@@ -90,6 +90,11 @@ u16 obli_cmov16(u16 i1, u16 i2,s64 cond, s64 cmp){
 u8 obli_cmov8(u8 i1, u8 i2,s64 cond, s64 cmp){
     return (u8)obli_cmov64(i1, i2, cond, cmp);
 }
+void obli_cmov(u8* i1, u8* i2, u64 len,s64 cond, s64 cmp){
+    for(u64 i =0;i<len;i++){
+        i1[i] = obli_cmov8(i1[i], i2[i], cond, cmp);
+    }
+}
 s64 obli_strcmp(u8 * a, u8 * b, u64 l){
     s64 out = 0;
     for(auto i = 0;i<l;i++){

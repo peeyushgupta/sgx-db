@@ -32,7 +32,7 @@ struct Table{
     str    colNames[MAX_COLS];
     Schema sc;
 };
-Table g_tbl[MAX_TABLES];
+
 struct DataBlock{
     void * data;
 };

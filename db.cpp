@@ -2,6 +2,7 @@
 #include <cstdlib>
 #include "obli.hpp"
 #include <cstdio>
+Table g_tbl[MAX_TABLES];
 s64 varchar_cmp(u8 *va, u8 *vb, u64 max)
 {
   u64 la = *((u64 *)va), lb = *((u64 *)vb);
@@ -79,22 +80,24 @@ u64 schema_rowoffs(Schema *tbl, u64 num)
   }
   return cur;
 }
-template <typename T>
-void tbl_loop_join(Table *tbl1, Table *tbl2, u64 attr1, u64 attr2, Table *out)
-{
-  auto o1 = tbl_rowoffs(tbl1, attr1), o2 = tbl_rowoffs(tbl2, attr2);
-  auto s1 = tbl_rowlen(tbl1), s2 = tbl_rowlen(tbl2);
-  if (tbl1->tblSchema[attr1].ty == VARCHAR)
-  {
-    u64 len = tbl1->tblSchema[attr1].buf.len;
-    for (u64 i = 0; i < tbl1->lenDat; i++)
-    {
-      for (u64 j = 0; i < tbl2->lenDat; j++)
-      {
-        u8 * ptr1 = &((u8*)tbl1->dat)[s1*i+o1], ptr2=&((u8*)tbl1->dat)[s1*i+o1];
-        s64 result = varchar_cmp(ptr1, ptr2, len);
 
-      }
+template <typename T>
+void db_tbl_join(void * blkIn, void * blkOut, u64 t1, u64 c1, u64 t2, u64 c2, T cb)
+{
+  Column col1, col2;
+  u64 off1 = 0, off2 = 0;
+  u64 len1 = 0, len2 = 0;
+  for(u64 i = 0;i<MAX_TABLES;i++){
+    Schema * cur = g_tbl[i].sc;
+    s64 tind1 = obli_cmp64(t1, i);
+    s64 tind2 = obli_cmp64(t2, i);
+    for (u64 j = 0; j < MAX_COLS; j++)
+    {
+      s64 cind1 = obli_cmp64(j, c1), cind2 = obli_cmp64(j, c2);
+      s64 eq1 = (cind1*cind1)+(tind1*tind1), eq2 = (cind2*cind2)+(tind2*tind2); 
+      obli_cmov(col1,cur->schema[j],eq1, 0);
+      obli_cmov(col2,cur->schema[j],eq2, 0);
+      
     }
   }
 }
