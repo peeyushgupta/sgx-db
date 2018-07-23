@@ -1,6 +1,6 @@
 #pragma once
 #include "util.hpp"
-#define MAX_COLS 100
+#define MAX_COLS 20
 #define MAX_TABLES 100
 enum SchemaType{
     BOOLEAN,

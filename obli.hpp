@@ -66,8 +66,19 @@ void obli_cswap8(u8 * i1, u8 * i2, s64 cond, s64 cmp){
     *i2 = (u8) c2;
 }
 void obli_cswap(u8 * i1, u8 * i2, u64 len, s64 cond, s64 cmp){
-    for(u64 i =0;i<len;i++){
-        obli_cswap8(&i1[i], &i2[i], cond, cmp);
+    u64 i =0;
+    for(;i<len-7;i+=8){
+        obli_cswap64(((u64*)(&i1[i])), ((u64*)(&i2[i])), cond, cmp);
+    }
+    for(;i<len-3;i+=4){
+        obli_cswap32(((u32*)(&i1[i])), ((u32*)(&i2[i])), cond, cmp);
+    }
+    for(;i<len-1;i+=2){
+        obli_cswap16(((u16*)(&i1[i])), ((u16*)(&i2[i])), cond, cmp);
+    }
+    
+    for(;i<len;i++){
+       obli_cswap8(((u8*)(&i1[i])), ((u8*)(&i2[i])), cond, cmp);
     }
 }
 u64 obli_cmov64(u64 i1, u64 i2,s64 cond, s64 cmp){
@@ -91,8 +102,19 @@ u8 obli_cmov8(u8 i1, u8 i2,s64 cond, s64 cmp){
     return (u8)obli_cmov64(i1, i2, cond, cmp);
 }
 void obli_cmov(u8* i1, u8* i2, u64 len,s64 cond, s64 cmp){
-    for(u64 i =0;i<len;i++){
-        i1[i] = obli_cmov8(i1[i], i2[i], cond, cmp);
+    u64 i =0;
+    for(;i<len-7;i+=8){
+        *((u64*)(&i1[i]))= obli_cmov64(*((u64*)(&i1[i])), *((u64*)(&i2[i])), cond, cmp);
+    }
+    for(;i<len-3;i+=4){
+        *((u32*)(&i1[i])) = obli_cmov32(*((u32*)(&i1[i])), *((u32*)(&i2[i])), cond, cmp);
+    }
+    for(;i<len-1;i+=2){
+        *((u16*)(&i1[i])) = obli_cmov16(*((u16*)(&i1[i])), *((u16*)(&i2[i])), cond, cmp);
+    }
+    
+    for(;i<len;i++){
+        *((u8*)(&i1[i])) = obli_cmov8(*((u8*)(&i1[i])), *((u8*)(&i2[i])), cond, cmp);
     }
 }
 s64 obli_strcmp(u8 * a, u8 * b, u64 l){

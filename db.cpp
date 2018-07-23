@@ -86,7 +86,6 @@ void db_tbl_join(void * blkIn, void * blkOut, u64 t1, u64 c1, u64 t2, u64 c2, T 
 {
   Column col1, col2;
   u64 off1 = 0, off2 = 0;
-  u64 len1 = 0, len2 = 0;
   for(u64 i = 0;i<MAX_TABLES;i++){
     Schema * cur = g_tbl[i].sc;
     s64 tind1 = obli_cmp64(t1, i);
@@ -95,8 +94,13 @@ void db_tbl_join(void * blkIn, void * blkOut, u64 t1, u64 c1, u64 t2, u64 c2, T 
     {
       s64 cind1 = obli_cmp64(j, c1), cind2 = obli_cmp64(j, c2);
       s64 eq1 = (cind1*cind1)+(tind1*tind1), eq2 = (cind2*cind2)+(tind2*tind2); 
-      obli_cmov(col1,cur->schema[j],eq1, 0);
-      obli_cmov(col2,cur->schema[j],eq2, 0);
+      obli_cmov(&col1,&cur->schema[j],sizeof(Column), eq1, 0);
+      obli_cmov(&col2,&cur->schema[j],sizeof(Column), eq2, 0);
+      s64 lt1 = 1-((-1*(cind1-1))>>1), lt2 = 1-((-1*(cind2-1))>>1);
+      lt1 = (lt1*lt1)+(tind1*tind1);
+      lt2 = (lt2*lt2)+(tind2*tind2); 
+      off1+=obli_cmov64(col_len(&cur->schema[j]), 0, lt1, 0);
+      off2+=obli_cmov64(col_len(&cur->schema[j]), 0, lt2, 0);
       
     }
   }
