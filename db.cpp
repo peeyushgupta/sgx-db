@@ -98,8 +98,3 @@ void tbl_loop_join(Table *tbl1, Table *tbl2, u64 attr1, u64 attr2, Table *out)
     }
   }
 }
-
-u64 tbl_len(Table *tbl)
-{
-  return tbl_rowlen(tbl) * tbl->lenDat;
-}

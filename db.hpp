@@ -34,5 +34,5 @@ struct Table{
 };
 Table g_tbl[MAX_TABLES];
 struct DataBlock{
-    
+    void * data;
 };
