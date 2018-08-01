@@ -1,6 +1,10 @@
 #pragma once
 #include "util.hpp"
 
+/* AB: cmp is oblivious operation by default, no? */
+
+#if 0 
+
 s64 obli_cmp64(s64 a, s64 b){
     s64 out = 0;
     u64 temp = 0;
@@ -38,98 +42,123 @@ s64 obli_cmp8(s8 a, s8 b){
     return out;
 }
 
-void obli_cswap64(u64 * i1, u64 * i2, s64 cond, s64 cmp){
-    u64 temp = 0;
-        asm volatile("xor %4, %3\n\t"
-                     "cmovz %0, %2\n\t"
-                     "cmovz %1, %0\n\t"
-                     "cmovz %2, %1":"+r"(i1[0]), "+r"(i2[0]), "+r"(temp), "+r"(cond): "r"(cmp):"cc");
+#endif 
+
+/* Conditional swap */
+void obli_cswap64(u64 * src, u64 * dst, bool cond){
+    u64 temp;
+    asm volatile("test %3, %3\n\t"
+                 "cmovz %0, %2\n\t"
+                 "cmovz %1, %0\n\t"
+                 "cmovz %2, %1"  : "+r"(src[0]), "+r"(dst[0]), "=r"(temp) : "r"(cond) : "cc");
+    return;
 }
-void obli_cswap32(u32 * i1, u32 * i2, s64 cond, s64 cmp){
-    u32 temp = 0;
-        asm volatile("xor %4, %3\n\t"
-                     "cmovz %0, %2\n\t"
-                     "cmovz %1, %0\n\t"
-                     "cmovz %2, %1":"+r"(i1[0]), "+r"(i2[0]), "+r"(temp), "+r"(cond): "r"(cmp):"cc");
+
+void obli_cswap32(u32 * src, u32 * dst, s64 cond){
+    u32 temp;
+    asm volatile("test  %3, %3\n\t"
+                 "cmovz %0, %2\n\t"
+                 "cmovz %1, %0\n\t"
+                 "cmovz %2, %1" : "+r"(src[0]), "+r"(dst[0]), "=r"(temp) : "r"(cond) : "cc");
 }
-void obli_cswap16(u16 * i1, u16 * i2, s64 cond, s64 cmp){
-    u16 temp = 0;
-        asm volatile("xor %4, %3\n\t"
-                     "cmovz %0, %2\n\t"
-                     "cmovz %1, %0\n\t"
-                     "cmovz %2, %1":"+r"(i1[0]), "+r"(i2[0]), "+r"(temp), "+r"(cond): "r"(cmp):"cc");
+
+void obli_cswap16(u16 * src, u16 * dst, s64 cond){
+    u16 temp;
+    asm volatile("test %3, %3\n\t"
+                 "cmovz %0, %2\n\t"
+                 "cmovz %1, %0\n\t"
+                 "cmovz %2, %1":"+r"(src[0]), "+r"(dst[0]), "=r"(temp) : "r"(cond) : "cc");
 }
-void obli_cswap8(u8 * i1, u8 * i2, s64 cond, s64 cmp){
-    u64 c1 = *i1, c2 = *i2;
-    obli_cswap64(&c1, &c2, cond, cmp);
-    *i1 = (u8) c1;
-    *i2 = (u8) c2;
+void obli_cswap8(u8 * src, u8 * dst, s64 cond){
+    u64 c1 = *src, c2 = *dst;
+    obli_cswap64(&c1, &c2, cond);
+    *src = (u8) c1;
+    *dst = (u8) c2;
 }
-void obli_cswap(u8 * i1, u8 * i2, u64 len, s64 cond, s64 cmp){
+
+void obli_cswap(u8 * src, u8 * dst, u64 len, s64 cond){
     u64 i =0;
+    for( ; i < len - 7; i+=8) {
+        obli_cswap64(((u64*)(&src[i])), ((u64*)(&dst[i])), cond);
+    }
+    for( ; i < len - 3; i+=4) {
+        obli_cswap32(((u32*)(&src[i])), ((u32*)(&dst[i])), cond);
+    }
+    for( ; i < len - 1; i+=2) {
+        obli_cswap16(((u16*)(&src[i])), ((u16*)(&dst[i])), cond);
+    }
+    
+    for( ; i < len; i++) {
+       obli_cswap8(((u8*)(&src[i])), ((u8*)(&dst[i])), cond);
+    }
+}
+
+/* Conditional mov: moves dst into src if cond is true, returns src */
+
+/* AB: Do we need 32bit and 64 bit versions? after all your 8 bit version simply 
+       uses 64bit one? */
+
+u64 obli_cmov64(u64 src, u64 dst, bool cond){
+    asm volatile("test %[cond], %[cond]\n\t"
+                 "cmovnz %[dst], %[src]" : [src]"+r"(src) : [cond]"r"(cond), [dst]"r"(dst) : "cc");
+    return src;
+}
+
+u32 obli_cmov32(u32 src, u32 dst, bool cond){
+
+    asm volatile("test %[cond], %[cond]\n\t"
+                 "cmovnz %[dst], %[src]" : [src]"=r"(src), [cond]"=r"(cond) : [dst]"r"(dst) : "cc");
+    return src;
+}
+
+u16 obli_cmov16(u16 src, u16 dst, bool cond){
+
+    asm volatile("test %[cond], %[cond]\n\t"
+                 "cmovnz %[dst], %[src]" : [src]"=r"(src), [cond]"=r"(cond) : [dst]"r"(dst) : "cc");
+    return src;
+}
+
+u8 obli_cmov8(u8 src, u8 dst, bool cond) {
+    return obli_cmov64((u64)src, (u64)dst, cond);
+}
+
+
+void obli_cmov(u8* src, u8* dst, u64 len, s64 cond){
+    u64 i =0;
+
     for(;i<len-7;i+=8){
-        obli_cswap64(((u64*)(&i1[i])), ((u64*)(&i2[i])), cond, cmp);
+        *((u64*)(&src[i]))= obli_cmov64(*((u64*)(&src[i])), *((u64*)(&dst[i])), cond);
     }
+
     for(;i<len-3;i+=4){
-        obli_cswap32(((u32*)(&i1[i])), ((u32*)(&i2[i])), cond, cmp);
+        *((u32*)(&src[i])) = obli_cmov32(*((u32*)(&src[i])), *((u32*)(&dst[i])), cond);
     }
+
     for(;i<len-1;i+=2){
-        obli_cswap16(((u16*)(&i1[i])), ((u16*)(&i2[i])), cond, cmp);
+        *((u16*)(&src[i])) = obli_cmov16(*((u16*)(&src[i])), *((u16*)(&dst[i])), cond);
     }
     
     for(;i<len;i++){
-       obli_cswap8(((u8*)(&i1[i])), ((u8*)(&i2[i])), cond, cmp);
+        *((u8*)(&src[i])) = obli_cmov8(*((u8*)(&src[i])), *((u8*)(&dst[i])), cond);
     }
-}
-u64 obli_cmov64(u64 i1, u64 i2,s64 cond, s64 cmp){
-    asm volatile("xor %3, %1\n\t"
-                 "cmovz %2,%0":"+r"(i1), "+r"(cond): "r"(i2), "r"(cmp):"cc");
-    return i1;
+} 
 
-}
-u32 obli_cmov32(u32 i1, u32 i2,s64 cond, s64 cmp){
-
-    asm volatile("xor %3, %1\n\t"
-                 "cmovz %2,%0":"+r"(i1), "+r"(cond): "r"(i2), "r"(cmp):"cc");
-    return i1;
-}
-u16 obli_cmov16(u16 i1, u16 i2,s64 cond, s64 cmp){
-    asm volatile("xor %3, %1\n\t"
-                 "cmovz %2,%0":"+r"(i1), "+r"(cond): "r"(i2), "r"(cmp):"cc");
-    return i1;
-}
-u8 obli_cmov8(u8 i1, u8 i2,s64 cond, s64 cmp){
-    return (u8)obli_cmov64(i1, i2, cond, cmp);
-}
-void obli_cmov(u8* i1, u8* i2, u64 len,s64 cond, s64 cmp){
-    u64 i =0;
-    for(;i<len-7;i+=8){
-        *((u64*)(&i1[i]))= obli_cmov64(*((u64*)(&i1[i])), *((u64*)(&i2[i])), cond, cmp);
-    }
-    for(;i<len-3;i+=4){
-        *((u32*)(&i1[i])) = obli_cmov32(*((u32*)(&i1[i])), *((u32*)(&i2[i])), cond, cmp);
-    }
-    for(;i<len-1;i+=2){
-        *((u16*)(&i1[i])) = obli_cmov16(*((u16*)(&i1[i])), *((u16*)(&i2[i])), cond, cmp);
-    }
-    
-    for(;i<len;i++){
-        *((u8*)(&i1[i])) = obli_cmov8(*((u8*)(&i1[i])), *((u8*)(&i2[i])), cond, cmp);
-    }
-}
-s64 obli_strcmp(u8 * a, u8 * b, u64 l){
+/* String comparison */
+s64 obli_memcmp(u8 * a, u8 * b, u64 l){
     s64 out = 0;
-    for(auto i = 0;i<l;i++){
-        s64 c = obli_cmp8(a[i], b[i]);
-        out = obli_cmov64((u64)out,(u64)c,out,0);
-        
+    for(u64 i = 0; i < l; i++){
+        s64 c = (a[i] == b[i]);
+        out = obli_cmov64((u64)out, (u64)c, out);
     }
     return out;
 }
+
+/* AB: Do we need it? */
+#if 0
 s64 obli_varcmp(u8 * a, u8 * b, u64 l, u64 lim){
     s64 out = 0;
     for(u64 i = 0;i<lim;i++){
-        s64 c = obli_cmp8(a[i], b[i]);
+        s64 c = (a[i] == b[i]);
         
         u64 temp = obli_cmov64((u64)out,(u64)c,obli_cmp64(i, l),-1);
         out = obli_cmov64((u64)out,(u64)temp,out,0);
@@ -137,3 +166,5 @@ s64 obli_varcmp(u8 * a, u8 * b, u64 l, u64 lim){
     }
     return out;
 }
+
+#endif
