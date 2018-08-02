@@ -10,13 +10,12 @@ CFLAGS :=-std=c++11 -Wall -g -D_GNU_SOURCE -pthread -lm -fno-pic -O2
 
 INCLUDES := -I. 
 
-SRCS = \
-	test.c\
-	awe_mapper.c\
-	test.c\
+SRCS = bitonic.cpp\
+	db.cpp\
+	main.cpp\
 
 TEST_SRCS = \
-	test.c\
+	test.cpp\
 
 
 OBJS = $(SRCS:.c=.o)
