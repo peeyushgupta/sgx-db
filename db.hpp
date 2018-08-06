@@ -11,7 +11,7 @@
 #define MAX_ROW_SIZE (1 << 12) /* 4096 for now */
 #define MAX_TABLES 10
 #define MAX_COLS 20
-#define MAX_ 20
+#define MAX_CONDITIONS 3 // number of ORs allowed in one clause of a condition
 
 typedef enum schema_type {
 	BOOLEAN = 1,
@@ -55,7 +55,7 @@ typedef struct {
 
 typedef struct table {
 	std::string name;
-	schema_t schema;
+	schema_t sc;
 	unsigned long long num_rows;  /* Number of rows in the table (used only 
 					 for bulk insertion) */
 	unsigned long long num_blks;  /* Number of blocks allocated */
@@ -70,9 +70,33 @@ typedef struct data_base {
 	bcache_t bcache;
 } data_base_t;
 
+// One condition allows you to join two tables (left 
+// and right), joining fields should be qual i.e., 
+// for all k:
+//    left_table.column[fields_left[k]] == right_table.column[fields_right[k]]
+//
+// I assume we'll be able to join more tables with a 
+// linked list of conditions
+//
+typedef struct join_condition join_condition_t;
+struct join_condition {
+	unsigned int num_conditions;
+	unsigned int table_left; 
+	unsigned int table_right; 
+	unsigned int fields_left[MAX_CONDITIONS];
+	unsigned int fields_right[MAX_CONDITIONS];
+	join_condition_t *next;  /* not supported at the moment */
+};
+
+
+
 int read_data_block(table *table, unsigned long blk_num, void *buf);
 int write_data_block(table *table, unsigned long blk_num, void *buf); 
+
+/* Enclave interface */
 
 int ecall_create_db(const char *cname, int name_len, int *db_id);
 int ecall_create_table(int db_id, const char *cname, int name_len, schema_t *schema, int *table_id);
 int ecall_insert_row_dbg(int db_id, int table_id, void *row);
+int ecall_join(int db_id, join_condition_t *c, int *join_tbl_id);
+

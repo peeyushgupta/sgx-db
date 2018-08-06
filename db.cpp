@@ -297,7 +297,7 @@ int ecall_create_table(int db_id, const char *cname, int name_len, schema_t *sch
 	table->name = name;
 	table->num_rows = 0; 
 	table->num_blks = 0; 
-	table->schema = *schema;
+	table->sc = *schema;
 	table->db = db; 	
 
 	/* Call outside of enclave to open a file for the table */
@@ -330,9 +330,203 @@ int ecall_insert_row(int db_id, int table_id, void *row) {
 	return -1; 
 }
 
-/* Select ... need to think */
-int ecall_select() {
-	return -1;
+void *get_column(schema_t *sc, int field, void *row) {
+	return(void*)((char*)row + sc->offsets[field]);
+}
+
+bool cmp_row(table_t *tbl_left, void *row_left, int field_left, table_t *tbl_right, void *row_right, int field_right) {
+
+	if(tbl_left->sc.types[field_left] != tbl_right->sc.types[field_right])
+		return false;
+	switch (tbl_left->sc.types[field_left]) {
+	case BOOLEAN: 
+		return (*((bool*)get_column(&tbl_left->sc, field_left, row_left)) 
+			== *((bool*)get_column(&tbl_right->sc, field_right, row_right))); 
+	case INTEGER: 
+		return (*((int*)get_column(&tbl_left->sc, field_left, row_left)) 
+			== *((int*)get_column(&tbl_right->sc, field_right, row_right))); 
+	case TINYTEXT: 
+		return (strncmp((char*)get_column(&tbl_left->sc, field_left, row_left), 
+			(char*)get_column(&tbl_right->sc, field_right, row_right), MAX_ROW_SIZE) == 0) ? true : false;
+
+	default: 
+		return false; 
+	}
+
+	return false;
+}
+
+int join_schema(schema_t *sc, schema_t *left, schema_t *right) {
+	
+	sc->num_fields = left->num_fields + right->num_fields;
+	if(sc->num_fields > MAX_COLS)
+		return -1; 
+
+	for(int i = 0; i < left->num_fields; i++) {
+		sc->offsets[i] = left->offsets[i];
+		sc->sizes[i] = left->sizes[i];
+		sc->types[i] = left->types[i];	
+	}
+
+	for(int i = left->num_fields; i < left->num_fields + right->num_fields; i++) {
+		sc->offsets[i] = right->offsets[i];
+		sc->sizes[i] = right->sizes[i];
+		sc->types[i] = right->types[i];	
+	}
+	sc->row_size = sc->offsets[sc->num_fields - 1] + sc->sizes[sc->num_fields - 1];
+
+	return 0;
+}
+
+/* Read one row. */
+int read_row(table_t *table, unsigned int row_num, void *row) {
+
+	unsigned long dblk_num;
+	unsigned long row_off, rows_per_blk; 
+	data_block_t *b;
+
+	if(row_num >= table->num_rows)
+		return -1; 
+
+	rows_per_blk = DATA_BLOCK_SIZE / table->sc.row_size; 
+	dblk_num = row_num / rows_per_blk;
+
+	/* Offset of the row within the data block in bytes */
+	row_off = (row_num - dblk_num * rows_per_blk) * table->sc.row_size; 
+	
+        b = bread(table, dblk_num);
+	 	
+	/* Copy the row into the data block */
+	memcpy(row, (char*)b->data + row_off, table->sc.row_size); 
+
+	brelse(b);
+	return 0; 
+}
+
+int join_rows(void *join_row, unsigned int join_row_size, void * row_left, unsigned int row_left_size, void * row_right, unsigned int row_right_size) {
+
+	if(row_left_size + row_right_size > join_row_size)
+		return -1; 
+	memcpy(join_row, row_left, row_left_size); 
+	memcpy((void*)((char*)join_row + row_left_size),row_right, row_right_size);
+	return 0; 
+}; 
+
+/* Join */
+int ecall_join(int db_id, join_condition_t *c, int *join_tbl_id) {
+	int ret;
+	data_base_t *db;
+	table_t *tbl_left, *tbl_right;
+	void *row_left = NULL, *row_right = NULL, *join_row = NULL;
+	schema_t join_sc;
+	std::string join_table_name;  
+	int join_table_id; 
+
+	if ((db_id > (MAX_DATABASES - 1)) || !g_dbs[db_id] || !c )	
+		return -1; 
+
+	db = g_dbs[db_id];
+	if(!db)
+		return -2;
+
+	tbl_left = db->tables[c->table_left];
+	tbl_right = db->tables[c->table_right];
+	if (! tbl_left || ! tbl_right)
+		return -3; 
+
+	join_table_name = "join:" + tbl_left->name + tbl_right->name; 
+
+	ret = join_schema(&join_sc, &tbl_left->sc, &tbl_right->sc); 
+	if (ret) {
+		printf("%s:create table error:%d\n", __func__, ret);
+		return ret; 
+	}
+
+	ret = ecall_create_table(db_id, 
+				join_table_name.c_str(), 
+				join_table_name.length(), 
+				&join_sc, 
+				&join_table_id);
+	if (ret) {
+		printf("%s:create table error:%d\n", __func__, ret);
+		return ret; 
+	}
+
+	join_row = malloc(MAX_ROW_SIZE*2);
+	if(!join_row)
+		return -4;
+
+	row_left = malloc(MAX_ROW_SIZE);
+	if(!row_left)
+		return -5;
+
+	row_right = malloc(MAX_ROW_SIZE);
+	if(!row_right)
+		return -6;
+
+	for (unsigned int i = 0; i < tbl_left->num_rows; i ++) {
+
+		// Read left row
+		ret = read_row(tbl_left, i, row_left);
+		if(ret) {
+			printf("%s, failed to read row %d of table %s\n",
+				__func__, i, tbl_left->name.c_str());
+			goto cleanup;
+		}
+
+				
+		for (unsigned int j = 0; j < tbl_right->num_rows; j ++) {
+			bool equal = true;
+			bool eq;
+
+			// Read right row
+			ret = read_row(tbl_right, j, row_right);
+			if(ret) {
+				printf("%s, failed to read row %d of table %s\n",
+					__func__, i, tbl_right->name.c_str());
+				goto cleanup;
+			}
+
+			for(unsigned int k = 0; k < c->num_conditions; k++) {
+				eq = cmp_row(tbl_left, row_left, c->fields_left[k], tbl_right, row_right, c->fields_right[k]);
+				if (!eq) {
+					equal = false; 
+				}
+
+			}
+
+			if (equal) { 
+
+				ret = join_rows(join_row, join_sc.row_size, row_left, tbl_left->sc.row_size, row_right, tbl_right->sc.row_size); 
+				if(ret) {
+					printf("%s, failed to produce a joined row %d of table %s with row %d of table %s\n",
+						__func__, i, tbl_left->name.c_str(), j, tbl_right->name.c_str());
+					goto cleanup;
+				}
+				/* Add row to the join */
+				ret = ecall_insert_row_dbg(db_id, join_table_id, join_row);
+				if(ret) {
+					printf("%s, failed to join row %d of table %s with row %d of table %s\n",
+						__func__, i, tbl_left->name.c_str(), j, tbl_right->name.c_str());
+					goto cleanup;
+				}
+			}
+
+		}
+	}
+
+	ret = 0;
+cleanup: 
+	if (join_row)
+		free(join_row); 
+	
+	if (row_left)
+		free(row_left); 
+
+	if (row_right)
+		free(row_right); 
+
+	return ret; 
 };
 
 /* 
@@ -364,16 +558,16 @@ int ecall_insert_row_dbg(int db_id, int table_id, void *row) {
 
 	table = db->tables[table_id];
 	
-	rows_per_blk = DATA_BLOCK_SIZE / table->schema.row_size; 
+	rows_per_blk = DATA_BLOCK_SIZE / table->sc.row_size; 
 	dblk_num = table->num_rows / rows_per_blk;
 
 	/* Offset of the row within the data block in bytes */
-	row_off = (table->num_rows - dblk_num * rows_per_blk) * table->schema.row_size; 
+	row_off = (table->num_rows - dblk_num * rows_per_blk) * table->sc.row_size; 
 	
         b = bread(table, dblk_num);
 	 	
 	/* Copy the row into the data block */
-	memcpy((char*)b->data + row_off, row, table->schema.row_size); 
+	memcpy((char*)b->data + row_off, row, table->sc.row_size); 
 
 	table->num_rows ++; 
 
@@ -381,4 +575,5 @@ int ecall_insert_row_dbg(int db_id, int table_id, void *row) {
 	brelse(b);
 	return 0; 
 }
+
 
