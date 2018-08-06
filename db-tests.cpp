@@ -113,7 +113,7 @@ int test_rankings() {
 	sc_udata.sizes[9] = 4;
 	sc_udata.types[9] = INTEGER;
 
-	sc_udata.row_size = sc_udata.offsets[sc.num_fields - 1] + sc_udata.sizes[sc.num_fields - 1];
+	sc_udata.row_size = sc_udata.offsets[sc_udata.num_fields - 1] + sc_udata.sizes[sc_udata.num_fields - 1];
 
 	ret = ecall_create_table(db_id, udata_table_name.c_str(), udata_table_name.length(), &sc_udata, &udata_table_id);
 	if (ret) {
@@ -132,16 +132,16 @@ int test_rankings() {
 
 		std::istringstream ss(line);
 
-		for(int j = 1; j < sc.num_fields; j++) {
+		for(int j = 1; j < sc_udata.num_fields; j++) {
 			if(!ss.getline(data, MAX_ROW_SIZE, ',')){
 				break;
 			}
-			if(sc.types[j] == INTEGER) {
+			if(sc_udata.types[j] == INTEGER) {
 				int d = 0;
 				d = atoi(data);
-				memcpy(&row[sc.offsets[j]], &d, 4);
-			} else if (sc.types[j] == TINYTEXT) {
-				strncpy((char*)&row[sc.offsets[j]], data, strlen(data) + 1);
+				memcpy(&row[sc_udata.offsets[j]], &d, 4);
+			} else if (sc_udata.types[j] == TINYTEXT) {
+				strncpy((char*)&row[sc_udata.offsets[j]], data, strlen(data) + 1);
 			}
 		}
 
