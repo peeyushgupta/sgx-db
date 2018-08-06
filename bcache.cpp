@@ -59,6 +59,8 @@ data_block_t *bget(struct table *table, unsigned int blk_num)
 	for(b = bcache->head.prev; b != &bcache->head; b = b->prev){
 		if(b->refcnt == 0) {
 			if(b->flags & B_DIRTY) {
+				printf("%s: write back dirty block, num:%lu, table:%s\n", 
+					__func__, b->blk_num, table->name.c_str()); 
 				ret = write_data_block(table, b->blk_num, b->data);
 				if (ret)
 					return NULL;
@@ -86,6 +88,7 @@ data_block_t* bread(table_t *table, uint blk_num)
 		ret = read_data_block(table, blk_num, b->data);
 		if (ret)
 			return NULL;
+		b->flags |= B_VALID; 
 	}
 	return b;
 }
