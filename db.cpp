@@ -333,7 +333,7 @@ int ecall_insert_row(int db_id, int table_id, void *row) {
 }
 
 void *get_column(schema_t *sc, int field, void *row) {
-	printf("%s: row:%p, field:%d, offset:%d\n", __func__, row, field, sc->offsets[field]); 
+	//printf("%s: row:%p, field:%d, offset:%d\n", __func__, row, field, sc->offsets[field]); 
 	return(void*)((char*)row + sc->offsets[field]);
 }
 
@@ -352,7 +352,7 @@ bool cmp_row(table_t *tbl_left, void *row_left, int field_left, table_t *tbl_rig
 		char *left = (char*)get_column(&tbl_left->sc, field_left, row_left); 
 		char *right = (char*)get_column(&tbl_right->sc, field_right, row_right);
 
-		printf("%s:left:%s, right:%s\n", __func__, left, right); 
+		//printf("%s:left:%s, right:%s\n", __func__, left, right); 
 
 		int ret = strncmp(left, right, MAX_ROW_SIZE);
 		if (ret == 0) 
@@ -379,7 +379,7 @@ int join_schema(schema_t *sc, schema_t *left, schema_t *right) {
 	}
 
 	for(int i = 0; i < right->num_fields; i++) {
-		sc->offsets[i + left->num_fields] = right->offsets[i];
+		sc->offsets[i + left->num_fields] = left->row_size + right->offsets[i];
 		sc->sizes[i + left->num_fields] = right->sizes[i];
 		sc->types[i + left->num_fields] = right->types[i];	
 	}
@@ -506,7 +506,7 @@ int ecall_join(int db_id, join_condition_t *c, int *join_tbl_id) {
 			}
 
 			if (equal) { 
-				printf("%s, joining (i:%d, j:%d)\n", __func__, i, j); 
+				//printf("%s, joining (i:%d, j:%d)\n", __func__, i, j); 
 
 				ret = join_rows(join_row, join_sc.row_size, row_left, tbl_left->sc.row_size, row_right, tbl_right->sc.row_size); 
 				if(ret) {
