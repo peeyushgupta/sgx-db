@@ -8,7 +8,7 @@
 int test_rankings() {
  	
 	schema_t sc, sc_udata;
-	std::string db_name("rankings");
+	std::string db_name("rankings-and-udata");
 	std::string table_name("rankings");
 	std::string udata_table_name("udata");
 	int db_id, table_id, udata_table_id, join_table_id, ret; 
@@ -50,7 +50,8 @@ int test_rankings() {
 	std::ifstream file("rankings.csv");
 
 	row[0] = 'a';
-	for(int i = 0; i < 360000; i++) { 
+	//for(int i = 0; i < 360000; i++) { 
+	for(int i = 0; i < 10000; i++) { 
 
 		memset(row, 'a', MAX_ROW_SIZE);
 		file.getline(line, MAX_ROW_SIZE); //get the field
@@ -112,9 +113,9 @@ int test_rankings() {
 	sc_udata.sizes[9] = 4;
 	sc_udata.types[9] = INTEGER;
 
-	sc.row_size = sc.offsets[sc.num_fields - 1] + sc.sizes[sc.num_fields - 1];
+	sc_udata.row_size = sc_udata.offsets[sc.num_fields - 1] + sc_udata.sizes[sc.num_fields - 1];
 
-	ret = ecall_create_table(db_id, udata_table_name.c_str(), udata_table_name.length(), &sc, &udata_table_id);
+	ret = ecall_create_table(db_id, udata_table_name.c_str(), udata_table_name.length(), &sc_udata, &udata_table_id);
 	if (ret) {
 		printf("%s:create table error:%d, table:%s\n", __func__, ret, udata_table_name.c_str());
 		return ret; 
@@ -123,8 +124,9 @@ int test_rankings() {
 	std::ifstream file2("uservisits.csv");
 
 	row[0] = 'a';
-	for(int i = 0; i < 350000; i++){//TODO temp really 350000
-		
+	//for(int i = 0; i < 350000; i++){//TODO temp really 350000
+	for(int i = 0; i < 10000; i++){//TODO temp really 350000
+	
 		memset(row, 'a', MAX_ROW_SIZE);
 		file2.getline(line, MAX_ROW_SIZE);//get the field
 

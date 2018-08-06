@@ -175,11 +175,6 @@ int read_data_block(table *table, unsigned long blk_num, void *buf) {
 	unsigned long long total_read = 0; 
 	long long read; 
 
-	if(blk_num >= table->num_blks) {
-		/* Allocate new data block */
-		memset(buf, 0, DATA_BLOCK_SIZE);
-		return 0;
-	}
 	ocall_seek(table->fd, blk_num*DATA_BLOCK_SIZE); 
 
 	while (total_read < DATA_BLOCK_SIZE) { 
@@ -188,6 +183,11 @@ int read_data_block(table *table, unsigned long blk_num, void *buf) {
 		if (read < 0) {
 			printf("%s: read filed\n", __func__); 
 			return -1; 
+		}
+		if (read == 0) {
+			/* We've reached the end of file, pad with zeroes */
+			read = DATA_BLOCK_SIZE - total_read; 
+			memset((void *)((char *)buf + total_read), 0, read); 
 		}
 		total_read += read;  
 	}
@@ -294,6 +294,8 @@ int ecall_create_table(int db_id, const char *cname, int name_len, schema_t *sch
 		return -4;
 
 	db->tables[i] = table;
+	*table_id = i; 
+
 	table->name = name;
 	table->num_rows = 0; 
 	table->num_blks = 0; 
@@ -331,6 +333,7 @@ int ecall_insert_row(int db_id, int table_id, void *row) {
 }
 
 void *get_column(schema_t *sc, int field, void *row) {
+	printf("%s: row:%p, field:%d, offset:%d\n", __func__, row, field, sc->offsets[field]); 
 	return(void*)((char*)row + sc->offsets[field]);
 }
 
@@ -345,10 +348,17 @@ bool cmp_row(table_t *tbl_left, void *row_left, int field_left, table_t *tbl_rig
 	case INTEGER: 
 		return (*((int*)get_column(&tbl_left->sc, field_left, row_left)) 
 			== *((int*)get_column(&tbl_right->sc, field_right, row_right))); 
-	case TINYTEXT: 
-		return (strncmp((char*)get_column(&tbl_left->sc, field_left, row_left), 
-			(char*)get_column(&tbl_right->sc, field_right, row_right), MAX_ROW_SIZE) == 0) ? true : false;
+	case TINYTEXT: {
+		char *left = (char*)get_column(&tbl_left->sc, field_left, row_left); 
+		char *right = (char*)get_column(&tbl_right->sc, field_right, row_right);
 
+		printf("%s:left:%s, right:%s\n", __func__, left, right); 
+
+		int ret = strncmp(left, right, MAX_ROW_SIZE);
+		if (ret == 0) 
+			return true;  
+		return false;
+	}
 	default: 
 		return false; 
 	}
@@ -368,10 +378,10 @@ int join_schema(schema_t *sc, schema_t *left, schema_t *right) {
 		sc->types[i] = left->types[i];	
 	}
 
-	for(int i = left->num_fields; i < left->num_fields + right->num_fields; i++) {
-		sc->offsets[i] = right->offsets[i];
-		sc->sizes[i] = right->sizes[i];
-		sc->types[i] = right->types[i];	
+	for(int i = 0; i < right->num_fields; i++) {
+		sc->offsets[i + left->num_fields] = right->offsets[i];
+		sc->sizes[i + left->num_fields] = right->sizes[i];
+		sc->types[i + left->num_fields] = right->types[i];	
 	}
 	sc->row_size = sc->offsets[sc->num_fields - 1] + sc->sizes[sc->num_fields - 1];
 
@@ -490,12 +500,13 @@ int ecall_join(int db_id, join_condition_t *c, int *join_tbl_id) {
 			for(unsigned int k = 0; k < c->num_conditions; k++) {
 				eq = cmp_row(tbl_left, row_left, c->fields_left[k], tbl_right, row_right, c->fields_right[k]);
 				if (!eq) {
-					equal = false; 
+					equal = eq; 
 				}
 
 			}
 
 			if (equal) { 
+				printf("%s, joining (i:%d, j:%d)\n", __func__, i, j); 
 
 				ret = join_rows(join_row, join_sc.row_size, row_left, tbl_left->sc.row_size, row_right, tbl_right->sc.row_size); 
 				if(ret) {
@@ -503,6 +514,7 @@ int ecall_join(int db_id, join_condition_t *c, int *join_tbl_id) {
 						__func__, i, tbl_left->name.c_str(), j, tbl_right->name.c_str());
 					goto cleanup;
 				}
+			
 				/* Add row to the join */
 				ret = ecall_insert_row_dbg(db_id, join_table_id, join_row);
 				if(ret) {
