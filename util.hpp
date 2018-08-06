@@ -10,6 +10,7 @@ using s32 = int32_t;
 using s16 = int16_t;
 using s8 = int8_t;
 
+#if 0
 template <typename T>
 struct buf{
     T * data;
@@ -20,3 +21,5 @@ struct arr{
     T arr[n];
 };
 using str = buf<char>;
+
+#endif

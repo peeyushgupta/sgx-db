@@ -5,13 +5,17 @@ OBJCOPY = $(TOOLPREFIX)objcopy
 OBJDUMP = $(TOOLPREFIX)objdump
 
 CFLAGS :=-std=c++11 -Wall -g -D_GNU_SOURCE -pthread -lm -fno-pic -O2 
+CFLAGS +=-fsanitize=address
+ 
 #CFLAGS += -DVERBOSE_DEBUG -DVERBOSE_ASSERT
 #CFLAGS += -DNDEBUG
 
 INCLUDES := -I. 
 
-SRCS = bitonic.cpp\
-	db.cpp\
+SRCS = 	db.cpp \
+	bcache.cpp \
+	db-tests.cpp \
+	env.cpp \
 	main.cpp\
 
 TEST_SRCS = \
@@ -27,8 +31,8 @@ MAIN = db
 
 .PHONY: depend clean
 
-#all:    $(MAIN) $(TESTS)
-all:    $(TESTS)
+all:    $(MAIN) $(TESTS)
+#all:    $(TESTS)
 
 $(TESTS): $(TEST_OBJS) 
 	$(CC) $(CFLAGS) $(INCLUDES) -o $(TESTS) $(TEST_OBJS) $(LFLAGS) $(LIBS)

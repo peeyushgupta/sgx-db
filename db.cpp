@@ -1,8 +1,21 @@
 #include "db.hpp"
-#include <cstdlib>
 #include "obli.hpp"
+#include "env.hpp"
+#include "bcache.hpp"
+
+#include <cstdlib>
 #include <cstdio>
-Table g_tbl[MAX_TABLES];
+
+#include <string.h>
+
+#define FILE_READ_SIZE (1 << 12)
+
+data_base_t* g_dbs[MAX_DATABASES];
+
+#if 0
+
+
+
 s64 varchar_cmp(u8 *va, u8 *vb, u64 max)
 {
   u64 la = *((u64 *)va), lb = *((u64 *)vb);
@@ -105,3 +118,267 @@ void db_tbl_join(void * blkIn, void * blkOut, u64 t1, u64 c1, u64 t2, u64 c2, T 
     }
   }
 }
+
+#endif
+
+/* Data layout
+ *
+ * - Data base is a collection of tables
+ * - Each table is a collection of data blocks that contain table's data
+ * - Each table is padded to its MAX size
+ * - Rows are fixed size for each table 
+ * 
+ */
+
+/* We assume that each data base has several data blocks for processing 
+   of unencrypted data in enclave's memory. The idea is that DB reads data 
+   from the external storage, e.g., disk or NVM into these data blocks, decrypts 
+   data and processes it there. 
+
+   Allocate these data blocks. 
+ */
+int alloc_data_blocks(data_base_t *db) {
+	int i; 
+	for (i = 0; i < DATA_BLKS_PER_DB; i++) {
+		db->bcache.data_blks[i].data = malloc(DATA_BLOCK_SIZE);
+		if (!db->bcache.data_blks[i].data) {
+			printf("%s: alloc failed\n", __func__); 
+			goto cleanup;
+		};
+	};
+
+	binit(&db->bcache);
+	return 0; 
+
+cleanup: 
+
+	for (int j = 0; j < i; j++ ) {
+		free(db->bcache.data_blks[j].data);
+		db->bcache.data_blks[j].data = NULL; 
+	};
+	return -1; 
+};
+
+/* Free data blocks in enclave's memory */
+void free_data_blocks(data_base_t *db) {
+	for (int i = 0; i < DATA_BLKS_PER_DB; i++ ) {
+		if(db->bcache.data_blks[i].data)
+			free(db->bcache.data_blks[i].data);
+	};
+	return; 
+};
+
+
+/* Read data block from external storage into enclave's memory (the memory 
+   region is passed as the  DataBlock argument), decrypt on the fly */
+int read_data_block(table *table, unsigned long blk_num, void *buf) {
+	unsigned long long total_read = 0; 
+	long long read; 
+
+	if(blk_num >= table->num_blks) {
+		/* Allocate new data block */
+		memset(buf, 0, DATA_BLOCK_SIZE);
+		return 0;
+	}
+	ocall_seek(table->fd, blk_num*DATA_BLOCK_SIZE); 
+
+	while (total_read < DATA_BLOCK_SIZE) { 
+		read = ocall_read_file(table->fd, 
+			(void *)((char *)buf + total_read), FILE_READ_SIZE);
+		if (read < 0) {
+			printf("%s: read filed\n", __func__); 
+			return -1; 
+		}
+		total_read += read;  
+	}
+	return 0; 
+}
+
+/* Write data block from enclave's memory back to disk. 
+ * For temporary results, we'll create temporary tables that will 
+ * have corresponding encryption keys (huh?)
+*/
+int write_data_block(table *table, unsigned long blk_num, void *buf) {
+	unsigned long long total_written = 0; 
+	long long written; 
+
+	ocall_seek(table->fd, blk_num*DATA_BLOCK_SIZE);
+ 
+	while (total_written < DATA_BLOCK_SIZE) { 
+		written = ocall_write_file(table->fd, 
+			(void *)((char *)buf + total_written), FILE_READ_SIZE);
+		if (written < 0) {
+			printf("%s: write filed\n", __func__); 
+			return -1; 
+		}
+		total_written += written;  
+	}
+	return 0; 
+}
+
+/*
+ *
+ * Public DB interace, i.e., something clients can invoke
+ *
+ */
+
+/* Create data base, returns dbId */
+int ecall_create_db(const char *cname, int name_len, int *db_id) {
+
+	data_base *db;
+	int i, ret; 
+	std::string name(cname, name_len);
+	
+	/* AB: Check for enclave-related validation... what needs to be 
+	   done? */
+	if (!cname || (name_len == 0) || !db_id)
+		return -1;  
+
+	/* Look up an empty DB slot */
+	for (i = 0; i < MAX_DATABASES; i++) {
+		if(!g_dbs[i])
+			break; 
+	}
+
+	if (i == MAX_DATABASES)
+		return -2; 
+
+	db = new data_base_t();
+	if (!db) 
+		return -3;	
+	
+	db->name = name;
+
+	g_dbs[i] = db;
+	*db_id = i; 
+
+	/* Allocate data blocks */
+	ret = alloc_data_blocks(db);
+	if (ret)
+		goto cleanup;
+
+	return 0;
+
+cleanup: 
+	delete db; 
+	g_dbs[i] = NULL;
+	return ret;
+};
+
+/* Create table, in the database dbId, described by the schema, returns tableId */
+int ecall_create_table(int db_id, const char *cname, int name_len, schema_t *schema, int *table_id) {
+	int i, ret, fd;
+	std::string name(cname, name_len);
+	data_base_t *db;
+	table_t *table;
+
+	if ((db_id > (MAX_DATABASES - 1)) || !g_dbs[db_id] 
+	   || !schema || !table_id || !cname || (name_len == 0))	
+		return -1; 
+
+	db = g_dbs[db_id];
+	if(!db)
+		return -2;
+
+	/* Look up an empty Table slot */
+	for (i = 0; i < MAX_TABLES; i++) {
+		if(!db->tables[i])
+			break; 
+	}
+
+	if (i == MAX_TABLES)
+		return -3; 
+
+	table = new table_t();
+	if (!table) 
+		return -4;
+
+	db->tables[i] = table;
+	table->name = name;
+	table->num_rows = 0; 
+	table->num_blks = 0; 
+	table->schema = *schema;
+	table->db = db; 	
+
+	/* Call outside of enclave to open a file for the table */
+	fd = ocall_open_file(name.c_str());
+	if (fd < 0) {
+		ret = -5;
+		goto cleanup; 
+	} 
+
+	table->fd = fd;
+
+	/* Fill table with dummy data */
+	
+
+	return 0;
+
+cleanup:
+	delete table;
+	db->tables[i] = NULL; 
+	return ret; 
+	
+
+};
+
+/* Insert one row */
+int ecall_insert_row(int db_id, int table_id, void *row) {
+
+   /* An oblivious version of row insert will update all 
+      rows in the table to conceal its size */
+	return -1; 
+}
+
+/* Select ... need to think */
+int ecall_select() {
+	return -1;
+};
+
+/* 
+ * 
+ * Insecure interfaces... debug only 
+ *
+ */
+
+/* Insert one row. This one is not oblivious, will insert 
+   a row at the very end of the table which is pointed by 
+   table->num_rows 
+ */
+int ecall_insert_row_dbg(int db_id, int table_id, void *row) {
+
+	data_base_t *db;
+	unsigned long dblk_num;
+	unsigned long row_off, rows_per_blk; 
+	table_t *table;
+	data_block_t *b;
+
+	if ((db_id > (MAX_DATABASES - 1)) || !g_dbs[db_id] 
+		|| !row )
+		return -1; 
+
+	db = g_dbs[db_id]; 
+	
+	if ((table_id > (MAX_TABLES - 1)) || !db->tables[table_id])
+		return -2; 
+
+	table = db->tables[table_id];
+	
+	rows_per_blk = DATA_BLOCK_SIZE / table->schema.row_size; 
+	dblk_num = table->num_rows / rows_per_blk;
+
+	/* Offset of the row within the data block in bytes */
+	row_off = (table->num_rows - dblk_num * rows_per_blk) * table->schema.row_size; 
+	
+        b = bread(table, dblk_num);
+	 	
+	/* Copy the row into the data block */
+	memcpy((char*)b->data + row_off, row, table->schema.row_size); 
+
+	table->num_rows ++; 
+
+	bwrite(b);
+	brelse(b);
+	return 0; 
+}
+
