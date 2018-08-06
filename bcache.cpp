@@ -62,8 +62,10 @@ data_block_t *bget(struct table *table, unsigned int blk_num)
 				//printf("%s: write back dirty block, num:%lu, table:%s\n", 
 				//	__func__, b->blk_num, table->name.c_str()); 
 				ret = write_data_block(table, b->blk_num, b->data);
-				if (ret)
+				if (ret) {
+					printf("%s: error writing dirty block:%lu for table %s\n", __func__, b->blk_num, table->name.c_str()); 
 					return NULL;
+				}
 			}
 
 			b->table = table;
