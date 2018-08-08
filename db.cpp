@@ -265,20 +265,9 @@ cleanup:
 	return ret;
 };
 
-/* Create table, in the database dbId, described by the schema, returns tableId */
-int ecall_create_table(int db_id, const char *cname, int name_len, schema_t *schema, int *table_id) {
-	int i, ret, fd;
-	std::string name(cname, name_len);
-	data_base_t *db;
-	table_t *table;
-
-	if ((db_id > (MAX_DATABASES - 1)) || !g_dbs[db_id] 
-	   || !schema || !table_id || !cname || (name_len == 0))	
-		return -1; 
-
-	db = g_dbs[db_id];
-	if(!db)
-		return -2;
+int create_table(data_base_t *db, std::string &name, schema_t *schema, table_t **new_table) {
+	table_t *table; 
+	int i, fd, ret; 
 
 	/* Look up an empty Table slot */
 	for (i = 0; i < MAX_TABLES; i++) {
@@ -294,7 +283,7 @@ int ecall_create_table(int db_id, const char *cname, int name_len, schema_t *sch
 		return -4;
 
 	db->tables[i] = table;
-	*table_id = i; 
+	table->id = i; 
 
 	table->name = name;
 	table->num_rows = 0; 
@@ -311,15 +300,60 @@ int ecall_create_table(int db_id, const char *cname, int name_len, schema_t *sch
 
 	table->fd = fd;
 
-	/* Fill table with dummy data */
-	
-
+	*new_table = table; 
 	return 0;
 
 cleanup:
 	delete table;
 	db->tables[i] = NULL; 
 	return ret; 
+
+}
+
+/* Create table, in the database dbId, described by the schema, returns tableId */
+int ecall_create_table(int db_id, const char *cname, int name_len, schema_t *schema, int *table_id) {
+	int ret;
+	std::string name(cname, name_len);
+	data_base_t *db;
+	table_t *table;
+
+	if ((db_id > (MAX_DATABASES - 1)) || !g_dbs[db_id] 
+	   || !schema || !table_id || !cname || (name_len == 0))	
+		return -1; 
+
+	db = g_dbs[db_id];
+	if(!db)
+		return -2;
+
+	ret = create_table(db, name, schema, &table); 
+	if (ret) {
+		ERR("failed to create table %s, ret:%d\n", cname, ret); 
+		return ret; 
+	}
+
+	*table_id = table->id; 
+	return 0; 
+};
+
+/* Flush all data to disk */
+int ecall_flush_table(int db_id, int table_id) {
+	data_base_t *db;
+	table_t *table;
+
+	if (db_id > (MAX_DATABASES - 1))	
+		return -1; 
+
+	db = g_dbs[db_id];
+	if(!db)
+		return -2;
+
+	if ((table_id > (MAX_TABLES - 1)) || !db->tables[table_id])
+		return -2; 
+
+	table = db->tables[table_id];
+	
+	bflush(table);
+	return 0;
 	
 
 };
@@ -423,14 +457,13 @@ int join_rows(void *join_row, unsigned int join_row_size, void * row_left, unsig
 }; 
 
 /* Join */
-int ecall_join(int db_id, join_condition_t *c, int *join_tbl_id) {
+int ecall_join(int db_id, join_condition_t *c, int *join_table_id) {
 	int ret;
 	data_base_t *db;
-	table_t *tbl_left, *tbl_right;
+	table_t *tbl_left, *tbl_right, *join_table;
 	void *row_left = NULL, *row_right = NULL, *join_row = NULL;
 	schema_t join_sc;
 	std::string join_table_name;  
-	int join_table_id; 
 
 	if ((db_id > (MAX_DATABASES - 1)) || !g_dbs[db_id] || !c )	
 		return -1; 
@@ -452,15 +485,15 @@ int ecall_join(int db_id, join_condition_t *c, int *join_tbl_id) {
 		return ret; 
 	}
 
-	ret = ecall_create_table(db_id, 
-				join_table_name.c_str(), 
-				join_table_name.length(), 
-				&join_sc, 
-				&join_table_id);
+	ret = create_table(db, join_table_name, &join_sc, &join_table);
 	if (ret) {
 		ERR("create table:%d\n", ret);
 		return ret; 
 	}
+
+	*join_table_id = join_table->id; 
+
+	DBG("Created join table %s, id:%d\n", join_table_name.c_str(), join_table_id); 
 
 	join_row = malloc(MAX_ROW_SIZE*2);
 	if(!join_row)
@@ -518,7 +551,7 @@ int ecall_join(int db_id, join_condition_t *c, int *join_tbl_id) {
 				}
 			
 				/* Add row to the join */
-				ret = ecall_insert_row_dbg(db_id, join_table_id, join_row);
+				ret = insert_row_dbg(join_table, join_row);
 				if(ret) {
 					ERR("failed to join row %d of table %s with row %d of table %s\n",
 						i, tbl_left->name.c_str(), j, tbl_right->name.c_str());
@@ -528,6 +561,8 @@ int ecall_join(int db_id, join_condition_t *c, int *join_tbl_id) {
 
 		}
 	}
+
+	bflush(join_table); 
 
 	ret = 0;
 cleanup: 
@@ -549,29 +584,11 @@ cleanup:
  *
  */
 
-/* Insert one row. This one is not oblivious, will insert 
-   a row at the very end of the table which is pointed by 
-   table->num_rows 
- */
-int ecall_insert_row_dbg(int db_id, int table_id, void *row) {
-
-	data_base_t *db;
+int insert_row_dbg(table_t *table, void *row) {
 	unsigned long dblk_num;
 	unsigned long row_off, rows_per_blk; 
-	table_t *table;
 	data_block_t *b;
 
-	if ((db_id > (MAX_DATABASES - 1)) || !g_dbs[db_id] 
-		|| !row )
-		return -1; 
-
-	db = g_dbs[db_id]; 
-	
-	if ((table_id > (MAX_TABLES - 1)) || !db->tables[table_id])
-		return -2; 
-
-	table = db->tables[table_id];
-	
 	rows_per_blk = DATA_BLOCK_SIZE / table->sc.row_size; 
 	dblk_num = table->num_rows / rows_per_blk;
 
@@ -588,6 +605,31 @@ int ecall_insert_row_dbg(int db_id, int table_id, void *row) {
 	bwrite(b);
 	brelse(b);
 	return 0; 
+
+
+}
+
+/* Insert one row. This one is not oblivious, will insert 
+   a row at the very end of the table which is pointed by 
+   table->num_rows 
+ */
+int ecall_insert_row_dbg(int db_id, int table_id, void *row) {
+
+	data_base_t *db;
+	table_t *table;
+
+	if ((db_id > (MAX_DATABASES - 1)) || !g_dbs[db_id] 
+		|| !row )
+		return -1; 
+
+	db = g_dbs[db_id]; 
+	
+	if ((table_id > (MAX_TABLES - 1)) || !db->tables[table_id])
+		return -2; 
+
+	table = db->tables[table_id];
+
+	return insert_row_dbg(table, row); 	
 }
 
 

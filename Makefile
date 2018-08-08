@@ -7,9 +7,7 @@ OBJDUMP = $(TOOLPREFIX)objdump
 CFLAGS :=-std=c++11 -Wall -g -D_GNU_SOURCE -pthread -lm -fno-pic -O2 
 CFLAGS +=-fsanitize=address
 #CFLAGS +=-DVERBOSE
- 
-#CFLAGS += -DVERBOSE_DEBUG -DVERBOSE_ASSERT
-#CFLAGS += -DNDEBUG
+
 
 INCLUDES := -I. 
 

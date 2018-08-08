@@ -29,6 +29,7 @@ typedef struct bcache {
 void binit(bcache_t *bcache);
 data_block_t *bget(struct table *table, unsigned int blk_num);
 data_block_t* bread(struct table *table, unsigned int blk_num);
+int bflush(struct table *table);
 void bwrite(data_block_t *b);
 void brelse(data_block_t *b);
 

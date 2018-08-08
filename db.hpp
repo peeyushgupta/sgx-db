@@ -54,6 +54,7 @@ typedef struct {
 } schema_t;
 
 typedef struct table {
+	unsigned long id; 
 	std::string name;
 	schema_t sc;
 	unsigned long long num_rows;  /* Number of rows in the table (used only 
@@ -93,10 +94,14 @@ struct join_condition {
 int read_data_block(table *table, unsigned long blk_num, void *buf);
 int write_data_block(table *table, unsigned long blk_num, void *buf); 
 
+int insert_row_dbg(table_t *table, void *row);
+
+
 /* Enclave interface */
 
 int ecall_create_db(const char *cname, int name_len, int *db_id);
 int ecall_create_table(int db_id, const char *cname, int name_len, schema_t *schema, int *table_id);
 int ecall_insert_row_dbg(int db_id, int table_id, void *row);
+int ecall_flush_table(int db_id, int table_id);
 int ecall_join(int db_id, join_condition_t *c, int *join_tbl_id);
 

@@ -20,6 +20,8 @@
 #include "bcache.hpp"
 #include "db.hpp"
 
+#define VERBOSE_BCACHE 0
+
 void binit(bcache_t *bcache)
 {
 	data_block_t *b;
@@ -51,6 +53,8 @@ data_block_t *bget(struct table *table, unsigned int blk_num)
 	for(b = bcache->head.next; b != &bcache->head; b = b->next){
 		if(b->table == table && b->blk_num == blk_num){
 			b->refcnt++;
+			DBG_ON(VERBOSE_BCACHE, "blk:%p (flags:%x), num:%d, b->table:%s for table:%s\n", 
+				b, b->flags, blk_num, b->table->name.c_str(), table->name.c_str()); 
 			return b;
 		}
 	}
@@ -59,15 +63,18 @@ data_block_t *bget(struct table *table, unsigned int blk_num)
 	for(b = bcache->head.prev; b != &bcache->head; b = b->prev){
 		if(b->refcnt == 0) {
 			if(b->flags & B_DIRTY) {
-				//printf("%s: write back dirty block, num:%lu, table:%s\n", 
-				//	__func__, b->blk_num, table->name.c_str()); 
-				ret = write_data_block(table, b->blk_num, b->data);
+				DBG_ON(VERBOSE_BCACHE, "write back dirty block: %p (data:%p), num:%lu, table:%s\n", 
+					b, b->data, b->blk_num, b->table->name.c_str()); 
+				ret = write_data_block(b->table, b->blk_num, b->data);
 				if (ret) {
 					ERR("writing dirty block:%lu for table %s\n", 
-						b->blk_num, table->name.c_str()); 
+						b->blk_num, b->table->name.c_str()); 
 					return NULL;
 				}
 			}
+
+			DBG_ON(VERBOSE_BCACHE, "re-using blk:%p (flags:%x), num:%d, b->table:%s for table:%s\n", 
+				b, b->flags, blk_num, b->table ? b->table->name.c_str() : "NULL", table->name.c_str()); 
 
 			b->table = table;
 			b->blk_num = blk_num;
@@ -80,6 +87,30 @@ data_block_t *bget(struct table *table, unsigned int blk_num)
 	return NULL;
 }
 
+int bflush(struct table *table)
+{
+	data_block_t *b;
+	int ret; 
+
+	bcache_t *bcache = &table->db->bcache;
+
+	// Is the block already cached?
+	for(b = bcache->head.next; b != &bcache->head; b = b->next) {
+		if(b->table == table && b->flags & B_DIRTY) {
+			DBG_ON(VERBOSE_BCACHE, "write back dirty block: %p (data:%p), num:%lu, table:%s\n", 
+					b, b->data, b->blk_num, b->table->name.c_str()); 
+			ret = write_data_block(b->table, b->blk_num, b->data);
+			if (ret) {
+				ERR("writing dirty block:%lu for table %s\n", 
+					b->blk_num, table->name.c_str()); 
+				return -1;
+			}
+			b->flags &= ~B_DIRTY; 
+		}
+	}
+
+	return 0;
+}
 // Return a locked buf with the contents of the indicated block.
 data_block_t* bread(table_t *table, uint blk_num)
 {
@@ -88,6 +119,9 @@ data_block_t* bread(table_t *table, uint blk_num)
 
 	b = bget(table, blk_num);
 	if((b->flags & B_VALID) == 0) {
+		DBG_ON(VERBOSE_BCACHE, "read block: %p (data:%p), num:%lu, table:%s\n", 
+			b, b->data, b->blk_num, table->name.c_str()); 
+
 		ret = read_data_block(table, blk_num, b->data);
 		if (ret) {
 			ERR("failed reading data block %d for table:%s\n", 
@@ -102,6 +136,9 @@ data_block_t* bread(table_t *table, uint blk_num)
 // Mark block as dirty
 void bwrite(data_block_t *b)
 {
+	DBG_ON(VERBOSE_BCACHE, "marking dirty blk:%p (flags:%x), num:%lu, b->table:%s\n", 
+		b, b->flags, b->blk_num, b->table->name.c_str()); 
+
 	b->flags |= B_DIRTY;
 }
 

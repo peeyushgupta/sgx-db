@@ -51,7 +51,7 @@ int test_rankings() {
 
 	row[0] = 'a';
 	//for(int i = 0; i < 360000; i++) { 
-	for(int i = 0; i < 100; i++) { 
+	for(int i = 0; i < 10000; i++) { 
 
 		memset(row, 'a', MAX_ROW_SIZE);
 		file.getline(line, MAX_ROW_SIZE); //get the field
@@ -82,6 +82,7 @@ int test_rankings() {
 	
 	}
 
+	ecall_flush_table(db_id, table_id);
 	printf("created rankings table\n");
 
 	sc_udata.num_fields = 10;
@@ -128,7 +129,7 @@ int test_rankings() {
 
 	row[0] = 'a';
 	//for(int i = 0; i < 350000; i++){//TODO temp really 350000
-	for(int i = 0; i < 100; i++){//TODO temp really 350000
+	for(int i = 0; i < 10000; i++){//TODO temp really 350000
 	
 		memset(row, 'a', MAX_ROW_SIZE);
 		file2.getline(line, MAX_ROW_SIZE);//get the field
@@ -157,6 +158,7 @@ int test_rankings() {
 
 	}
 
+	ecall_flush_table(db_id, udata_table_id);
 	printf("created uservisits table\n");
 
 	c.num_conditions = 1; 
@@ -171,8 +173,8 @@ int test_rankings() {
 		return ret; 
 	}
 
+	ecall_flush_table(db_id, join_table_id);
 	printf("joined successfully\n");
-
 	return 0;
 
 }
