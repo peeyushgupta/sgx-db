@@ -37,13 +37,13 @@ int test_rankings() {
 
 	ret = ecall_create_db(db_name.c_str(), db_name.length(), &db_id);
 	if (ret) {
-		printf("%s:create db error:%d\n", __func__, ret);
+		ERR("create db error:%d\n", ret);
 		return ret; 
 	}
 
 	ret = ecall_create_table(db_id, table_name.c_str(), table_name.length(), &sc, &table_id);
 	if (ret) {
-		printf("%s:create table error:%d\n", __func__, ret);
+		ERR("create table error:%d\n", ret);
 		return ret; 
 	}
 
@@ -51,14 +51,15 @@ int test_rankings() {
 
 	row[0] = 'a';
 	//for(int i = 0; i < 360000; i++) { 
-	for(int i = 0; i < 10000; i++) { 
+	for(int i = 0; i < 100; i++) { 
 
 		memset(row, 'a', MAX_ROW_SIZE);
 		file.getline(line, MAX_ROW_SIZE); //get the field
 
 		std::istringstream ss(line);
 		for(int j = 1; j < sc.num_fields; j++) {
-			if(!ss.getline(data, MAX_ROW_SIZE, ',')){
+			if(!ss.getline(data, MAX_ROW_SIZE, ',')) {
+				ERR("something is wrong with data (skipping):%s\n", line);
 				break;
 			}
 			if(sc.types[j] == INTEGER) {
@@ -69,10 +70,12 @@ int test_rankings() {
 				strncpy((char*)&row[sc.offsets[j]], data, strlen(data) + 1);
 			}
 		}
+
+		DBG("insert row:%s\n", (char*)row); 
 	
 		ret = ecall_insert_row_dbg(db_id, table_id, row);
 		if (ret) {
-			printf("%s:insert row:%d, err:%d\n", __func__, i, ret);
+			ERR("insert row:%d, err:%d\n", i, ret);
 			return ret; 
 		}
 		
@@ -117,7 +120,7 @@ int test_rankings() {
 
 	ret = ecall_create_table(db_id, udata_table_name.c_str(), udata_table_name.length(), &sc_udata, &udata_table_id);
 	if (ret) {
-		printf("%s:create table error:%d, table:%s\n", __func__, ret, udata_table_name.c_str());
+		ERR("create table error:%d, table:%s\n", ret, udata_table_name.c_str());
 		return ret; 
 	}
 
@@ -125,7 +128,7 @@ int test_rankings() {
 
 	row[0] = 'a';
 	//for(int i = 0; i < 350000; i++){//TODO temp really 350000
-	for(int i = 0; i < 10000; i++){//TODO temp really 350000
+	for(int i = 0; i < 100; i++){//TODO temp really 350000
 	
 		memset(row, 'a', MAX_ROW_SIZE);
 		file2.getline(line, MAX_ROW_SIZE);//get the field
@@ -147,8 +150,8 @@ int test_rankings() {
 
 		ret = ecall_insert_row_dbg(db_id, udata_table_id, row);
 		if (ret) {
-			printf("%s:insert row:%d into %s, err:%d\n", 
-				__func__, i, udata_table_name.c_str(), ret);
+			ERR("insert row:%d into %s, err:%d\n", 
+				i, udata_table_name.c_str(), ret);
 			return ret; 
 		}
 
@@ -164,7 +167,7 @@ int test_rankings() {
 
 	ret = ecall_join(db_id, &c, &join_table_id);
 	if (ret) {
-		printf("%s:join failed, err:%d\n", __func__, ret);
+		ERR("join failed, err:%d\n", ret);
 		return ret; 
 	}
 

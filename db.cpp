@@ -142,7 +142,7 @@ int alloc_data_blocks(data_base_t *db) {
 	for (i = 0; i < DATA_BLKS_PER_DB; i++) {
 		db->bcache.data_blks[i].data = malloc(DATA_BLOCK_SIZE);
 		if (!db->bcache.data_blks[i].data) {
-			printf("%s: alloc failed\n", __func__); 
+			ERR("alloc failed\n"); 
 			goto cleanup;
 		};
 	};
@@ -181,7 +181,7 @@ int read_data_block(table *table, unsigned long blk_num, void *buf) {
 		read = ocall_read_file(table->fd, 
 			(void *)((char *)buf + total_read), FILE_READ_SIZE);
 		if (read < 0) {
-			printf("%s: read filed\n", __func__); 
+			ERR("read filed\n"); 
 			return -1; 
 		}
 		if (read == 0) {
@@ -208,7 +208,7 @@ int write_data_block(table *table, unsigned long blk_num, void *buf) {
 		written = ocall_write_file(table->fd, 
 			(void *)((char *)buf + total_written), FILE_READ_SIZE);
 		if (written < 0) {
-			printf("%s: write filed\n", __func__); 
+			ERR("write filed\n"); 
 			return -1; 
 		}
 		total_written += written;  
@@ -352,7 +352,7 @@ bool cmp_row(table_t *tbl_left, void *row_left, int field_left, table_t *tbl_rig
 		char *left = (char*)get_column(&tbl_left->sc, field_left, row_left); 
 		char *right = (char*)get_column(&tbl_right->sc, field_right, row_right);
 
-		//printf("%s:left:%s, right:%s\n", __func__, left, right); 
+		DBG("left:%s, right:%s\n", left, right); 
 
 		int ret = strncmp(left, right, MAX_ROW_SIZE);
 		if (ret == 0) 
@@ -448,7 +448,7 @@ int ecall_join(int db_id, join_condition_t *c, int *join_tbl_id) {
 
 	ret = join_schema(&join_sc, &tbl_left->sc, &tbl_right->sc); 
 	if (ret) {
-		printf("%s:create table error:%d\n", __func__, ret);
+		ERR("create table error:%d\n", ret);
 		return ret; 
 	}
 
@@ -458,7 +458,7 @@ int ecall_join(int db_id, join_condition_t *c, int *join_tbl_id) {
 				&join_sc, 
 				&join_table_id);
 	if (ret) {
-		printf("%s:create table error:%d\n", __func__, ret);
+		ERR("create table:%d\n", ret);
 		return ret; 
 	}
 
@@ -479,8 +479,8 @@ int ecall_join(int db_id, join_condition_t *c, int *join_tbl_id) {
 		// Read left row
 		ret = read_row(tbl_left, i, row_left);
 		if(ret) {
-			printf("%s, failed to read row %d of table %s\n",
-				__func__, i, tbl_left->name.c_str());
+			ERR("failed to read row %d of table %s\n",
+				i, tbl_left->name.c_str());
 			goto cleanup;
 		}
 
@@ -492,12 +492,14 @@ int ecall_join(int db_id, join_condition_t *c, int *join_tbl_id) {
 			// Read right row
 			ret = read_row(tbl_right, j, row_right);
 			if(ret) {
-				printf("%s, failed to read row %d of table %s\n",
-					__func__, i, tbl_right->name.c_str());
+				ERR("failed to read row %d of table %s\n",
+					i, tbl_right->name.c_str());
 				goto cleanup;
 			}
 
 			for(unsigned int k = 0; k < c->num_conditions; k++) {
+				DBG("comparing (i:%d, j:%d, k:%d\n", i, j, k); 
+
 				eq = cmp_row(tbl_left, row_left, c->fields_left[k], tbl_right, row_right, c->fields_right[k]);
 				if (!eq) {
 					equal = eq; 
@@ -506,20 +508,20 @@ int ecall_join(int db_id, join_condition_t *c, int *join_tbl_id) {
 			}
 
 			if (equal) { 
-				//printf("%s, joining (i:%d, j:%d)\n", __func__, i, j); 
+				DBG("joining (i:%d, j:%d)\n", i, j); 
 
 				ret = join_rows(join_row, join_sc.row_size, row_left, tbl_left->sc.row_size, row_right, tbl_right->sc.row_size); 
 				if(ret) {
-					printf("%s, failed to produce a joined row %d of table %s with row %d of table %s\n",
-						__func__, i, tbl_left->name.c_str(), j, tbl_right->name.c_str());
+					ERR("failed to produce a joined row %d of table %s with row %d of table %s\n",
+						i, tbl_left->name.c_str(), j, tbl_right->name.c_str());
 					goto cleanup;
 				}
 			
 				/* Add row to the join */
 				ret = ecall_insert_row_dbg(db_id, join_table_id, join_row);
 				if(ret) {
-					printf("%s, failed to join row %d of table %s with row %d of table %s\n",
-						__func__, i, tbl_left->name.c_str(), j, tbl_right->name.c_str());
+					ERR("failed to join row %d of table %s with row %d of table %s\n",
+						i, tbl_left->name.c_str(), j, tbl_right->name.c_str());
 					goto cleanup;
 				}
 			}

@@ -2,7 +2,7 @@
 
 #include <string>
 
-//#include "util.hpp"
+#include "dbg.hpp"
 #include "bcache.hpp"
 
 #define MAX_DATABASES 1

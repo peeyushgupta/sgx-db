@@ -63,7 +63,8 @@ data_block_t *bget(struct table *table, unsigned int blk_num)
 				//	__func__, b->blk_num, table->name.c_str()); 
 				ret = write_data_block(table, b->blk_num, b->data);
 				if (ret) {
-					printf("%s: error writing dirty block:%lu for table %s\n", __func__, b->blk_num, table->name.c_str()); 
+					ERR("writing dirty block:%lu for table %s\n", 
+						b->blk_num, table->name.c_str()); 
 					return NULL;
 				}
 			}
@@ -75,7 +76,7 @@ data_block_t *bget(struct table *table, unsigned int blk_num)
 			return b;
 		}
 	}
-	printf("%s: panic: no buffers\n", __func__);
+	ERR("panic: no buffers\n");
 	return NULL;
 }
 
@@ -88,8 +89,11 @@ data_block_t* bread(table_t *table, uint blk_num)
 	b = bget(table, blk_num);
 	if((b->flags & B_VALID) == 0) {
 		ret = read_data_block(table, blk_num, b->data);
-		if (ret)
+		if (ret) {
+			ERR("failed reading data block %d for table:%s\n", 
+				blk_num, table->name.c_str()); 
 			return NULL;
+		}
 		b->flags |= B_VALID; 
 	}
 	return b;
