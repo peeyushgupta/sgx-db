@@ -19,6 +19,7 @@
 
 #include "bcache.hpp"
 #include "db.hpp"
+#include "util.hpp"
 
 #define VERBOSE_BCACHE 0
 
@@ -112,7 +113,7 @@ int bflush(struct table *table)
 	return 0;
 }
 // Return a locked buf with the contents of the indicated block.
-data_block_t* bread(table_t *table, uint blk_num)
+data_block_t* bread(table_t *table, unsigned int blk_num)
 {
 	data_block_t *b;
 	int ret; 

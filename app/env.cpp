@@ -3,6 +3,17 @@
 #include <sys/types.h>
 #include <sys/stat.h>
 #include <fcntl.h>
+#include <stdio.h>
+#include "enclave_u.h"
+
+void ocall_print_string(const char *str)
+{
+	/* Proxy/Bridge will check the length and null-terminate 
+	* the input string to prevent buffer overflow. 
+	*/
+	printf("%s", str);
+	return;
+};
 
 /* Open a file descriptor to store the table */
 int ocall_open_file(const char *name) {

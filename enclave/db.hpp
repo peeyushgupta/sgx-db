@@ -98,10 +98,11 @@ int insert_row_dbg(table_t *table, void *row);
 
 
 /* Enclave interface */
-
+#if NO_SGX
 int ecall_create_db(const char *cname, int name_len, int *db_id);
 int ecall_create_table(int db_id, const char *cname, int name_len, schema_t *schema, int *table_id);
 int ecall_insert_row_dbg(int db_id, int table_id, void *row);
 int ecall_flush_table(int db_id, int table_id);
 int ecall_join(int db_id, join_condition_t *c, int *join_tbl_id);
+#endif
 

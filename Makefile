@@ -85,8 +85,8 @@ else
 	Urts_Library_Name := sgx_urts
 endif
 
-App_Cpp_Files := main.cpp 
-App_Include_Paths := -I. -I$(SGX_SDK)/include
+App_Cpp_Files := app/main.cpp app/env.cpp app/db-tests.cpp
+App_Include_Paths := -I./ -I./include -I./enclave -I$(SGX_SDK)/include
 
 App_C_Flags := $(SGX_COMMON_CFLAGS) -fPIC -Wno-attributes $(App_Include_Paths)
 
@@ -126,9 +126,9 @@ else
 endif
 Crypto_Library_Name := sgx_tcrypto
 
-Enclave_Cpp_Files := bcache.cpp \
-			bitonic.cpp \
-			db.cpp
+Enclave_Cpp_Files := enclave/bcache.cpp \
+			enclave/db.cpp \
+			enclave/util.cpp
 Enclave_Include_Paths := -Iinclude -Ienclave -I$(SGX_SDK)/include -I$(SGX_SDK)/include/tlibc -I$(SGX_SDK)/include/libcxx
 
 CC_BELOW_4_9 := $(shell expr "`$(CC) -dumpversion`" \< "4.9")
@@ -154,7 +154,7 @@ Enclave_Link_Flags := $(SGX_COMMON_CFLAGS) -Wl,--no-undefined -nostdlib -nodefau
 	-Wl,-Bstatic -Wl,-Bsymbolic -Wl,--no-undefined \
 	-Wl,-pie,-eenclave_entry -Wl,--export-dynamic  \
 	-Wl,--defsym,__ImageBase=0 -Wl,--gc-sections   \
-	-Wl,--version-script=Enclave/Enclave.lds
+	-Wl,--version-script=enclave/enclave.lds
 
 Enclave_Cpp_Objects := $(Enclave_Cpp_Files:.cpp=.o)
 

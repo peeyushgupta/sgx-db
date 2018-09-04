@@ -1,15 +1,25 @@
  /* Enclave.edl - Top EDL file. */
 
 enclave {
-    
-    
-    /* 
-     * ocall_print_string - invokes OCALL to display string buffer inside the enclave.
-     *  [in]: copy the string buffer to App outside.
-     *  [string]: specifies 'str' is a NULL terminated buffer.
-     */
-    untrusted {
-         /* void ocall_print_string([in, string] const char *str); */
-    };
+
+	include "db.hpp" 
+	include "stdio.h"
+
+	untrusted {
+		void ocall_print_string([in, string] const char *str);
+		/* File operations to read/write tables from disk */
+		int ocall_open_file([in, string] const char *name); 
+		int ocall_write_file(int fd, [in,size=size] void* buf, unsigned long size); 
+		int ocall_read_file(int fd, [out,size=size] void* buf, unsigned long size);
+		int ocall_seek(int fd, unsigned long offset);
+	};
+ 
+	trusted {
+		public int ecall_create_db([in,size=name_len] const char *cname, int name_len, [out] int *db_id);
+		public int ecall_create_table(int db_id, [in,size=name_len] const char *cname, int name_len, [user_check]schema_t *schema, [out]int *table_id);
+		public int ecall_insert_row_dbg(int db_id, int table_id, [user_check] void *row);
+		public int ecall_flush_table(int db_id, int table_id);
+		public int ecall_join(int db_id, [user_check]join_condition_t *c, [out]int *join_tbl_id);
+	};
 
 };

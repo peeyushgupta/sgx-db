@@ -1,6 +1,12 @@
 #include "db.hpp"
 #include "obli.hpp"
+
+#if defined(NO_SGX)
 #include "env.hpp"
+#else
+#include "enclave_t.h"
+#endif
+
 #include "bcache.hpp"
 
 #include <cstdlib>
@@ -173,12 +179,12 @@ void free_data_blocks(data_base_t *db) {
    region is passed as the  DataBlock argument), decrypt on the fly */
 int read_data_block(table *table, unsigned long blk_num, void *buf) {
 	unsigned long long total_read = 0; 
-	long long read; 
+	int read, ret; 
 
-	ocall_seek(table->fd, blk_num*DATA_BLOCK_SIZE); 
+	ocall_seek(&ret, table->fd, blk_num*DATA_BLOCK_SIZE); 
 
 	while (total_read < DATA_BLOCK_SIZE) { 
-		read = ocall_read_file(table->fd, 
+		ocall_read_file(&read, table->fd, 
 			(void *)((char *)buf + total_read), FILE_READ_SIZE);
 		if (read < 0) {
 			ERR("read filed\n"); 
@@ -200,12 +206,12 @@ int read_data_block(table *table, unsigned long blk_num, void *buf) {
 */
 int write_data_block(table *table, unsigned long blk_num, void *buf) {
 	unsigned long long total_written = 0; 
-	long long written; 
+	int written, ret; 
 
-	ocall_seek(table->fd, blk_num*DATA_BLOCK_SIZE);
+	ocall_seek(&ret, table->fd, blk_num*DATA_BLOCK_SIZE);
  
 	while (total_written < DATA_BLOCK_SIZE) { 
-		written = ocall_write_file(table->fd, 
+		ocall_write_file(&written, table->fd, 
 			(void *)((char *)buf + total_written), FILE_READ_SIZE);
 		if (written < 0) {
 			ERR("write filed\n"); 
@@ -292,7 +298,7 @@ int create_table(data_base_t *db, std::string &name, schema_t *schema, table_t *
 	table->db = db; 	
 
 	/* Call outside of enclave to open a file for the table */
-	fd = ocall_open_file(name.c_str());
+	fd = ocall_open_file(&ret, name.c_str());
 	if (fd < 0) {
 		ret = -5;
 		goto cleanup; 
