@@ -8,3 +8,11 @@
 *.swp
 tests
 db
+.config_SIM_DEBUG_x64
+app/enclave_u.c
+app/enclave_u.h
+enclave.signed.so
+enclave.so
+enclave/enclave_t.c
+enclave/enclave_t.h
+
