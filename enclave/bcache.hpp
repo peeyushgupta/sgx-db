@@ -1,6 +1,8 @@
 #pragma once
 
-#define DATA_BLKS_PER_DB 2 /* two data blocks per DB */
+#define DATA_BLOCK_SIZE (1 << 20) /* 1 MB for now */
+#define DATA_BLKS_PER_DB 90 /* data blocks per DB */
+
 
 typedef struct data_block {
   int flags;
