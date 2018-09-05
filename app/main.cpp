@@ -1,5 +1,6 @@
 #include "db-tests.hpp"
 #include "dbg.hpp"
+#include "apputil.hpp"
 #include <cstdio>
 
 /* Global EID shared by multiple threads */
@@ -21,6 +22,7 @@ int main(){
 				&eid, NULL);
 	if (ret != SGX_SUCCESS) {
 		ERR("Failed to create SGX enclave:%d\n", ret);
+		print_sgx_error(ret);
 		return -1;
     	}
 
