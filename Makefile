@@ -6,7 +6,7 @@ OBJDUMP = $(TOOLPREFIX)objdump
 
 CFLAGS :=-std=c++11 -Wall -g -D_GNU_SOURCE -pthread -lm -fno-pic -O2 
 CFLAGS +=-fsanitize=address
-#SGX_COMMON_CFLAGS +=-DVERBOSE
+SGX_COMMON_CFLAGS +=-DVERBOSE
 
 #INCLUDES := -I. 
 #

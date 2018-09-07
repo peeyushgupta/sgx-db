@@ -6,12 +6,12 @@
 #include "bcache.hpp"
 
 #define MAX_DATABASES 1
-#define DATA_BLOCK_SIZE (1 << 20) /* 1 MB for now */
 #define MAX_ROWS (1 << 20) /* 1 M for now */
 #define MAX_ROW_SIZE (1 << 12) /* 4096 for now */
 #define MAX_TABLES 10
 #define MAX_COLS 20
 #define MAX_CONDITIONS 3 // number of ORs allowed in one clause of a condition
+#define THREADS_PER_DB 1 // number of threads concurrently working on DB
 
 typedef enum schema_type {
 	BOOLEAN = 1,
@@ -69,6 +69,7 @@ typedef struct data_base {
 	std::string name;
 	table_t *tables[MAX_TABLES];
 	bcache_t bcache;
+	void *io_buf[THREADS_PER_DB]; /* each thread has an I/O buffer */
 } data_base_t;
 
 // One condition allows you to join two tables (left 

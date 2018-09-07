@@ -9,8 +9,13 @@ enclave {
 		void ocall_print_string([in, string] const char *str);
 		/* File operations to read/write tables from disk */
 		int ocall_open_file([in, string] const char *name); 
-		int ocall_write_file(int fd, [in,size=size] void* buf, unsigned long size); 
-		int ocall_read_file(int fd, [out,size=size] void* buf, unsigned long size);
+
+		void *ocall_alloc_io_buf(unsigned long size); 
+		void ocall_free_io_buf([user_check] void *buf);
+		
+		/* BU: ok, this is exploitable... enclave can overwrite it's own memory */
+		int ocall_write_file(int fd, [user_check] void* buf, unsigned long size); 
+		int ocall_read_file(int fd, [user_check] void* buf, unsigned long size);
 		int ocall_seek(int fd, unsigned long offset);
 	};
  
@@ -20,6 +25,7 @@ enclave {
 		public int ecall_insert_row_dbg(int db_id, int table_id, [user_check] void *row);
 		public int ecall_flush_table(int db_id, int table_id);
 		public int ecall_join(int db_id, [user_check]join_condition_t *c, [out]int *join_tbl_id);
+		public int ecall_scan_table_dbg(int db_id, int table_id);
 	};
 
 };

@@ -12,7 +12,7 @@ int test_rankings(sgx_enclave_id_t eid) {
 	std::string db_name("rankings-and-udata");
 	std::string table_name("rankings");
 	std::string udata_table_name("udata");
-	int db_id, table_id, udata_table_id, join_table_id, ret; 
+	int i, db_id, table_id, udata_table_id, join_table_id, ret; 
 	join_condition_t c;
 	char line[MAX_ROW_SIZE]; 
 	char data[MAX_ROW_SIZE];
@@ -37,13 +37,13 @@ int test_rankings(sgx_enclave_id_t eid) {
 	//row = (uint8_t*)malloc(sc.row_size);
 	row = (uint8_t*)malloc(MAX_ROW_SIZE);
 
-	sgx_ret = ecall_create_db(eid, &ret, db_name.c_str(), db_name.length() + 1, &db_id);
+	sgx_ret = ecall_create_db(eid, &ret, db_name.c_str(), db_name.length(), &db_id);
 	if (sgx_ret || ret) {
 		ERR("create db error:%d (sgx ret:%d)\n", ret, sgx_ret);
 		return ret; 
 	}
 
-	sgx_ret = ecall_create_table(eid, &ret, db_id, table_name.c_str(), table_name.length() + 1, &sc, &table_id);
+	sgx_ret = ecall_create_table(eid, &ret, db_id, table_name.c_str(), table_name.length(), &sc, &table_id);
 	if (sgx_ret || ret) {
 		ERR("create table error:%d (sgx ret:%d)\n", ret, sgx_ret);
 		return ret; 
@@ -52,8 +52,8 @@ int test_rankings(sgx_enclave_id_t eid) {
 	std::ifstream file("rankings.csv");
 
 	row[0] = 'a';
-	//for(int i = 0; i < 360000; i++) { 
-	for(int i = 0; i < 10000; i++) { 
+	for(int i = 0; i < 360000; i++) { 
+	//for(int i = 0; i < 10000; i++) { 
 
 		memset(row, 'a', MAX_ROW_SIZE);
 		file.getline(line, MAX_ROW_SIZE); //get the field
@@ -73,7 +73,7 @@ int test_rankings(sgx_enclave_id_t eid) {
 			}
 		}
 
-		DBG("insert row:%s\n", (char*)row); 
+		//DBG_ON(VERBOSE_INSERT, "insert row:%s\n", (char*)row); 
 	
 		sgx_ret = ecall_insert_row_dbg(eid, &ret, db_id, table_id, row);
 		if (sgx_ret) {
@@ -121,7 +121,7 @@ int test_rankings(sgx_enclave_id_t eid) {
 
 	sc_udata.row_size = sc_udata.offsets[sc_udata.num_fields - 1] + sc_udata.sizes[sc_udata.num_fields - 1];
 
-	sgx_ret = ecall_create_table(eid, &ret, db_id, udata_table_name.c_str(), udata_table_name.length() + 1, &sc_udata, &udata_table_id);
+	sgx_ret = ecall_create_table(eid, &ret, db_id, udata_table_name.c_str(), udata_table_name.length(), &sc_udata, &udata_table_id);
 	if (sgx_ret || ret) {
 		ERR("create table error:%d (sgx ret:%d), table:%s\n", 
 			ret, sgx_ret, udata_table_name.c_str());
@@ -131,8 +131,8 @@ int test_rankings(sgx_enclave_id_t eid) {
 	std::ifstream file2("uservisits.csv");
 
 	row[0] = 'a';
-	//for(int i = 0; i < 350000; i++){//TODO temp really 350000
-	for(int i = 0; i < 10000; i++){//TODO temp really 350000
+	for(int i = 0; i < 350000; i++){//TODO temp really 350000
+	//for(int i = 0; i < 10000; i++){//TODO temp really 350000
 	
 		memset(row, 'a', MAX_ROW_SIZE);
 		file2.getline(line, MAX_ROW_SIZE);//get the field
@@ -163,6 +163,15 @@ int test_rankings(sgx_enclave_id_t eid) {
 
 	ecall_flush_table(eid, &ret, db_id, udata_table_id);
 	printf("created uservisits table\n");
+
+	for (i = 0; i < 10; i++) {
+		ecall_scan_table_dbg(eid, &ret, db_id, table_id);
+	}
+
+	for (i = 0; i < 10; i++) {
+		ecall_scan_table_dbg(eid, &ret, db_id, udata_table_id);
+	}
+
 
 	c.num_conditions = 1; 
 	c.table_left = table_id; 

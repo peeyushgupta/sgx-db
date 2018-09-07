@@ -15,9 +15,13 @@
 
 #include <string.h>
 
-#define FILE_READ_SIZE (1 << 12)
+//#define FILE_READ_SIZE (1 << 12)
+
+#define FILE_READ_SIZE DATA_BLOCK_SIZE
 
 data_base_t* g_dbs[MAX_DATABASES];
+
+static inline int tid() { return 0; }
 
 #if 0
 
@@ -155,8 +159,25 @@ int alloc_data_blocks(data_base_t *db) {
 	};
 
 	binit(&db->bcache);
+
+	for (i = 0; i < THREADS_PER_DB; i++) {
+		ocall_alloc_io_buf(&db->io_buf[i], FILE_READ_SIZE);
+		if (!db->io_buf[i]) {
+			ERR("alloc of io buffer failed\n"); 
+			goto cleanup_io_bufs;
+		};
+	};
+
 	return 0; 
 
+
+cleanup_io_bufs:
+	for (int j = 0; j < i; j++ ) {
+		ocall_free_io_buf(db->io_buf[j]);
+		db->io_buf[j] = NULL; 
+	};
+
+	i = DATA_BLKS_PER_DB; 
 cleanup: 
 
 	for (int j = 0; j < i; j++ ) {
@@ -169,9 +190,19 @@ cleanup:
 /* Free data blocks in enclave's memory */
 void free_data_blocks(data_base_t *db) {
 	for (int i = 0; i < DATA_BLKS_PER_DB; i++ ) {
-		if(db->bcache.data_blks[i].data)
+		if(db->bcache.data_blks[i].data) {
 			free(db->bcache.data_blks[i].data);
+			db->bcache.data_blks[i].data = NULL; 
+		}
 	};
+
+	for (int j = 0; j < THREADS_PER_DB; j++ ) {
+		if (db->io_buf[j]) {
+			ocall_free_io_buf(db->io_buf[j]);
+			db->io_buf[j] = NULL; 
+		}
+	};
+
 	return; 
 };
 
@@ -182,22 +213,40 @@ int read_data_block(table *table, unsigned long blk_num, void *buf) {
 	unsigned long long total_read = 0; 
 	int read, ret; 
 
+	unsigned long long start, end; 
+	start = RDTSC();
+	
 	ocall_seek(&ret, table->fd, blk_num*DATA_BLOCK_SIZE); 
+	
+	end = RDTSC();
+	DBG("ocall_seek: %llu cycles\n", end - start);
+
+	start = RDTSC();
 
 	while (total_read < DATA_BLOCK_SIZE) { 
 		ocall_read_file(&read, table->fd, 
-			(void *)((char *)buf + total_read), FILE_READ_SIZE);
+				table->db->io_buf[tid()], 
+				FILE_READ_SIZE);
 		if (read < 0) {
 			ERR("read filed\n"); 
 			return -1; 
 		}
+
 		if (read == 0) {
 			/* We've reached the end of file, pad with zeroes */
 			read = DATA_BLOCK_SIZE - total_read; 
 			memset((void *)((char *)buf + total_read), 0, read); 
+			return 0; 
+		} else {
+			/* Copy data from the I/O buffer into bcache buffer */
+			memcpy((void *)((char *)buf + total_read), table->db->io_buf[tid()], read); 
 		}
 		total_read += read;  
 	}
+
+	end = RDTSC();
+	DBG("ocall_read_file: %llu cycles\n", end - start);
+
 	return 0; 
 }
 
@@ -206,18 +255,27 @@ int read_data_block(table *table, unsigned long blk_num, void *buf) {
  * have corresponding encryption keys (huh?)
 */
 int write_data_block(table *table, unsigned long blk_num, void *buf) {
-	unsigned long long total_written = 0; 
+	unsigned long long total_written = 0, write_size; 
 	int written, ret; 
 
 	ocall_seek(&ret, table->fd, blk_num*DATA_BLOCK_SIZE);
  
 	while (total_written < DATA_BLOCK_SIZE) { 
+		/* make sure we don't write more than DATA_BLOCK_SIZE */
+		write_size = (total_written + FILE_READ_SIZE) <= DATA_BLOCK_SIZE ? 
+			FILE_READ_SIZE : DATA_BLOCK_SIZE - total_written;  
+
+		/* Copy data into the I/O buffer */
+		memcpy(table->db->io_buf[tid()], 
+			(void *)((char *)buf + total_written), write_size); 
+		/* Submit I/O buffer */
 		ocall_write_file(&written, table->fd, 
-			(void *)((char *)buf + total_written), FILE_READ_SIZE);
+			table->db->io_buf[tid()], 
+			write_size);
 		if (written < 0) {
 			ERR("write filed\n"); 
 			return -1; 
-		}
+		} 
 		total_written += written;  
 	}
 	return 0; 
@@ -517,9 +575,6 @@ int ecall_join(int db_id, join_condition_t *c, int *join_table_id) {
 	unsigned long long start = RDTSC(), end; 
 	unsigned int i_start = 0;
 
-	const unsigned long FREQ = 2200;
-	const unsigned long long cycles_per_sec = FREQ*1000*1000;
-
 	/* Reporting interval = 5 seconds */
 	const unsigned long long REPORTING_INTERVAL = cycles_per_sec * 5;
 
@@ -617,7 +672,7 @@ int insert_row_dbg(table_t *table, void *row) {
 	unsigned long row_off, rows_per_blk; 
 	data_block_t *b;
 
-	DBG("insert row, row size:%lu\n", table->sc.row_size); 
+	//DBG("insert row, row size:%lu\n", table->sc.row_size); 
 
 	rows_per_blk = DATA_BLOCK_SIZE / table->sc.row_size; 
 	dblk_num = table->num_rows / rows_per_blk;
@@ -662,4 +717,63 @@ int ecall_insert_row_dbg(int db_id, int table_id, void *row) {
 	return insert_row_dbg(table, row); 	
 }
 
+/* 
+ * 
+ * Scan the table... debug only 
+ *
+ */
+
+int scan_table_dbg(table_t *table) {
+	unsigned long i;
+	char *row;
+
+	printf("scan table:%s with %lu rows\n", 
+		table->name.c_str(), table->num_rows); 
+
+	row = (char *)malloc(table->sc.row_size); 
+	if (!row) {
+		ERR("can't allocate memory for the row\n");
+		return -1;
+	}
+
+	unsigned long long start, end; 
+	start = RDTSC();
+
+	for (i = 0; i < table->num_rows; i++) {
+	
+		/* Read one row. */
+		read_row(table, i, (void *)row);
+
+	}
+	
+	end = RDTSC();
+	unsigned long long cycles = end - start;
+	unsigned long long msecs = (cycles / cycles_per_msec);
+
+	printf("Scanned table %s in %llu msecs (%llu cycles, %llu cycles per row)\n",
+			table->name.c_str(), msecs, cycles, cycles/table->num_rows);
+
+	return 0; 
+
+}
+
+
+/* Scan the table touching all rows */
+int ecall_scan_table_dbg(int db_id, int table_id) {
+
+	data_base_t *db;
+	table_t *table;
+
+	if ((db_id > (MAX_DATABASES - 1)) || !g_dbs[db_id] )
+		return -1; 
+
+	db = g_dbs[db_id]; 
+	
+	if ((table_id > (MAX_TABLES - 1)) || !db->tables[table_id])
+		return -2; 
+
+	table = db->tables[table_id];
+
+	return scan_table_dbg(table); 	
+}
 

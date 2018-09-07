@@ -1,7 +1,11 @@
 #pragma once
 
-#define DATA_BLOCK_SIZE (1 << 20) /* 1 MB for now */
-#define DATA_BLKS_PER_DB 10 /* data blocks per DB */
+//#define DATA_BLOCK_SIZE (1 << 12) /* 4 KB */
+//#define DATA_BLOCK_SIZE (1 << 20) /* 1 MB  */
+#define DATA_BLOCK_SIZE (40*(1 << 20)) /* X MB  */
+
+#define DATA_BLKS_PER_DB 1 /* data blocks per DB */
+//#define DATA_BLKS_PER_DB 7 /* data blocks per DB */
 
 
 typedef struct data_block {
