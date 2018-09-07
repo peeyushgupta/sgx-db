@@ -37,13 +37,13 @@ int test_rankings(sgx_enclave_id_t eid) {
 	//row = (uint8_t*)malloc(sc.row_size);
 	row = (uint8_t*)malloc(MAX_ROW_SIZE);
 
-	sgx_ret = ecall_create_db(eid, &ret, db_name.c_str(), db_name.length(), &db_id);
+	sgx_ret = ecall_create_db(eid, &ret, db_name.c_str(), db_name.length() + 1, &db_id);
 	if (sgx_ret || ret) {
 		ERR("create db error:%d (sgx ret:%d)\n", ret, sgx_ret);
 		return ret; 
 	}
 
-	sgx_ret = ecall_create_table(eid, &ret, db_id, table_name.c_str(), table_name.length(), &sc, &table_id);
+	sgx_ret = ecall_create_table(eid, &ret, db_id, table_name.c_str(), table_name.length() + 1, &sc, &table_id);
 	if (sgx_ret || ret) {
 		ERR("create table error:%d (sgx ret:%d)\n", ret, sgx_ret);
 		return ret; 
@@ -121,7 +121,7 @@ int test_rankings(sgx_enclave_id_t eid) {
 
 	sc_udata.row_size = sc_udata.offsets[sc_udata.num_fields - 1] + sc_udata.sizes[sc_udata.num_fields - 1];
 
-	sgx_ret = ecall_create_table(eid, &ret, db_id, udata_table_name.c_str(), udata_table_name.length(), &sc_udata, &udata_table_id);
+	sgx_ret = ecall_create_table(eid, &ret, db_id, udata_table_name.c_str(), udata_table_name.length() + 1, &sc_udata, &udata_table_id);
 	if (sgx_ret || ret) {
 		ERR("create table error:%d (sgx ret:%d), table:%s\n", 
 			ret, sgx_ret, udata_table_name.c_str());

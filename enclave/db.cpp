@@ -1,4 +1,5 @@
 #include "db.hpp"
+#include "time.hpp"
 #include "obli.hpp"
 
 #if defined(NO_SGX)
@@ -273,7 +274,7 @@ cleanup:
 
 int create_table(data_base_t *db, std::string &name, schema_t *schema, table_t **new_table) {
 	table_t *table; 
-	int i, fd, ret; 
+	int i, fd, ret, sgx_ret; 
 
 	/* Look up an empty Table slot */
 	for (i = 0; i < MAX_TABLES; i++) {
@@ -298,8 +299,8 @@ int create_table(data_base_t *db, std::string &name, schema_t *schema, table_t *
 	table->db = db; 	
 
 	/* Call outside of enclave to open a file for the table */
-	fd = ocall_open_file(&ret, name.c_str());
-	if (fd < 0) {
+	sgx_ret = ocall_open_file(&fd, name.c_str());
+	if (sgx_ret || fd < 0) {
 		ret = -5;
 		goto cleanup; 
 	} 
@@ -513,7 +514,28 @@ int ecall_join(int db_id, join_condition_t *c, int *join_table_id) {
 	if(!row_right)
 		return -6;
 
+	unsigned long long start = RDTSC(), end; 
+	unsigned int i_start = 0;
+
+	const unsigned long FREQ = 2200;
+	const unsigned long long cycles_per_sec = FREQ*1000*1000;
+
+	/* Reporting interval = 5 seconds */
+	const unsigned long long REPORTING_INTERVAL = cycles_per_sec * 5;
+
 	for (unsigned int i = 0; i < tbl_left->num_rows; i ++) {
+
+		end = RDTSC();
+		if(end - start > REPORTING_INTERVAL) {
+			unsigned long long num_recs = (i - i_start) * tbl_right->num_rows;
+			unsigned long long cycles = end - start;
+			unsigned long long secs = (cycles / cycles_per_sec);
+
+			printf("Joined %llu recs (%llu recs per second, %llu cycles per rec)\n",
+					num_recs, num_recs/secs, cycles/num_recs);
+			i_start = i;
+			start = RDTSC();
+		};
 
 		// Read left row
 		ret = read_row(tbl_left, i, row_left);
@@ -594,6 +616,8 @@ int insert_row_dbg(table_t *table, void *row) {
 	unsigned long dblk_num;
 	unsigned long row_off, rows_per_blk; 
 	data_block_t *b;
+
+	DBG("insert row, row size:%lu\n", table->sc.row_size); 
 
 	rows_per_blk = DATA_BLOCK_SIZE / table->sc.row_size; 
 	dblk_num = table->num_rows / rows_per_blk;

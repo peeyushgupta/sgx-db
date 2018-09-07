@@ -20,6 +20,7 @@ int ocall_open_file(const char *name) {
 	int fd; 
 
 	fd = open(name, O_RDWR | O_CREAT, S_IRUSR | S_IWUSR);
+	DBG("open file, fd:%d\n", fd); 
 	return fd; 
 };
 

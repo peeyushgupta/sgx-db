@@ -49,7 +49,7 @@ typedef struct {
 	int offsets[MAX_COLS];
 	int sizes[MAX_COLS];
 	schema_type types[MAX_COLS];
-	std::string names[MAX_COLS];
+	//std::string names[MAX_COLS];
 	int row_size; 
 } schema_t;
 

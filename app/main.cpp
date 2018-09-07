@@ -26,6 +26,8 @@ int main(){
 		return -1;
     	}
 
+	DBG("Created enclave... starting DB tests\n");
+
 	test_rankings(eid); 
 
 
