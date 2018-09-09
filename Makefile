@@ -6,7 +6,7 @@ OBJDUMP = $(TOOLPREFIX)objdump
 
 CFLAGS :=-std=c++11 -Wall -g -D_GNU_SOURCE -pthread -lm -fno-pic -O2 
 CFLAGS +=-fsanitize=address
-SGX_COMMON_CFLAGS +=-DVERBOSE
+#SGX_COMMON_CFLAGS +=-DVERBOSE
 
 #INCLUDES := -I. 
 #
@@ -84,7 +84,7 @@ else
 	Urts_Library_Name := sgx_urts
 endif
 
-App_Cpp_Files := app/main.cpp app/apputil.cpp app/env.cpp app/db-tests.cpp
+App_Cpp_Files := app/main.cpp app/apputil.cpp app/env.cpp app/db-tests.cpp app/time.cpp
 App_Include_Paths := -I./ -I./include -I./enclave -I$(SGX_SDK)/include
 
 App_C_Flags := $(SGX_COMMON_CFLAGS) -fPIC -Wno-attributes $(App_Include_Paths)

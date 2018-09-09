@@ -4,12 +4,20 @@
 #include <sys/stat.h>
 #include <fcntl.h>
 #include <stdio.h>
+#include <time.hpp>
+
 #include "enclave_u.h"
 
 void ocall_null_ocall(void) {
 
 	return;
 };
+
+unsigned long long ocall_rdtsc(void) {
+
+	return RDTSC();
+};
+
 
 
 void ocall_print_string(const char *str)

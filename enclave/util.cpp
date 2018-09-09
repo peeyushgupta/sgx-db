@@ -15,3 +15,12 @@ void printf(const char *fmt, ...)
     va_end(ap);
     ocall_print_string(buf);
 }
+
+
+unsigned long long RDTSC( void ) {
+	unsigned long long tsc;
+	ocall_rdtsc(&tsc);
+	return tsc;
+};
+
+

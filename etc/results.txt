@@ -1,0 +1,566 @@
+4KB (40 blocks per db)
+	-----------------------------------------------------------------------------------
+
+node:528-/15:27>./db 
+Testing: null ecall for 10000 iterations
+Null ecall 10872 cycles
+Testing: null ocall for 10000 iterations
+Null ocall 9613 cycles
+created rankings table
+created uservisits table
+scan table:rankings with 360000 rows
+Scanned table rankings in 717 msecs (1577595539 cycles, 4382 cycles per row)
+scan table:rankings with 360000 rows
+Scanned table rankings in 708 msecs (1559582183 cycles, 4332 cycles per row)
+scan table:rankings with 360000 rows
+Scanned table rankings in 712 msecs (1567458191 cycles, 4354 cycles per row)
+scan table:rankings with 360000 rows
+Scanned table rankings in 715 msecs (1573682051 cycles, 4371 cycles per row)
+scan table:rankings with 360000 rows
+Scanned table rankings in 715 msecs (1574862116 cycles, 4374 cycles per row)
+scan table:rankings with 360000 rows
+Scanned table rankings in 709 msecs (1560465318 cycles, 4334 cycles per row)
+scan table:rankings with 360000 rows
+Scanned table rankings in 712 msecs (1568485258 cycles, 4356 cycles per row)
+scan table:rankings with 360000 rows
+Scanned table rankings in 715 msecs (1574609082 cycles, 4373 cycles per row)
+scan table:rankings with 360000 rows
+Scanned table rankings in 715 msecs (1574658324 cycles, 4374 cycles per row)
+scan table:rankings with 360000 rows
+Scanned table rankings in 709 msecs (1560858341 cycles, 4335 cycles per row)
+scan table:udata with 350000 rows
+Scanned table udata in 5049 msecs (11108194851 cycles, 31737 cycles per row)
+scan table:udata with 350000 rows
+Scanned table udata in 5068 msecs (11150464873 cycles, 31858 cycles per row)
+scan table:udata with 350000 rows
+Scanned table udata in 5059 msecs (11129832468 cycles, 31799 cycles per row)
+scan table:udata with 350000 rows
+Scanned table udata in 5042 msecs (11094330290 cycles, 31698 cycles per row)
+scan table:udata with 350000 rows
+Scanned table udata in 5045 msecs (11099452966 cycles, 31712 cycles per row)
+scan table:udata with 350000 rows
+Scanned table udata in 5042 msecs (11094305769 cycles, 31698 cycles per row)
+scan table:udata with 350000 rows
+Scanned table udata in 5042 msecs (11093553015 cycles, 31695 cycles per row)
+scan table:udata with 350000 rows
+Scanned table udata in 5038 msecs (11085573409 cycles, 31673 cycles per row)
+scan table:udata with 350000 rows
+Scanned table udata in 5045 msecs (11099064584 cycles, 31711 cycles per row)
+scan table:udata with 350000 rows
+Scanned table udata in 5042 msecs (11093898521 cycles, 31696 cycles per row)
+
+8KB (40 blocks per db)
+-------------------------------------------
+
+
+Sun/09.09:/local/devel/projects/sgx-db
+node:533-/15:30>./db 
+Testing: null ecall for 10000 iterations
+Null ecall 11556 cycles
+Testing: null ocall for 10000 iterations
+Null ocall 10326 cycles
+created rankings table
+created uservisits table
+scan table:rankings with 360000 rows
+Scanned table rankings in 365 msecs (803805276 cycles, 2232 cycles per row)
+scan table:rankings with 360000 rows
+Scanned table rankings in 357 msecs (786815736 cycles, 2185 cycles per row)
+scan table:rankings with 360000 rows
+Scanned table rankings in 361 msecs (794517557 cycles, 2206 cycles per row)
+scan table:rankings with 360000 rows
+Scanned table rankings in 364 msecs (801106699 cycles, 2225 cycles per row)
+scan table:rankings with 360000 rows
+Scanned table rankings in 364 msecs (801232926 cycles, 2225 cycles per row)
+scan table:rankings with 360000 rows
+Scanned table rankings in 357 msecs (787558515 cycles, 2187 cycles per row)
+scan table:rankings with 360000 rows
+Scanned table rankings in 361 msecs (794247934 cycles, 2206 cycles per row)
+scan table:rankings with 360000 rows
+Scanned table rankings in 364 msecs (801498097 cycles, 2226 cycles per row)
+scan table:rankings with 360000 rows
+Scanned table rankings in 364 msecs (801853127 cycles, 2227 cycles per row)
+scan table:rankings with 360000 rows
+Scanned table rankings in 358 msecs (787872049 cycles, 2188 cycles per row)
+scan table:udata with 350000 rows
+Scanned table udata in 2061 msecs (4535607735 cycles, 12958 cycles per row)
+scan table:udata with 350000 rows
+Scanned table udata in 2062 msecs (4537477180 cycles, 12964 cycles per row)
+scan table:udata with 350000 rows
+Scanned table udata in 2061 msecs (4535914942 cycles, 12959 cycles per row)
+scan table:udata with 350000 rows
+Scanned table udata in 2058 msecs (4528456255 cycles, 12938 cycles per row)
+scan table:udata with 350000 rows
+Scanned table udata in 2064 msecs (4541765757 cycles, 12976 cycles per row)
+scan table:udata with 350000 rows
+Scanned table udata in 2062 msecs (4536987361 cycles, 12962 cycles per row)
+scan table:udata with 350000 rows
+Scanned table udata in 2067 msecs (4548048308 cycles, 12994 cycles per row)
+scan table:udata with 350000 rows
+Scanned table udata in 2057 msecs (4527214868 cycles, 12934 cycles per row)
+scan table:udata with 350000 rows
+Scanned table udata in 2071 msecs (4556334428 cycles, 13018 cycles per row)
+scan table:udata with 350000 rows
+Scanned table udata in 2079 msecs (4574317133 cycles, 13069 cycles per row)
+
+16KB (40 blocks per db)
+	
+--------------------------------------------------
+
+Testing: null ecall for 10000 iterations
+Null ecall 11113 cycles
+Testing: null ocall for 10000 iterations
+Null ocall 9565 cycles
+created rankings table
+created uservisits table
+scan table:rankings with 360000 rows
+Scanned table rankings in 204 msecs (449415584 cycles, 1248 cycles per row)
+scan table:rankings with 360000 rows
+Scanned table rankings in 195 msecs (430566397 cycles, 1196 cycles per row)
+scan table:rankings with 360000 rows
+Scanned table rankings in 198 msecs (436148752 cycles, 1211 cycles per row)
+scan table:rankings with 360000 rows
+Scanned table rankings in 201 msecs (442293693 cycles, 1228 cycles per row)
+scan table:rankings with 360000 rows
+Scanned table rankings in 201 msecs (442707734 cycles, 1229 cycles per row)
+scan table:rankings with 360000 rows
+Scanned table rankings in 195 msecs (429546057 cycles, 1193 cycles per row)
+scan table:rankings with 360000 rows
+Scanned table rankings in 198 msecs (436789247 cycles, 1213 cycles per row)
+scan table:rankings with 360000 rows
+Scanned table rankings in 200 msecs (442086872 cycles, 1228 cycles per row)
+scan table:rankings with 360000 rows
+Scanned table rankings in 201 msecs (442836539 cycles, 1230 cycles per row)
+scan table:rankings with 360000 rows
+Scanned table rankings in 195 msecs (429360253 cycles, 1192 cycles per row)
+scan table:udata with 350000 rows
+Scanned table udata in 1079 msecs (2375804043 cycles, 6788 cycles per row)
+scan table:udata with 350000 rows
+Scanned table udata in 1080 msecs (2377790047 cycles, 6793 cycles per row)
+scan table:udata with 350000 rows
+Scanned table udata in 1099 msecs (2418148692 cycles, 6908 cycles per row)
+scan table:udata with 350000 rows
+Scanned table udata in 1079 msecs (2375897066 cycles, 6788 cycles per row)
+scan table:udata with 350000 rows
+Scanned table udata in 1083 msecs (2384171982 cycles, 6811 cycles per row)
+scan table:udata with 350000 rows
+Scanned table udata in 1082 msecs (2381569472 cycles, 6804 cycles per row)
+scan table:udata with 350000 rows
+Scanned table udata in 1081 msecs (2379969375 cycles, 6799 cycles per row)
+scan table:udata with 350000 rows
+^[[BScanned table udata in 1079 msecs (2374933589 cycles, 6785 cycles per row)
+scan table:udata with 350000 rows
+Scanned table udata in 1082 msecs (2382576850 cycles, 6807 cycles per row)
+scan table:udata with 350000 rows
+Scanned table udata in 1081 msecs (2378540458 cycles, 6795 cycles per row)
+
+32KB (40 blocks per db)
+--------------------------------------------------------------------------
+
+The project has been built in debug hardware mode.
+Testing: null ecall for 10000 iterations
+Null ecall 10817 cycles
+Testing: null ocall for 10000 iterations
+Null ocall 9611 cycles
+created rankings table
+created uservisits table
+scan table:rankings with 360000 rows
+Scanned table rankings in 121 msecs (266228159 cycles, 739 cycles per row)
+scan table:rankings with 360000 rows
+Scanned table rankings in 113 msecs (250077630 cycles, 694 cycles per row)
+scan table:rankings with 360000 rows
+Scanned table rankings in 116 msecs (257317168 cycles, 714 cycles per row)
+scan table:rankings with 360000 rows
+Scanned table rankings in 119 msecs (262870143 cycles, 730 cycles per row)
+scan table:rankings with 360000 rows
+Scanned table rankings in 119 msecs (263639390 cycles, 732 cycles per row)
+scan table:rankings with 360000 rows
+Scanned table rankings in 113 msecs (249838747 cycles, 693 cycles per row)
+scan table:rankings with 360000 rows
+Scanned table rankings in 116 msecs (257322429 cycles, 714 cycles per row)
+scan table:rankings with 360000 rows
+Scanned table rankings in 119 msecs (262913466 cycles, 730 cycles per row)
+scan table:rankings with 360000 rows
+Scanned table rankings in 119 msecs (263620389 cycles, 732 cycles per row)
+scan table:rankings with 360000 rows
+Scanned table rankings in 113 msecs (249857102 cycles, 694 cycles per row)
+scan table:udata with 350000 rows
+Scanned table udata in 562 msecs (1237884622 cycles, 3536 cycles per row)
+scan table:udata with 350000 rows
+Scanned table udata in 562 msecs (1238281594 cycles, 3537 cycles per row)
+scan table:udata with 350000 rows
+Scanned table udata in 563 msecs (1239192312 cycles, 3540 cycles per row)
+scan table:udata with 350000 rows
+Scanned table udata in 561 msecs (1234900585 cycles, 3528 cycles per row)
+scan table:udata with 350000 rows
+Scanned table udata in 563 msecs (1238795325 cycles, 3539 cycles per row)
+scan table:udata with 350000 rows
+Scanned table udata in 562 msecs (1237990510 cycles, 3537 cycles per row)
+scan table:udata with 350000 rows
+Scanned table udata in 562 msecs (1237795609 cycles, 3536 cycles per row)
+scan table:udata with 350000 rows
+Scanned table udata in 560 msecs (1233309780 cycles, 3523 cycles per row)
+scan table:udata with 350000 rows
+Scanned table udata in 563 msecs (1239042619 cycles, 3540 cycles per row)
+scan table:udata with 350000 rows
+Scanned table udata in 562 msecs (1237710642 cycles, 3536 cycles per row)
+
+64KB (40 blocks per db)
+--------------------------------
+
+The project has been built in debug hardware mode.
+Testing: null ecall for 10000 iterations
+Null ecall 10823 cycles
+Testing: null ocall for 10000 iterations
+Null ocall 9604 cycles
+created rankings table
+created uservisits table
+scan table:rankings with 360000 rows
+Scanned table rankings in 80 msecs (177764662 cycles, 493 cycles per row)
+scan table:rankings with 360000 rows
+Scanned table rankings in 73 msecs (160681549 cycles, 446 cycles per row)
+scan table:rankings with 360000 rows
+Scanned table rankings in 76 msecs (167742091 cycles, 465 cycles per row)
+scan table:rankings with 360000 rows
+Scanned table rankings in 78 msecs (173539691 cycles, 482 cycles per row)
+scan table:rankings with 360000 rows
+Scanned table rankings in 78 msecs (173760500 cycles, 482 cycles per row)
+scan table:rankings with 360000 rows
+Scanned table rankings in 72 msecs (160415815 cycles, 445 cycles per row)
+scan table:rankings with 360000 rows
+Scanned table rankings in 76 msecs (167455378 cycles, 465 cycles per row)
+scan table:rankings with 360000 rows
+Scanned table rankings in 78 msecs (173521028 cycles, 482 cycles per row)
+scan table:rankings with 360000 rows
+Scanned table rankings in 79 msecs (173809881 cycles, 482 cycles per row)
+scan table:rankings with 360000 rows
+Scanned table rankings in 73 msecs (160688730 cycles, 446 cycles per row)
+scan table:udata with 350000 rows
+Scanned table udata in 330 msecs (727893102 cycles, 2079 cycles per row)
+scan table:udata with 350000 rows
+Scanned table udata in 329 msecs (725464504 cycles, 2072 cycles per row)
+scan table:udata with 350000 rows
+Scanned table udata in 330 msecs (726914244 cycles, 2076 cycles per row)
+scan table:udata with 350000 rows
+Scanned table udata in 328 msecs (723655389 cycles, 2067 cycles per row)
+scan table:udata with 350000 rows
+Scanned table udata in 330 msecs (727810731 cycles, 2079 cycles per row)
+scan table:udata with 350000 rows
+Scanned table udata in 329 msecs (725364223 cycles, 2072 cycles per row)
+scan table:udata with 350000 rows
+Scanned table udata in 329 msecs (725700892 cycles, 2073 cycles per row)
+scan table:udata with 350000 rows
+Scanned table udata in 327 msecs (721200602 cycles, 2060 cycles per row)
+scan table:udata with 350000 rows
+Scanned table udata in 343 msecs (755078189 cycles, 2157 cycles per row)
+scan table:udata with 350000 rows
+Scanned table udata in 332 msecs (731324599 cycles, 2089 cycles per row)
+
+128KB (40 blocks per db)
+
+-------------------------------------------------------------------
+	
+
+Testing: null ecall for 10000 iterations
+Null ecall 10954 cycles
+Testing: null ocall for 10000 iterations
+Null ocall 9588 cycles
+created rankings table
+created uservisits table
+scan table:rankings with 360000 rows
+Scanned table rankings in 108 msecs (237804778 cycles, 660 cycles per row)
+scan table:rankings with 360000 rows
+Scanned table rankings in 99 msecs (219231272 cycles, 608 cycles per row)
+scan table:rankings with 360000 rows
+Scanned table rankings in 103 msecs (228252143 cycles, 634 cycles per row)
+scan table:rankings with 360000 rows
+Scanned table rankings in 106 msecs (234293797 cycles, 650 cycles per row)
+scan table:rankings with 360000 rows
+Scanned table rankings in 106 msecs (234593783 cycles, 651 cycles per row)
+scan table:rankings with 360000 rows
+Scanned table rankings in 99 msecs (218962855 cycles, 608 cycles per row)
+scan table:rankings with 360000 rows
+Scanned table rankings in 103 msecs (228330401 cycles, 634 cycles per row)
+scan table:rankings with 360000 rows
+Scanned table rankings in 106 msecs (234187243 cycles, 650 cycles per row)
+scan table:rankings with 360000 rows
+Scanned table rankings in 106 msecs (234740698 cycles, 652 cycles per row)
+scan table:rankings with 360000 rows
+Scanned table rankings in 99 msecs (219378963 cycles, 609 cycles per row)
+scan table:udata with 350000 rows
+Scanned table udata in 511 msecs (1125196806 cycles, 3214 cycles per row)
+scan table:udata with 350000 rows
+Scanned table udata in 510 msecs (1122902248 cycles, 3208 cycles per row)
+scan table:udata with 350000 rows
+Scanned table udata in 511 msecs (1124815814 cycles, 3213 cycles per row)
+scan table:udata with 350000 rows
+Scanned table udata in 508 msecs (1119583792 cycles, 3198 cycles per row)
+scan table:udata with 350000 rows
+Scanned table udata in 510 msecs (1122779566 cycles, 3207 cycles per row)
+scan table:udata with 350000 rows
+Scanned table udata in 510 msecs (1123773487 cycles, 3210 cycles per row)
+scan table:udata with 350000 rows
+Scanned table udata in 511 msecs (1124633291 cycles, 3213 cycles per row)
+scan table:udata with 350000 rows
+Scanned table udata in 508 msecs (1118159288 cycles, 3194 cycles per row)
+scan table:udata with 350000 rows
+Scanned table udata in 512 msecs (1126629574 cycles, 3218 cycles per row)
+scan table:udata with 350000 rows
+Scanned table udata in 511 msecs (1125956273 cycles, 3217 cycles per row)
+
+256KB (40 blocks per db)
+----------------------------------------------------------------------------
+
+SIGN =>  enclave.signed.so
+The project has been built in debug hardware mode.
+Testing: null ecall for 10000 iterations
+Null ecall 10854 cycles
+Testing: null ocall for 10000 iterations
+Null ocall 9603 cycles
+created rankings table
+created uservisits table
+scan table:rankings with 360000 rows
+Scanned table rankings in 100 msecs (220150854 cycles, 611 cycles per row)
+scan table:rankings with 360000 rows
+Scanned table rankings in 91 msecs (201156042 cycles, 558 cycles per row)
+scan table:rankings with 360000 rows
+Scanned table rankings in 95 msecs (211171105 cycles, 586 cycles per row)
+scan table:rankings with 360000 rows
+Scanned table rankings in 98 msecs (216850222 cycles, 602 cycles per row)
+scan table:rankings with 360000 rows
+Scanned table rankings in 98 msecs (217017613 cycles, 602 cycles per row)
+scan table:rankings with 360000 rows
+Scanned table rankings in 91 msecs (201136581 cycles, 558 cycles per row)
+scan table:rankings with 360000 rows
+Scanned table rankings in 96 msecs (211399016 cycles, 587 cycles per row)
+scan table:rankings with 360000 rows
+Scanned table rankings in 98 msecs (217111480 cycles, 603 cycles per row)
+scan table:rankings with 360000 rows
+Scanned table rankings in 98 msecs (217025643 cycles, 602 cycles per row)
+scan table:rankings with 360000 rows
+Scanned table rankings in 91 msecs (200830346 cycles, 557 cycles per row)
+scan table:udata with 350000 rows
+Scanned table udata in 497 msecs (1094506693 cycles, 3127 cycles per row)
+scan table:udata with 350000 rows
+Scanned table udata in 496 msecs (1093074602 cycles, 3123 cycles per row)
+scan table:udata with 350000 rows
+Scanned table udata in 497 msecs (1094631699 cycles, 3127 cycles per row)
+scan table:udata with 350000 rows
+Scanned table udata in 494 msecs (1088470842 cycles, 3109 cycles per row)
+scan table:udata with 350000 rows
+Scanned table udata in 496 msecs (1091993021 cycles, 3119 cycles per row)
+scan table:udata with 350000 rows
+Scanned table udata in 496 msecs (1092655841 cycles, 3121 cycles per row)
+scan table:udata with 350000 rows
+Scanned table udata in 497 msecs (1094752922 cycles, 3127 cycles per row)
+scan table:udata with 350000 rows
+Scanned table udata in 493 msecs (1086530222 cycles, 3104 cycles per row)
+scan table:udata with 350000 rows
+Scanned table udata in 497 msecs (1094474426 cycles, 3127 cycles per row)
+scan table:udata with 350000 rows
+Scanned table udata in 496 msecs (1092976731 cycles, 3122 cycles per row)
+
+512KB (40 blocks per db)
+---------------------------------------------------------
+
+The project has been built in debug hardware mode.
+Testing: null ecall for 10000 iterations
+Null ecall 11576 cycles
+Testing: null ocall for 10000 iterations
+Null ocall 10293 cycles
+created rankings table
+created uservisits table
+scan table:rankings with 360000 rows
+Scanned table rankings in 95 msecs (210762630 cycles, 585 cycles per row)
+scan table:rankings with 360000 rows
+Scanned table rankings in 86 msecs (191058359 cycles, 530 cycles per row)
+scan table:rankings with 360000 rows
+Scanned table rankings in 91 msecs (202078889 cycles, 561 cycles per row)
+scan table:rankings with 360000 rows
+Scanned table rankings in 94 msecs (207041408 cycles, 575 cycles per row)
+scan table:rankings with 360000 rows
+Scanned table rankings in 94 msecs (207010093 cycles, 575 cycles per row)
+scan table:rankings with 360000 rows
+Scanned table rankings in 86 msecs (191345828 cycles, 531 cycles per row)
+scan table:rankings with 360000 rows
+Scanned table rankings in 91 msecs (201849426 cycles, 560 cycles per row)
+scan table:rankings with 360000 rows
+Scanned table rankings in 94 msecs (207001036 cycles, 575 cycles per row)
+scan table:rankings with 360000 rows
+Scanned table rankings in 94 msecs (207133824 cycles, 575 cycles per row)
+scan table:rankings with 360000 rows
+Scanned table rankings in 86 msecs (191253951 cycles, 531 cycles per row)
+scan table:udata with 350000 rows
+Scanned table udata in 486 msecs (1069542610 cycles, 3055 cycles per row)
+scan table:udata with 350000 rows
+Scanned table udata in 485 msecs (1067527200 cycles, 3050 cycles per row)
+scan table:udata with 350000 rows
+Scanned table udata in 485 msecs (1068587447 cycles, 3053 cycles per row)
+scan table:udata with 350000 rows
+Scanned table udata in 483 msecs (1064178765 cycles, 3040 cycles per row)
+scan table:udata with 350000 rows
+Scanned table udata in 484 msecs (1066376499 cycles, 3046 cycles per row)
+scan table:udata with 350000 rows
+Scanned table udata in 485 msecs (1067479078 cycles, 3049 cycles per row)
+scan table:udata with 350000 rows
+Scanned table udata in 485 msecs (1067576491 cycles, 3050 cycles per row)
+scan table:udata with 350000 rows
+Scanned table udata in 482 msecs (1062158270 cycles, 3034 cycles per row)
+scan table:udata with 350000 rows
+Scanned table udata in 486 msecs (1069998780 cycles, 3057 cycles per row)
+scan table:udata with 350000 rows
+Scanned table udata in 485 msecs (1067687946 cycles, 3050 cycles per row)
+
+1MB (1 block)
+---------------------------------------------------------------------------
+
+node:518-/15:23>./db 
+Testing: null ecall for 10000 iterations
+Null ecall 10901 cycles
+Testing: null ocall for 10000 iterations
+Null ocall 9733 cycles
+created rankings table
+created uservisits table
+scan table:rankings with 360000 rows
+Scanned table rankings in 91 msecs (202166138 cycles, 561 cycles per row)
+scan table:rankings with 360000 rows
+Scanned table rankings in 91 msecs (201995769 cycles, 561 cycles per row)
+scan table:rankings with 360000 rows
+Scanned table rankings in 84 msecs (185569492 cycles, 515 cycles per row)
+scan table:rankings with 360000 rows
+Scanned table rankings in 89 msecs (196546593 cycles, 545 cycles per row)
+scan table:rankings with 360000 rows
+Scanned table rankings in 91 msecs (201811362 cycles, 560 cycles per row)
+scan table:rankings with 360000 rows
+Scanned table rankings in 91 msecs (201711316 cycles, 560 cycles per row)
+scan table:rankings with 360000 rows
+Scanned table rankings in 84 msecs (186653446 cycles, 518 cycles per row)
+scan table:rankings with 360000 rows
+Scanned table rankings in 89 msecs (196143547 cycles, 544 cycles per row)
+scan table:rankings with 360000 rows
+Scanned table rankings in 91 msecs (202218696 cycles, 561 cycles per row)
+scan table:rankings with 360000 rows
+Scanned table rankings in 91 msecs (201451733 cycles, 559 cycles per row)
+scan table:udata with 350000 rows
+Scanned table udata in 470 msecs (1034001239 cycles, 2954 cycles per row)
+scan table:udata with 350000 rows
+Scanned table udata in 471 msecs (1038326654 cycles, 2966 cycles per row)
+scan table:udata with 350000 rows
+Scanned table udata in 472 msecs (1040178925 cycles, 2971 cycles per row)
+scan table:udata with 350000 rows
+Scanned table udata in 472 msecs (1040020340 cycles, 2971 cycles per row)
+scan table:udata with 350000 rows
+Scanned table udata in 469 msecs (1032393612 cycles, 2949 cycles per row)
+scan table:udata with 350000 rows
+Scanned table udata in 471 msecs (1037095962 cycles, 2963 cycles per row)
+scan table:udata with 350000 rows
+Scanned table udata in 472 msecs (1038584106 cycles, 2967 cycles per row)
+scan table:udata with 350000 rows
+Scanned table udata in 472 msecs (1040130825 cycles, 2971 cycles per row)
+scan table:udata with 350000 rows
+Scanned table udata in 470 msecs (1034144954 cycles, 2954 cycles per row)
+scan table:udata with 350000 rows
+Scanned table udata in 471 msecs (1037153352 cycles, 2963 cycles per row)
+
+1MB (40 blocks)
+----------------------------------------------------------
+
+node:523-/15:26>./db 
+Testing: null ecall for 10000 iterations
+Null ecall 11574 cycles
+Testing: null ocall for 10000 iterations
+Null ocall 9617 cycles
+created rankings table
+created uservisits table
+scan table:rankings with 360000 rows
+Scanned table rankings in 93 msecs (206558822 cycles, 573 cycles per row)
+scan table:rankings with 360000 rows
+Scanned table rankings in 84 msecs (186165383 cycles, 517 cycles per row)
+scan table:rankings with 360000 rows
+Scanned table rankings in 89 msecs (197571789 cycles, 548 cycles per row)
+scan table:rankings with 360000 rows
+Scanned table rankings in 91 msecs (201826685 cycles, 560 cycles per row)
+scan table:rankings with 360000 rows
+Scanned table rankings in 91 msecs (202247062 cycles, 561 cycles per row)
+scan table:rankings with 360000 rows
+Scanned table rankings in 84 msecs (185951964 cycles, 516 cycles per row)
+scan table:rankings with 360000 rows
+Scanned table rankings in 89 msecs (197456996 cycles, 548 cycles per row)
+scan table:rankings with 360000 rows
+Scanned table rankings in 91 msecs (201868877 cycles, 560 cycles per row)
+scan table:rankings with 360000 rows
+Scanned table rankings in 91 msecs (202387038 cycles, 562 cycles per row)
+scan table:rankings with 360000 rows
+Scanned table rankings in 84 msecs (185915218 cycles, 516 cycles per row)
+scan table:udata with 350000 rows
+Scanned table udata in 472 msecs (1040285446 cycles, 2972 cycles per row)
+scan table:udata with 350000 rows
+Scanned table udata in 471 msecs (1038247504 cycles, 2966 cycles per row)
+scan table:udata with 350000 rows
+Scanned table udata in 472 msecs (1038751926 cycles, 2967 cycles per row)
+scan table:udata with 350000 rows
+Scanned table udata in 470 msecs (1035077181 cycles, 2957 cycles per row)
+scan table:udata with 350000 rows
+Scanned table udata in 471 msecs (1037880290 cycles, 2965 cycles per row)
+scan table:udata with 350000 rows
+Scanned table udata in 472 msecs (1039277467 cycles, 2969 cycles per row)
+scan table:udata with 350000 rows
+Scanned table udata in 472 msecs (1039617278 cycles, 2970 cycles per row)
+scan table:udata with 350000 rows
+Scanned table udata in 469 msecs (1032634156 cycles, 2950 cycles per row)
+scan table:udata with 350000 rows
+Scanned table udata in 473 msecs (1041325154 cycles, 2975 cycles per row)
+scan table:udata with 350000 rows
+Scanned table udata in 472 msecs (1039046223 cycles, 2968 cycles per row)
+
+
+40MB (1 block)
+----------------------------------------------------------
+
+Testing: null ecall for 10000 iterations
+Null ecall 11595 cycles
+Testing: null ocall for 10000 iterations
+Null ocall 9704 cycles
+created rankings table
+created uservisits table
+scan table:rankings with 360000 rows
+Scanned table rankings in 112 msecs (247788469 cycles, 688 cycles per row)
+scan table:rankings with 360000 rows
+Scanned table rankings in 112 msecs (246698161 cycles, 685 cycles per row)
+scan table:rankings with 360000 rows
+Scanned table rankings in 104 msecs (230829225 cycles, 641 cycles per row)
+scan table:rankings with 360000 rows
+Scanned table rankings in 109 msecs (241920556 cycles, 672 cycles per row)
+scan table:rankings with 360000 rows
+Scanned table rankings in 112 msecs (246656086 cycles, 685 cycles per row)
+scan table:rankings with 360000 rows
+Scanned table rankings in 112 msecs (246556059 cycles, 684 cycles per row)
+scan table:rankings with 360000 rows
+Scanned table rankings in 105 msecs (231597496 cycles, 643 cycles per row)
+scan table:rankings with 360000 rows
+Scanned table rankings in 109 msecs (241739346 cycles, 671 cycles per row)
+scan table:rankings with 360000 rows
+Scanned table rankings in 112 msecs (246735304 cycles, 685 cycles per row)
+scan table:rankings with 360000 rows
+Scanned table rankings in 112 msecs (246786077 cycles, 685 cycles per row)
+scan table:udata with 350000 rows
+Scanned table udata in 481 msecs (1058734508 cycles, 3024 cycles per row)
+scan table:udata with 350000 rows
+Scanned table udata in 483 msecs (1064114406 cycles, 3040 cycles per row)
+scan table:udata with 350000 rows
+Scanned table udata in 484 msecs (1066976152 cycles, 3048 cycles per row)
+scan table:udata with 350000 rows
+Scanned table udata in 483 msecs (1063772287 cycles, 3039 cycles per row)
+scan table:udata with 350000 rows
+Scanned table udata in 481 msecs (1060017036 cycles, 3028 cycles per row)
+scan table:udata with 350000 rows
+Scanned table udata in 483 msecs (1064416311 cycles, 3041 cycles per row)
+scan table:udata with 350000 rows
+Scanned table udata in 483 msecs (1063938795 cycles, 3039 cycles per row)
+scan table:udata with 350000 rows
+Scanned table udata in 485 msecs (1068707769 cycles, 3053 cycles per row)
+scan table:udata with 350000 rows
+Scanned table udata in 481 msecs (1060075168 cycles, 3028 cycles per row)
+scan table:udata with 350000 rows
+Scanned table udata in 483 msecs (1064006639 cycles, 3040 cycles per row)
+
+

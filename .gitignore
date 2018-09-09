@@ -15,4 +15,8 @@ enclave.signed.so
 enclave.so
 enclave/enclave_t.c
 enclave/enclave_t.h
-
+*~
+udata
+rankings
+join:*
+.config_HW_RELEASE_x64

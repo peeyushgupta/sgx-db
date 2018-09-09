@@ -16,6 +16,9 @@ extern "C" {
 
 void printf(const char *fmt, ...);
 
+//unsigned long long RDTSC( void );
+
+
 #if defined(__cplusplus)
 }
 #endif
