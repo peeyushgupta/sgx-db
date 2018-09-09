@@ -777,3 +777,30 @@ int ecall_scan_table_dbg(int db_id, int table_id) {
 	return scan_table_dbg(table); 	
 }
 
+void ecall_null_ecall() {
+	return; 
+}
+
+
+void ecall_test_null_ocall() {
+
+	unsigned long long start, end; 
+
+	printf("Testing: null ocall for %llu iterations\n", ECALL_TEST_LENGTH);
+
+	start = RDTSC();
+
+	for (int i = 0; i < ECALL_TEST_LENGTH; i++) {
+	
+		ocall_null_ocall();
+
+	}
+	
+	end = RDTSC();
+
+	printf("Null ocall %llu cycles\n", (end - start)/ECALL_TEST_LENGTH);
+
+	return; 
+
+}
+

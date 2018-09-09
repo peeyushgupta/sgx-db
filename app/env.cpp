@@ -6,6 +6,12 @@
 #include <stdio.h>
 #include "enclave_u.h"
 
+void ocall_null_ocall(void) {
+
+	return;
+};
+
+
 void ocall_print_string(const char *str)
 {
 	/* Proxy/Bridge will check the length and null-terminate 
