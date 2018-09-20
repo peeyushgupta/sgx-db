@@ -180,6 +180,7 @@ int test_rankings(sgx_enclave_id_t eid) {
 	ecall_flush_table(eid, &ret, db_id, udata_table_id);
 	printf("created uservisits table\n");
 
+#if defined(TABLE_SCAN_TESTS)
 	for (i = 0; i < 10; i++) {
 		ecall_scan_table_dbg(eid, &ret, db_id, table_id);
 	}
@@ -187,6 +188,7 @@ int test_rankings(sgx_enclave_id_t eid) {
 	for (i = 0; i < 10; i++) {
 		ecall_scan_table_dbg(eid, &ret, db_id, udata_table_id);
 	}
+#endif
 
 
 	c.num_conditions = 1; 

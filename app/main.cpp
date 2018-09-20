@@ -28,8 +28,9 @@ int main(){
 
 	DBG("Created enclave... starting DB tests\n");
 
-	//test_null_ocalls(eid);
-
+#if defined(OCALL_ECALL_TESTS)
+	test_null_ocalls(eid);
+#endif
 	test_rankings(eid); 
 
 

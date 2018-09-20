@@ -572,13 +572,17 @@ int ecall_join(int db_id, join_condition_t *c, int *join_table_id) {
 	if(!row_right)
 		return -6;
 
+#if defined(REPORT_JOIN_STATS)
 	unsigned long long start = RDTSC(), end; 
 	unsigned int i_start = 0;
 
 	/* Reporting interval = 5 seconds */
 	const unsigned long long REPORTING_INTERVAL = cycles_per_sec * 5;
+#endif
 
 	for (unsigned int i = 0; i < tbl_left->num_rows; i ++) {
+
+#if defined(REPORT_JOIN_STATS)
 
 		end = RDTSC();
 		if(end - start > REPORTING_INTERVAL) {
@@ -591,6 +595,7 @@ int ecall_join(int db_id, join_condition_t *c, int *join_table_id) {
 			i_start = i;
 			start = RDTSC();
 		};
+#endif
 
 		// Read left row
 		ret = read_row(tbl_left, i, row_left);
