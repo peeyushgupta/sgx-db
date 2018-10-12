@@ -31,8 +31,11 @@ int main(){
 #if defined(OCALL_ECALL_TESTS)
 	test_null_ocalls(eid);
 #endif
-	test_rankings(eid); 
+#if defined(TEST_THREADS)
+	test_threads(eid);
+#endif
 
+	test_rankings(eid);
 
 	/* Destroy the enclave */
 	sgx_destroy_enclave(eid);
