@@ -487,6 +487,7 @@ int join_schema(schema_t *sc, schema_t *left, schema_t *right) {
 	return 0;
 }
 
+
 /* Read one row. */
 int read_row(table_t *table, unsigned int row_num, void *row) {
 
@@ -520,6 +521,8 @@ int join_rows(void *join_row, unsigned int join_row_size, void * row_left, unsig
 	memcpy((void*)((char*)join_row + row_left_size),row_right, row_right_size);
 	return 0; 
 }; 
+
+
 
 /* Join */
 int ecall_join(int db_id, join_condition_t *c, int *join_table_id) {
@@ -665,6 +668,151 @@ cleanup:
 
 	return ret; 
 };
+
+int promote_schema(schema_t *old_sc, int column, schema_t *new_sc) {
+	schema_type_t type;
+	int size;   
+ 
+	/* Offsets of the columns that are right of the promoted column 
+ 		don't change since we just flip two columns on the left. The 
+		offsets of the columns that are left of the promoted column 
+		are simply shifted by the size of the promoted column */
+	size = old_sc->sizes[column];
+	type = old_sc->types[column];  
+	for(int i = column; i > 0; i--) {
+		new_sc->offsets[i] = old_sc->offsets[i-1] + size;
+		new_sc->sizes[i] = old_sc->sizes[i-1];
+		new_sc->types[i] = old_sc->types[i-1];	
+	}
+
+	for(int i = column + 1;  i < old_sc->num_fields; i++) {
+		new_sc->offsets[i] = old_sc->offsets[i] + size;
+		new_sc->sizes[i] = old_sc->sizes[i];
+		new_sc->types[i] = old_sc->types[i];	
+	}
+
+	new_sc->offsets[0] = 0;
+	new_sc->sizes[0] = size; 
+	new_sc->types[0] = type; 
+
+        new_sc->num_fields = old_sc->num_fields; 
+        new_sc->row_size = old_sc->row_size; 
+
+	return 0;
+}
+
+int promote_row(void *old_row, schema_t *sc, int column, void * new_row) {
+       
+	memcpy(new_row, (char*)old_row + sc->offsets[column], sc->sizes[column]); 
+	memcpy((char*)new_row + sc->sizes[column], old_row, sc->offsets[column]); 
+	memcpy((char*)new_row + sc->sizes[column] + sc->offsets[column], 
+		(char*)old_row + sc->offsets[column] + sc->sizes[column], 
+		sc->row_size - (sc->offsets[column] + sc->sizes[column]));
+	
+        return 0; 
+}; 
+
+/* Before sorting the table we promote the column that we sort on 
+   to the front -- this allows us to compare the bits of the columns 
+   from two tables in an oblivious fashion by just comparing the first 
+   N bytes of each row */
+
+int promote_table(data_base_t *db, table_t *tbl, int column, table_t **p_tbl) {
+	int ret;
+	std::string p_tbl_name;  
+        schema_t p_sc;
+	void *row_old, *row_new; 
+
+	p_tbl_name = "p:" + tbl->name; 
+
+	ret = promote_schema(&tbl->sc, column, &p_sc); 
+	if (ret) {
+		ERR("create table error:%d\n", ret);
+		return ret; 
+	}
+
+	ret = create_table(db, p_tbl_name, &p_sc, p_tbl);
+	if (ret) {
+		ERR("create table:%d\n", ret);
+		return ret; 
+	}
+
+	DBG("Created promoted table %s, id:%d\n", 
+            p_tbl_name.c_str(), p_tbl->id); 
+
+	row_old = malloc(MAX_ROW_SIZE);
+	if(!row_old)
+		return -5;
+
+	row_new = malloc(MAX_ROW_SIZE);
+	if(!row_new)
+		return -6;
+
+	for (unsigned int i = 0; i < tbl->num_rows; i ++) {
+
+		// Read old row
+		ret = read_row(tbl, i, row_old);
+		if(ret) {
+			ERR("failed to read row %d of table %s\n",
+				i, tbl->name.c_str());
+			goto cleanup;
+		}
+
+				
+		// Promote row
+		ret = promote_row(row_old, &tbl->sc, column, row_new);
+		if(ret) {
+			ERR("failed to promote row %d of table %s\n",
+				i, tbl->name.c_str());
+			goto cleanup;
+		}
+
+		/* Add row to the promoted table */
+		ret = insert_row_dbg(*p_tbl, row_new);
+		if(ret) {
+			ERR("failed to insert row %d of promoted table %s\n",
+				i, (*p_tbl)->name.c_str());
+			goto cleanup;
+		}
+
+	}
+
+	bflush(*p_tbl); 
+
+	ret = 0;
+cleanup: 
+	if (row_old)
+		free(row_old); 
+
+	if (row_new)
+		free(row_new); 
+
+	return ret; 
+};
+
+/* Promote column in a table to the front */
+int ecall_promote_table_dbg(int db_id, int table_id, int column, int *promoted_table_id) {
+	int ret; 
+	data_base_t *db;
+	table_t *table, *p_table;
+
+	if ((db_id > (MAX_DATABASES - 1)) || !g_dbs[db_id] )
+		return -1; 
+
+	db = g_dbs[db_id]; 
+	
+	if ((table_id > (MAX_TABLES - 1)) || !db->tables[table_id])
+		return -2; 
+
+	table = db->tables[table_id];
+
+	ret = promote_table(db, table, column, &p_table); 
+	*promoted_table_id = p_table->id; 
+
+	return ret; 
+}
+
+
 
 /* 
  * 

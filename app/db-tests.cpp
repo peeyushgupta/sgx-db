@@ -209,6 +209,14 @@ int test_rankings(sgx_enclave_id_t eid) {
 	}
 #endif
 
+	/* Promote column tests */
+	{
+		int p_rankings_id;
+		ecall_promote_table_dbg(eid, &ret, db_id, table_id, 1, &p_rankings_id);
+	}
+	printf("promoted rankings table\n");
+
+
 
 	c.num_conditions = 1; 
 	c.table_left = table_id; 
