@@ -686,7 +686,7 @@ int promote_schema(schema_t *old_sc, int column, schema_t *new_sc) {
 	}
 
 	for(int i = column + 1;  i < old_sc->num_fields; i++) {
-		new_sc->offsets[i] = old_sc->offsets[i] + size;
+		new_sc->offsets[i] = old_sc->offsets[i];
 		new_sc->sizes[i] = old_sc->sizes[i];
 		new_sc->types[i] = old_sc->types[i];	
 	}
