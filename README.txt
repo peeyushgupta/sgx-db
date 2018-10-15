@@ -6,3 +6,7 @@ To run
 
   source /home/aburtsev/projects/sgxsdk/environment
   ./db
+
+To debug
+ 
+  sgx-gdb db

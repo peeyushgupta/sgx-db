@@ -870,6 +870,38 @@ int ecall_insert_row_dbg(int db_id, int table_id, void *row) {
 	return insert_row_dbg(table, row); 	
 }
 
+int print_row(schema_t *sc, void *row) {
+	bool first = true; 	
+	for(int i = 0;  i < sc->num_fields; i++) {
+		if (first) {
+			first = false; 
+		} else {
+			printf(", "); 
+		}
+		switch(sc->types[i]) {
+		case BOOLEAN:
+			printf("%b", *(bool*)((char*)row + sc->offsets[i]));
+			break;
+	
+		case CHARACTER: 
+			printf("%c", *(char*)((char*)row + sc->offsets[i]));
+			break;
+ 
+		case TINYTEXT:
+		case VARCHAR:
+			printf("%s", (char*)((char*)row + sc->offsets[i]));
+			break; 
+		case INTEGER:
+			printf("%d", *(int*)((char*)row + sc->offsets[i]));
+			break; 		
+		default: 
+			printf("unknown type");
+		}
+
+	}
+	printf("\n"); 
+}
+
 /* 
  * 
  * Scan the table... debug only 
@@ -928,6 +960,61 @@ int ecall_scan_table_dbg(int db_id, int table_id) {
 	table = db->tables[table_id];
 
 	return scan_table_dbg(table); 	
+}
+
+/* 
+ * 
+ * Print the table... debug only 
+ *
+ */
+
+int print_table_dbg(table_t *table, int start, int end) {
+	unsigned long i;
+	char *row;
+
+	printf("printing table:%s with %lu rows\n", 
+		table->name.c_str(), table->num_rows); 
+
+	row = (char *)malloc(table->sc.row_size); 
+	if (!row) {
+		ERR("can't allocate memory for the row\n");
+		return -1;
+	}
+
+	if (end > table->num_rows) {
+		end = table->num_rows; 
+	}
+
+	for (i = start; i < end; i++) {
+	
+		/* Read one row. */
+		read_row(table, i, (void *)row);
+		print_row(&table->sc, row); 
+
+	}
+	
+	return 0; 
+
+}
+
+
+/* Print some number of rows from the database */
+int ecall_print_table_dbg(int db_id, int table_id, int start, int end) {
+
+	data_base_t *db;
+	table_t *table;
+
+	if ((db_id > (MAX_DATABASES - 1)) || !g_dbs[db_id] )
+		return -1; 
+
+	db = g_dbs[db_id]; 
+	
+	if ((table_id > (MAX_TABLES - 1)) || !db->tables[table_id])
+		return -2; 
+
+	table = db->tables[table_id];
+
+	return print_table_dbg(table, start, end); 	
 }
 
 void ecall_null_ecall() {
