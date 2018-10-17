@@ -21,6 +21,9 @@
 
 data_base_t* g_dbs[MAX_DATABASES];
 
+const int ASCENDING  = 1;
+const int DESCENDING = 0;
+
 static inline int tid() { return 0; }
 
 #if 0
@@ -811,14 +814,182 @@ int ecall_promote_table_dbg(int db_id, int table_id, int column, int *promoted_t
 
 	return ret; 
 }
+/// Bitonic sort functions ////
+/** INLINE procedure exchange() : pair swap **/
+inline int exchange(table_t *tbl, int i, int j) {
+  void *row_i, *row_j, *row_tmp;
+
+  row_tmp = malloc(MAX_ROW_SIZE);
+
+  if(!row_tmp)
+    return -4;
+
+  row_i = malloc(MAX_ROW_SIZE);
+  if(!row_i)
+    return -5;
+
+  row_j = malloc(MAX_ROW_SIZE);
+  if(!row_j)
+    return -6;
+
+  read_row(tbl, i, (void *)row_i);
+  read_row(tbl, j, (void *)row_j);
+
+  memcpy(row_tmp, row_i, MAX_ROW_SIZE); 
+
+  write_row_dbg(tbl, row_j, i);
+  write_row_dbg(tbl, row_tmp, j);
+
+  free(row_i);
+  free(row_j);
+  free(row_tmp);
+
+  return 0;
+}
 
 
+
+/** procedure compare() 
+   The parameter dir indicates the sorting direction, ASCENDING 
+   or DESCENDING; if (a[i] > a[j]) agrees with the direction, 
+   then a[i] and a[j] are interchanged.
+**/
+int compare(table_t *tbl, int column, int i, int j, int dir) {
+  void *row_i, *row_j;
+  int val_i, val_j;
+
+  row_i = malloc(MAX_ROW_SIZE);
+  if(!row_i)
+    return -5;
+
+  row_j = malloc(MAX_ROW_SIZE);
+  if(!row_j)
+    return -6;
+
+  read_row(tbl, i, (void *)row_i);
+  read_row(tbl, j, (void *)row_j);
+
+  val_i = *((int*)get_column(&tbl->sc, column, row_i));
+  val_j = *((int*)get_column(&tbl->sc, column, row_j));
+
+  if (dir==(val_i>val_j)) 
+    exchange(tbl, i,j);
+
+  free(row_i);
+  free(row_j);
+  return 0;
+}
+
+
+
+/** Procedure bitonicMerge() 
+   It recursively sorts a bitonic sequence in ascending order, 
+   if dir = ASCENDING, and in descending order otherwise. 
+   The sequence to be sorted starts at index position lo,
+   the parameter cbt is the number of elements to be sorted. 
+ **/
+void bitonicMerge(table_t *tbl, int lo, int column, int cnt, int dir) {
+  if (cnt>1) {
+    int k=cnt/2;
+    int i;
+    for (i=lo; i<lo+k; i++)
+      compare(tbl, column, i, i+k, dir);
+    bitonicMerge(tbl, lo, column, k, dir);
+    bitonicMerge(tbl, lo+k, column, k, dir);
+  }
+}
+
+
+
+/** function recBitonicSort() 
+    first produces a bitonic sequence by recursively sorting 
+    its two halves in opposite sorting orders, and then
+    calls bitonicMerge to make them in the same order 
+ **/
+void recBitonicSort(table_t *tbl, int lo, int column, int cnt, int dir) {
+  if (cnt>1) {
+    int k=cnt/2;
+    recBitonicSort(tbl, lo, column, k, ASCENDING);
+    recBitonicSort(tbl, lo+k, column, k, DESCENDING);
+    bitonicMerge(tbl, lo, column, cnt, dir);
+  }
+}
+
+
+int bitonic_sort_table(data_base_t *db, table_t *tbl, int column, table_t **p_tbl) {
+	int ret = 0;
+	std::string s_tbl_name;  
+        schema_t p_sc;
+
+	s_tbl_name = "s:" + tbl->name; 
+
+	ret = create_table(db, s_tbl_name, &p_sc, p_tbl);
+	if (ret) {
+		ERR("create table:%d\n", ret);
+		return ret; 
+	}
+
+	DBG("Created sorted table %s, id:%d\n", 
+            s_tbl_name.c_str(), s_tbl->id); 
+
+	recBitonicSort(tbl, 0, column, tbl->num_rows, ASCENDING);
+
+	bflush(*p_tbl); 
+
+	return ret; 
+}
+
+int ecall_sort_table(int db_id, int table_id, int field, int *sorted_id) {
+	int ret; 
+	data_base_t *db;
+	table_t *table, *s_table;
+
+	if ((db_id > (MAX_DATABASES - 1)) || !g_dbs[db_id] )
+		return -1; 
+
+	db = g_dbs[db_id]; 
+	
+	if ((table_id > (MAX_TABLES - 1)) || !db->tables[table_id])
+		return -2; 
+
+	table = db->tables[table_id];
+
+	ret = bitonic_sort_table(db, table, field, &s_table); 
+	*sorted_id = s_table->id; 
+
+	return ret; 
+}
 
 /* 
  * 
  * Insecure interfaces... debug only 
  *
  */
+
+int write_row_dbg(table_t *table, void *new_data, int row_num) {
+	unsigned long dblk_num;
+	unsigned long row_off, rows_per_blk; 
+	data_block_t *b;
+
+	if(row_num >= table->num_rows)
+		return -1; 
+
+	rows_per_blk = DATA_BLOCK_SIZE / table->sc.row_size; 
+	dblk_num = row_num / rows_per_blk;
+
+	/* Offset of the row within the data block in bytes */
+	row_off = (row_num - dblk_num * rows_per_blk) * table->sc.row_size; 
+	
+        b = bread(table, dblk_num);
+	 	
+	/* Copy the row into the data block */
+	memcpy((char*)b->data + row_off, new_data, table->sc.row_size); 
+
+	bwrite(b);
+	brelse(b);
+	return 0; 
+}
+
 
 int insert_row_dbg(table_t *table, void *row) {
 	unsigned long dblk_num;
@@ -1043,4 +1214,3 @@ void ecall_test_null_ocall() {
 	return; 
 
 }
-

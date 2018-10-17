@@ -240,4 +240,76 @@ int test_rankings(sgx_enclave_id_t eid) {
 
 }
 
+int test_bitonic_sort(sgx_enclave_id_t eid)
+{
+	schema_t sc;
+	std::string db_name("random-integers");
+	std::string table_name("rand_int");
+	int i, db_id, table_id, join_table_id, ret;
+	char line[MAX_ROW_SIZE] = {0};
+	char data[MAX_ROW_SIZE] = {0};
+	uint8_t *row;
+	sgx_status_t sgx_ret = SGX_ERROR_UNEXPECTED;
 
+	sc.num_fields = 1;
+	sc.offsets[0] = 0;
+	sc.sizes[0] = 4;
+	sc.types[0] = INTEGER;
+	sc.row_size = sc.offsets[sc.num_fields - 1] + sc.sizes[sc.num_fields - 1];
+
+	//row = (uint7_t*)malloc(sc.row_size);
+	row = (uint8_t*)malloc(MAX_ROW_SIZE);
+
+	sgx_ret = ecall_create_db(eid, &ret, db_name.c_str(), db_name.length(), &db_id);
+	if (sgx_ret || ret) {
+		ERR("create db error:%d (sgx ret:%d)\n", ret, sgx_ret);
+		return ret;
+	}
+
+	sgx_ret = ecall_create_table(eid, &ret, db_id, table_name.c_str(), table_name.length(), &sc, &table_id);
+	if (sgx_ret || ret) {
+		ERR("create table error:%d (sgx ret:%d)\n", ret, sgx_ret);
+		return ret;
+	}
+
+	std::ifstream file("rand.csv");
+
+	for(int i = 0; i < 256; i++) {
+
+		memset(row, 0x0, MAX_ROW_SIZE);
+		file.getline(line, MAX_ROW_SIZE); //get the field
+		std::istringstream ss(line);
+		for(int j = 0; j < sc.num_fields; j++) {
+			if(!ss.getline(data, MAX_ROW_SIZE, ',')) {
+				ERR("something is wrong with data (skipping):%s\n", line);
+				break;
+			}
+			if(sc.types[j] == INTEGER) {
+				int d = 0;
+				d = atoi(data);
+				//printf("%s, row %d | data %s : %d\n", __func__, i, data, atoi(data));
+				memcpy(&row[sc.offsets[j]], &d, 4);
+			}
+		}
+
+		sgx_ret = ecall_insert_row_dbg(eid, &ret, db_id, table_id, row);
+		if (sgx_ret) {
+			ERR("insert row:%d, err:%d (sgx ret:%d)\n", i, ret, sgx_ret);
+			return ret;
+		}
+	}
+
+	ecall_flush_table(eid, &ret, db_id, table_id);
+	printf("created random table\n");
+
+	{
+		int sorted_id;
+		printf("Sorting random table (in-place)\n");
+		ecall_sort_table(eid, &ret, db_id, table_id, 0, &sorted_id);
+		ecall_flush_table(eid, &ret, db_id, sorted_id);
+		ecall_flush_table(eid, &ret, db_id, table_id);
+		//ecall_print_table_dbg(eid, &ret, db_id, table_id, 1, 256);
+	}
+
+	return 0;
+}
