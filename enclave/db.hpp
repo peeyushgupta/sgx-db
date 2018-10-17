@@ -24,6 +24,7 @@ typedef enum schema_type {
 	VARCHAR = 6,
 	INTEGER = 7,
 	TINYTEXT = 8,
+        PADDING = 9
 } schema_type_t;
 
 #if 0 

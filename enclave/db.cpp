@@ -701,6 +701,39 @@ int promote_schema(schema_t *old_sc, int column, schema_t *new_sc) {
 	return 0;
 }
 
+int project_schema(schema_t *old_sc, int* columns, int num_columns, schema_t *new_sc) {
+    int j;
+    int size;
+    for(int i = 0; i < num_columns; i++) {
+        j = columns[i];
+        new_sc->offsets[i] = old_sc->offsets[j];
+        new_sc->sizes[i] = old_sc->sizes[j];
+        size += new_sc->sizes[i];
+        new_sc->types[i] = old_sc->types[j];
+    }
+    new_sc->num_fields = num_columns;
+    new_sc->row_size = size;
+    return 0;
+}
+
+int pad_schema(schema_t *old_sc, int num_pad_bytes, schema_t *new_sc){
+    if (old_sc->num_fields >= MAX_COLS)
+        return -1;
+    int i;
+    for (i = 0; i < old_schema->num_fields; i++) {
+        new_sc->offsets[i] = old_sc->offsets[i];
+        new_sc->sizes[i] = old_sc->sizes[i];
+        new_sc->types[i] = old_schema->types[i];
+    }
+    new_sc->offsets[i] = old_sc->row_size;
+    new_sc->sizes[i] = num_pad_bytes;
+    new_sc->types[i] = schema_type::PADDING;
+
+    new_sc->num_fields++;
+    new_sc->row_size += num_pad_bytes;
+    return 0; 
+}
+
 int promote_row(void *old_row, schema_t *sc, int column, void * new_row) {
        
 	memcpy(new_row, (char*)old_row + sc->offsets[column], sc->sizes[column]); 
@@ -711,6 +744,19 @@ int promote_row(void *old_row, schema_t *sc, int column, void * new_row) {
 	
         return 0; 
 }; 
+
+int project_row(void *old_row, schema_t *sc, void* new_row) {
+    int offset = 0;
+    for(int i = 0; i < sc->num_fields; i++) {
+        memcpy(new_row + offset, (char*)old_row + sc->offsets[i], sc->sizes[i]);
+        offset += sc->sizes[i];
+    }
+    return 0; 
+}
+
+int pad_row(void *old_row, schema_t *sc, void* new_row) {
+    
+}
 
 /* Before sorting the table we promote the column that we sort on 
    to the front -- this allows us to compare the bits of the columns 
@@ -812,6 +858,89 @@ int ecall_promote_table_dbg(int db_id, int table_id, int column, int *promoted_t
 	return ret; 
 }
 
+int project_promote_pad_table(
+    data_base_t *db, 
+    table_t *tbl, 
+    int project_columns [], 
+    int promote_columns [],
+    int num_pad_bytes,
+    table_t **p3_tbl    
+)
+{
+    int ret;
+    std::string p3_tbl_name;
+    schema_t project_sc, project_promote_sc, project_promote_pad_sc;
+    void *row_old, *row_new;
+    p3_tbl_name = "p3:" + tbl->name;
+
+    ret = project_schema(&tbl->sc, 
+                         project_columns, 
+                         sizeof(project_columns) / sizeof(int), 
+                         &project_sc);
+    if (ret) {
+        ERR("project_schema failed:%d\n", ret);
+        return ret;
+    }
+    ret = promote_schema(&project_sc,
+                         promote_columns,
+                         sizeof(promote_columns) / sizeof(int),
+                         &project_promote_sc);
+    if (ret) {
+        ERR("promote_schema failed:%d\n", ret);
+        return ret;
+    }
+    ret = pad_schema(&project_promote_sc,
+                     num_pad_bytes,
+                     &project_promote_pad_sc);
+    if (ret) {
+        ERR("pad_schema failed:%d\n", ret);
+        return ret;
+    }
+
+    ret = create_table(db, p3_tbl_name, &project_promote_pad_sc, p3_tbl);
+    if (ret) {
+        ERR("create_table failed:%d\n", ret);
+        return ret;
+    }
+
+    for (unsigned int i = 0; i < tbl->num_rows; i++) {
+        // Read original row
+        ret = read_row(tbl, i, row_old);
+        if(ret) {
+            ERR("read_row failed on row %d of table %s\n", i, tbl->name.c_str());
+            goto cleanup;
+        }
+
+        // Project row
+        // Since the schema was projected, promoted, and padded, this is all we need to do.
+        ret = project_row(old_row, project_promote_pad_sc, new_row);
+        if(ret) {
+            ERR("project_row failed on row %d of table %s\n", i, tbl->name.c_str());
+            goto cleanup;
+        }
+
+        // Add row to table
+        ret = insert_row_dbg(p3_tbl, row_new);
+        if(ret) {
+            ERR("insert_row_db failed on row %d of table %s\n", i,
+                (*p3_tbl)->name.c_str());
+            goto cleanup;
+        }
+    }
+
+    bflush(*p3_tbl);
+    ret = 0;
+
+cleanup:
+    if (row_old)
+        free(row_old);
+
+    if (row_new)
+        free(row_new);
+
+    return ret;
+    
+} 
 
 
 /* 
