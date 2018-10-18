@@ -816,32 +816,19 @@ int ecall_promote_table_dbg(int db_id, int table_id, int column, int *promoted_t
 }
 /// Bitonic sort functions ////
 /** INLINE procedure exchange() : pair swap **/
-inline int exchange(table_t *tbl, int i, int j) {
-  void *row_i, *row_j, *row_tmp;
+inline int exchange(table_t *tbl, int i, int j, void *row_i, void *row_j) {
+  void *row_tmp;
 
   row_tmp = malloc(MAX_ROW_SIZE);
 
   if(!row_tmp)
     return -4;
 
-  row_i = malloc(MAX_ROW_SIZE);
-  if(!row_i)
-    return -5;
-
-  row_j = malloc(MAX_ROW_SIZE);
-  if(!row_j)
-    return -6;
-
-  read_row(tbl, i, (void *)row_i);
-  read_row(tbl, j, (void *)row_j);
-
   memcpy(row_tmp, row_i, MAX_ROW_SIZE); 
 
   write_row_dbg(tbl, row_j, i);
   write_row_dbg(tbl, row_tmp, j);
 
-  free(row_i);
-  free(row_j);
   free(row_tmp);
 
   return 0;
@@ -872,8 +859,9 @@ int compare(table_t *tbl, int column, int i, int j, int dir) {
   val_i = *((int*)get_column(&tbl->sc, column, row_i));
   val_j = *((int*)get_column(&tbl->sc, column, row_j));
 
-  if (dir==(val_i>val_j)) 
-    exchange(tbl, i,j);
+	if (dir==(val_i>val_j)) {
+		exchange(tbl, i,j, row_i, row_j);
+	}
 
   free(row_i);
   free(row_j);
@@ -918,6 +906,8 @@ void recBitonicSort(table_t *tbl, int lo, int column, int cnt, int dir) {
 
 int bitonic_sort_table(data_base_t *db, table_t *tbl, int column, table_t **p_tbl) {
 	int ret = 0;
+
+#ifdef CREATE_SORTED_TABLE
 	std::string s_tbl_name;  
         schema_t p_sc;
 
@@ -931,11 +921,12 @@ int bitonic_sort_table(data_base_t *db, table_t *tbl, int column, table_t **p_tb
 
 	DBG("Created sorted table %s, id:%d\n", 
             s_tbl_name.c_str(), s_tbl->id); 
-
+#endif
 	recBitonicSort(tbl, 0, column, tbl->num_rows, ASCENDING);
 
-	bflush(*p_tbl); 
-
+#ifdef CREATE_SORTED_TABLE
+	bflush(*p_tbl);
+#endif
 	return ret; 
 }
 
@@ -955,8 +946,10 @@ int ecall_sort_table(int db_id, int table_id, int field, int *sorted_id) {
 	table = db->tables[table_id];
 
 	ret = bitonic_sort_table(db, table, field, &s_table); 
-	*sorted_id = s_table->id; 
 
+#ifdef CREATE_SORTED_TABLE
+	*sorted_id = s_table->id; 
+#endif
 	return ret; 
 }
 

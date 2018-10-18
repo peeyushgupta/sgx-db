@@ -100,7 +100,7 @@ int write_data_block(table *table, unsigned long blk_num, void *buf);
 int insert_row_dbg(table_t *table, void *row);
 int write_row_dbg(table_t *table, void *new_data, int row_num);
 
-inline int exchange(table_t *tbl, int i, int j);
+inline int exchange(table_t *tbl, int i, int j, void *row_i, void *row_j);
 int compare(table_t *tbl, int column, int i, int j, int dir);
 void bitonicMerge(table_t *tbl, int lo, int column, int cnt, int dir);
 void recBitonicSort(table_t *tbl, int lo, int column, int cnt, int dir);

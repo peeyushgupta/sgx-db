@@ -304,11 +304,18 @@ int test_bitonic_sort(sgx_enclave_id_t eid)
 
 	{
 		int sorted_id;
-		printf("Sorting random table (in-place)\n");
+		unsigned long long start, end;
+		start = RDTSC_START();
 		ecall_sort_table(eid, &ret, db_id, table_id, 0, &sorted_id);
+#ifdef CREATE_SORTED_TABLE
 		ecall_flush_table(eid, &ret, db_id, sorted_id);
+#endif
 		ecall_flush_table(eid, &ret, db_id, table_id);
-		//ecall_print_table_dbg(eid, &ret, db_id, table_id, 1, 256);
+		end = RDTSCP();
+		printf("Sorting random table (in-place) + flushing took %llu cycles\n", end - start);
+#ifdef PRINT_SORTED_TABLE
+		ecall_print_table_dbg(eid, &ret, db_id, table_id, 1, 256);
+#endif
 	}
 
 	return 0;
