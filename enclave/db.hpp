@@ -5,7 +5,7 @@
 #include "dbg.hpp"
 #include "bcache.hpp"
 
-#define MAX_DATABASES 1
+#define MAX_DATABASES 2
 #define MAX_ROWS (1 << 20) /* 1 M for now */
 #define MAX_ROW_SIZE (1 << 12) /* 4096 for now */
 #define MAX_TABLES 10
@@ -98,7 +98,12 @@ int read_data_block(table *table, unsigned long blk_num, void *buf);
 int write_data_block(table *table, unsigned long blk_num, void *buf); 
 
 int insert_row_dbg(table_t *table, void *row);
+int write_row_dbg(table_t *table, void *new_data, int row_num);
 
+inline int exchange(table_t *tbl, int i, int j, void *row_i, void *row_j);
+int compare(table_t *tbl, int column, int i, int j, int dir);
+void bitonicMerge(table_t *tbl, int lo, int column, int cnt, int dir);
+void recBitonicSort(table_t *tbl, int lo, int column, int cnt, int dir);
 
 /* Enclave interface */
 #if NO_SGX

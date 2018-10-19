@@ -35,7 +35,9 @@ int main(){
 	test_threads(eid);
 #endif
 
+	test_bitonic_sort(eid);
 	test_rankings(eid);
+
 
 	/* Destroy the enclave */
 	sgx_destroy_enclave(eid);
