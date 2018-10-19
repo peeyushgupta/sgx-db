@@ -99,7 +99,9 @@ int read_data_block(table *table, unsigned long blk_num, void *buf);
 int write_data_block(table *table, unsigned long blk_num, void *buf); 
 
 int insert_row_dbg(table_t *table, void *row);
-
+int project_schema(schema_t *old_sc, int* columns, int num_columns, schema_t *new_sc);
+int pad_schema(schema_t *old_sc, int num_pad_bytes, schema_t *new_sc);
+int project_row(void *old_row, schema_t *sc, void* new_row);
 
 /* Enclave interface */
 #if NO_SGX

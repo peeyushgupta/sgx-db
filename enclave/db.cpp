@@ -754,9 +754,6 @@ int project_row(void *old_row, schema_t *sc, void* new_row) {
     return 0; 
 }
 
-int pad_row(void *old_row, schema_t *sc, void* new_row) {
-    
-}
 
 /* Before sorting the table we promote the column that we sort on 
    to the front -- this allows us to compare the bits of the columns 

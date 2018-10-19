@@ -28,6 +28,9 @@ int main(){
 
 	DBG("Created enclave... starting DB tests\n");
 
+        test_project_schema();
+        return 0;
+
 #if defined(OCALL_ECALL_TESTS)
 	test_null_ocalls(eid);
 #endif
