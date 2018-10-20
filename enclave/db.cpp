@@ -14,7 +14,7 @@
 #include <cstdio>
 
 #include <string.h>
-
+#include <atomic>
 //#define FILE_READ_SIZE (1 << 12)
 
 #define FILE_READ_SIZE DATA_BLOCK_SIZE
@@ -951,6 +951,120 @@ int ecall_sort_table(int db_id, int table_id, int field, int *sorted_id) {
 	*sorted_id = s_table->id; 
 #endif
 	return ret; 
+}
+
+int print_table_dbg(table_t *table, int start, int end);
+
+int bitonicSplit(table_t *tbl, int start_i, int start_j, int end, int column)
+{
+	for (int i = start_i, j = start_j; i < end; i++, j++) {
+		void *row_i, *row_j;
+		int val_i, val_j;
+
+		row_i = malloc(MAX_ROW_SIZE);
+		if(!row_i)
+			return -5;
+
+		row_j = malloc(MAX_ROW_SIZE);
+
+		if(!row_j)
+			return -6;
+
+		read_row(tbl, i, (void *)row_i);
+		read_row(tbl, j, (void *)row_j);
+
+		val_i = *((int*)get_column(&tbl->sc, column, row_i));
+		val_j = *((int*)get_column(&tbl->sc, column, row_j));
+
+		if (val_i > val_j)
+			exchange(tbl, i,j, row_i, row_j);
+
+		free(row_i);
+		free(row_j);
+	}
+	return 0;
+}
+std::atomic_uint stage1, stage2, stage3;
+int ecall_sort_table_parallel(int db_id, int table_id, int column, int tid)
+{
+  int ret;
+  data_base_t *db;
+  table_t *table;
+
+  if ((db_id > (MAX_DATABASES - 1)) || !g_dbs[db_id])
+    return -1;
+
+  db = g_dbs[db_id];
+
+  if ((table_id > (MAX_TABLES - 1)) || !db->tables[table_id])
+    return -2;
+
+  table = db->tables[table_id];
+  // printf("%s, num_rows %d | tid = %d\n", __func__, table->num_rows, tid);
+
+  // stage 1. Split it into the number of threads and alternate between ascending and descending
+  if (tid == 0)
+  {
+    recBitonicSort(table, 0, column, (table->num_rows / 2), ASCENDING);
+    stage1++;
+  }
+  else
+  {
+    recBitonicSort(table, (table->num_rows / 2), column, table->num_rows / 2, DESCENDING);
+    stage1++;
+  }
+  if (stage1 == 2)
+  {
+    printf("after stage 1\n");
+    print_table_dbg(table, 0, 8);
+  }
+//int print_table_dbg(table_t *table, int start, int end) {
+
+//bflush(table);
+#define STAGE2
+// stage 2
+#ifdef STAGE2
+  if (tid == 0)
+  {
+    bitonicSplit(table, 0, table->num_rows / 2, table->num_rows / 4, column);
+    stage2++;
+  }
+  else
+  {
+    bitonicSplit(table, table->num_rows / 4, table->num_rows - (table->num_rows / 4), table->num_rows / 2, column);
+    stage2++;
+  }
+#endif
+  if (stage2 == 2)
+  {
+    printf("after stage 2\n");
+    print_table_dbg(table, 0, 8);
+  }
+#define STAGE3
+  //bflush(table);
+#ifdef STAGE3
+  //stage 3
+  if (tid == 0)
+  {
+    //printf("stage3, num_rows %d | tid = %d\n", table->num_rows, tid);
+    recBitonicSort(table, 0, column, table->num_rows / 2, ASCENDING);
+    stage3++;
+  }
+  else
+  {
+    recBitonicSort(table, table->num_rows / 2, column, table->num_rows / 2, ASCENDING);
+    stage3++;
+  }
+  if (stage3 == 2)
+  {
+    printf(">>>>> after stage 3\n");
+    print_table_dbg(table, 0, 8);
+  }
+#endif
+#ifdef CREATE_SORTED_TABLE
+  *sorted_id = s_table->id;
+#endif
+  return ret;
 }
 
 /* 

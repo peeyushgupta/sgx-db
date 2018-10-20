@@ -38,6 +38,8 @@ enclave {
 		public void ecall_null_ecall(void); 
 		public int ecall_promote_table_dbg(int db_id, int table_id, int column, [out] int *promoted_table_id);
 		public int ecall_sort_table(int db_id, int table_id, int column, [out] int *sorted_table_id);
+		public int ecall_sort_table_parallel(int db_id, int table_id, int field, int tid);
+
 	};
 
 };

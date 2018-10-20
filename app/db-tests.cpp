@@ -240,6 +240,20 @@ int test_rankings(sgx_enclave_id_t eid) {
 
 }
 
+void bitonic_sorter_fn(sgx_enclave_id_t eid, int db_id, int table_id, int field, int tid) 
+{
+	int ret;
+	ecall_sort_table_parallel(eid, &ret, db_id, table_id, field, tid);
+}
+
+void bitonic_sort_parallel(sgx_enclave_id_t eid, int db_id, int table_id, int field)
+{
+	thread t1(bitonic_sorter_fn, eid, db_id, table_id, field, 0);
+	thread t2(bitonic_sorter_fn, eid, db_id, table_id, field, 1);
+	t1.join();
+	t2.join();
+}
+
 int test_bitonic_sort(sgx_enclave_id_t eid)
 {
 	schema_t sc;
@@ -274,7 +288,7 @@ int test_bitonic_sort(sgx_enclave_id_t eid)
 
 	std::ifstream file("rand.csv");
 
-	for(int i = 0; i < 256; i++) {
+	for(int i = 0; i < 8; i++) {
 
 		memset(row, 0x0, MAX_ROW_SIZE);
 		file.getline(line, MAX_ROW_SIZE); //get the field
@@ -301,12 +315,14 @@ int test_bitonic_sort(sgx_enclave_id_t eid)
 
 	ecall_flush_table(eid, &ret, db_id, table_id);
 	printf("created random table\n");
-
+#define PRINT_SORTED_TABLE
 	{
 		int sorted_id;
 		unsigned long long start, end;
 		start = RDTSC_START();
-		ecall_sort_table(eid, &ret, db_id, table_id, 0, &sorted_id);
+		//ecall_sort_table(eid, &ret, db_id, table_id, 0, &sorted_id);
+
+		bitonic_sort_parallel(eid, db_id, table_id, 0);
 #ifdef CREATE_SORTED_TABLE
 		ecall_flush_table(eid, &ret, db_id, sorted_id);
 #endif
@@ -314,7 +330,7 @@ int test_bitonic_sort(sgx_enclave_id_t eid)
 		end = RDTSCP();
 		printf("Sorting random table (in-place) + flushing took %llu cycles\n", end - start);
 #ifdef PRINT_SORTED_TABLE
-		ecall_print_table_dbg(eid, &ret, db_id, table_id, 1, 256);
+		ecall_print_table_dbg(eid, &ret, db_id, table_id, 0, 8);
 #endif
 	}
 
