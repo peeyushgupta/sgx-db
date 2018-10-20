@@ -7,7 +7,6 @@
 #include "enclave_t.h"
 #endif
 
-
 #define ECALL_TEST_LENGTH 10000
 
 struct spinlock s_inc = {.locked = 0};
@@ -28,7 +27,7 @@ int ecall_spinlock_inc(unsigned long count) {
 		tn.b ++; 	
 	}
 
-	printf("%s: a:%lu, b:%lu (%s)\n", 
+	printf("%s: We expect to fail here: a:%lu, b:%lu (%s)\n", 
 		__func__, tn.a, tn.b, tn.a == tn.b? "passed" : "failed"); 
 
 	printf("%s: Now run with locks on\n", __func__); 
