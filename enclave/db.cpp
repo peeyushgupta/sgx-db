@@ -793,27 +793,6 @@ cleanup:
 	return ret; 
 };
 
-/* Promote column in a table to the front */
-int ecall_promote_table_dbg(int db_id, int table_id, int column, int *promoted_table_id) {
-	int ret; 
-	data_base_t *db;
-	table_t *table, *p_table;
-
-	if ((db_id > (MAX_DATABASES - 1)) || !g_dbs[db_id] )
-		return -1; 
-
-	db = g_dbs[db_id]; 
-	
-	if ((table_id > (MAX_TABLES - 1)) || !db->tables[table_id])
-		return -2; 
-
-	table = db->tables[table_id];
-
-	ret = promote_table(db, table, column, &p_table); 
-	*promoted_table_id = p_table->id; 
-
-	return ret; 
-}
 /// Bitonic sort functions ////
 /** INLINE procedure exchange() : pair swap **/
 inline int exchange(table_t *tbl, int i, int j, void *row_i, void *row_j) {

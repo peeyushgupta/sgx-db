@@ -91,13 +91,19 @@ struct join_condition {
 	join_condition_t *next;  /* not supported at the moment */
 };
 
-
+int create_table(data_base_t *db, std::string &name, schema_t *schema, table_t **new_table);
+int read_row(table_t *table, unsigned int row_num, void *row);
+int write_row_dbg(table_t *table, void *new_data, int row_num);
+int print_row(schema_t *sc, void *row); 
 
 int read_data_block(table *table, unsigned long blk_num, void *buf);
 int write_data_block(table *table, unsigned long blk_num, void *buf); 
 
 int insert_row_dbg(table_t *table, void *row);
 int write_row_dbg(table_t *table, void *new_data, int row_num);
+
+int promote_table(data_base_t *db, table_t *tbl, int column, table_t **p_tbl);
+
 
 inline int exchange(table_t *tbl, int i, int j, void *row_i, void *row_j);
 int compare(table_t *tbl, int column, int i, int j, int dir);

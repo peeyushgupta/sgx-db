@@ -59,7 +59,8 @@ data_block_t *bget(struct table *table, unsigned int blk_num)
 	// Is the block already cached?
 	for(b = bcache->head.next; b != &bcache->head; b = b->next){
 		if(b->table == table && b->blk_num == blk_num){
-			b->refcnt++;
+			// Atomic increment, relies on GCC builtins
+			__sync_fetch_and_add(&b->refcnt, 1);
 			release(&bcache->lock);
 			acquire(&b->lock);
 
@@ -99,6 +100,14 @@ data_block_t *bget(struct table *table, unsigned int blk_num)
 		}
 	}
 	ERR("panic: no buffers\n");
+
+	/* print buffer cache */
+	for(b = bcache->head.next; b != &bcache->head; b = b->next){
+		ERR("table: %s, blk:%d, refcnt:%d, flags:%x\n", 
+			b->table->name.c_str(), b->blk_num, b->refcnt, b->flags);
+	}
+
+
 	release(&bcache->lock);
 	return NULL;
 }
@@ -141,6 +150,9 @@ data_block_t* bread(table_t *table, unsigned int blk_num)
 	int ret; 
 
 	b = bget(table, blk_num);
+	if(b == NULL)
+		return NULL; 
+	
 	if((b->flags & B_VALID) == 0) {
 		DBG_ON(VERBOSE_BCACHE, "read block: %p (data:%p), num:%lu, table:%s\n", 
 			b, b->data, b->blk_num, table->name.c_str()); 
@@ -172,13 +184,15 @@ void bwrite(data_block_t *b)
 // Move to the head of the MRU list.
 void brelse(data_block_t *b)
 {
+	int old; 
 	bcache_t *bcache = &b->table->db->bcache;
 	//releasesleep(&b->lock);
 
 	acquire(&b->lock);
 
-	b->refcnt--;
-	if (b->refcnt != 0) {
+	//b->refcnt--;
+	old = __sync_fetch_and_sub(&b->refcnt, 1);
+	if (old != 1) {
 		release(&b->lock);
 		return; 
 	}	

@@ -65,6 +65,62 @@ void test_spinlock_inc(sgx_enclave_id_t eid, unsigned long count)
 	t4.join(); 
 }
 
+/* Test thread-safety of the buffer cache */
+void bcache_read_write_fn(sgx_enclave_id_t eid, int db_id, int from_table_id, int to_table_id) 
+{
+	int ret;
+	sgx_status_t sgx_ret = SGX_ERROR_UNEXPECTED;
+
+	sgx_ret = ecall_bcache_test_read_write(eid, &ret, db_id, from_table_id, to_table_id);
+	if (sgx_ret || ret) {
+		ERR("error:%d (sgx ret:%d)\n", ret, sgx_ret);
+		return;
+	}
+
+	return;  
+}
+
+void bcache_test_run_threads(sgx_enclave_id_t eid, int db_id, int from_table_id, int to_table_id)
+{
+
+	thread t1(bcache_read_write_fn, eid, db_id, from_table_id, to_table_id);
+	thread t2(bcache_read_write_fn, eid, db_id, from_table_id, to_table_id);
+	thread t3(bcache_read_write_fn, eid, db_id, from_table_id, to_table_id);
+	thread t4(bcache_read_write_fn, eid, db_id, from_table_id, to_table_id);
+
+	t1.join();
+	t2.join();
+	t3.join(); 
+	t4.join(); 
+}
+
+int bcache_test(sgx_enclave_id_t eid, int db_id, int from_table_id)
+{
+	int ret; 
+	sgx_status_t sgx_ret = SGX_ERROR_UNEXPECTED;
+	int to_table_id;
+
+	printf("%s:starting buffer cache test\n", __func__); 
+
+	sgx_ret = ecall_bcache_test_create_read_write_table(eid, &ret, db_id, from_table_id, &to_table_id);
+	if (sgx_ret || ret) {
+		ERR("error:%d (sgx ret:%d)\n", ret, sgx_ret);
+		return ret;
+	}
+
+	bcache_test_run_threads(eid, db_id, from_table_id, to_table_id);
+
+	sgx_ret = ecall_bcache_test_cmp_read_write(eid, &ret, db_id, from_table_id, to_table_id);
+	if (sgx_ret || ret) {
+		ERR("error:%d (sgx ret:%d)\n", ret, sgx_ret);
+		return ret;
+	}
+
+	printf("%s:buffer cache test passed\n", __func__); 
+	return 0;
+}
+
+
 int test_rankings(sgx_enclave_id_t eid) {
  	
 	schema_t sc, sc_udata;
@@ -232,6 +288,11 @@ int test_rankings(sgx_enclave_id_t eid) {
 		ecall_scan_table_dbg(eid, &ret, db_id, udata_table_id);
 	}
 #endif
+
+	/* Buffer cache testst */
+	{	
+		bcache_test(eid, db_id, table_id);
+	}
 
 	/* Promote column tests */
 	{
