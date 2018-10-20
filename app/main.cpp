@@ -27,6 +27,7 @@ int main(){
     	}
 
 	DBG("Created enclave... starting DB tests\n");
+	test_spinlock_inc(eid, 10000);
 
 #if defined(OCALL_ECALL_TESTS)
 	test_null_ocalls(eid);

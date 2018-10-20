@@ -43,9 +43,10 @@ void binit(bcache_t *bcache)
 	}
 }
 
-// Look through buffer cache for a block on device dev.
-// If not found, allocate a buffer.
-// In either case, return locked buffer.
+// Look through buffer cache for a block with a specific number
+// If not found, allocate a buffer
+// If successfully found a buffer or managed to get a new one 
+// return a locked buffer, if not return NULL
 data_block_t *bget(struct table *table, unsigned int blk_num)
 {
 	data_block_t *b;

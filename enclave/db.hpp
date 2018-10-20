@@ -13,7 +13,6 @@
 #define MAX_CONDITIONS 3 // number of ORs allowed in one clause of a condition
 #define THREADS_PER_DB 1 // number of threads concurrently working on DB
 
-#define ECALL_TEST_LENGTH 10000
 
 typedef enum schema_type {
 	BOOLEAN = 1,

@@ -134,6 +134,7 @@ Crypto_Library_Name := sgx_tcrypto
 Enclave_Cpp_Files := enclave/bcache.cpp \
 			enclave/db.cpp \
 			enclave/spinlock.cpp \
+			enclave/tests.cpp \
 			enclave/util.cpp
 Enclave_Include_Paths := -Iinclude -Ienclave -I$(SGX_SDK)/include -I$(SGX_SDK)/include/tlibc -I$(SGX_SDK)/include/libcxx
 
