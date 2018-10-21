@@ -11,7 +11,7 @@
 #define MAX_TABLES 10
 #define MAX_COLS 20
 #define MAX_CONDITIONS 3 // number of ORs allowed in one clause of a condition
-#define THREADS_PER_DB 1 // number of threads concurrently working on DB
+#define THREADS_PER_DB 8 // number of threads concurrently working on DB
 
 int reserve_tid();
 void reset_tids();
