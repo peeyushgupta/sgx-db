@@ -24,7 +24,20 @@ data_base_t* g_dbs[MAX_DATABASES];
 const int ASCENDING  = 1;
 const int DESCENDING = 0;
 
-static inline int tid() { return 0; }
+static unsigned int g_thread_id = 0;
+thread_local int thread_id; 
+
+int reserve_tid() { 
+	thread_id = __sync_fetch_and_add(&g_thread_id, 1);
+	return thread_id; 
+}
+
+void reset_tids() { 
+	g_thread_id = 0;
+}
+
+int tid() { return thread_id; }
+
 
 #if 0
 

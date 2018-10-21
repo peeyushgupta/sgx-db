@@ -13,6 +13,10 @@
 #define MAX_CONDITIONS 3 // number of ORs allowed in one clause of a condition
 #define THREADS_PER_DB 1 // number of threads concurrently working on DB
 
+int reserve_tid();
+void reset_tids();
+int tid();
+
 
 typedef enum schema_type {
 	BOOLEAN = 1,
@@ -24,6 +28,7 @@ typedef enum schema_type {
 	INTEGER = 7,
 	TINYTEXT = 8,
 } schema_type_t;
+
 
 #if 0 
 struct Column{

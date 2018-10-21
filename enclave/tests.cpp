@@ -26,7 +26,8 @@ int ecall_spinlock_inc(unsigned long count) {
 
 	int passed = 0; 
 
-	printf("%s: First test without lock to see if we get a race\n", __func__); 
+	printf("%s: First test without lock to see if we get a race (init tid:%d)\n",
+		 __func__, reserve_tid()); 
 	for (unsigned long i = 0; i < count; i++) {
 		tn.a ++; 
 		tn.b ++; 	
@@ -51,8 +52,8 @@ int ecall_spinlock_inc(unsigned long count) {
 
 	acquire(&s_inc);
 	passed = (tn.a == tn.b) ? 0 : -1;
-	printf("%s: a:%lu, b:%lu (%s)\n", 
-		__func__, tn.a, tn.b, tn.a == tn.b? "passed" : "failed"); 
+	printf("%s: tid:%d a:%lu, b:%lu (%s)\n", 
+		__func__, tid(), tn.a, tn.b, tn.a == tn.b? "passed" : "failed"); 
 	release(&s_inc); 
 	return passed; 
 }
