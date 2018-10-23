@@ -1015,6 +1015,8 @@ int ecall_sort_table_parallel(int db_id, int table_id, int column, int tid)
 //bflush(table);
 #define STAGE2
 // stage 2
+// TODO: replace it with conditional variables
+  while (stage1 !=2) ;
 #ifdef STAGE2
   if (tid == 0)
   {
@@ -1035,6 +1037,8 @@ int ecall_sort_table_parallel(int db_id, int table_id, int column, int tid)
 #define STAGE3
   //bflush(table);
 #ifdef STAGE3
+// TODO: replace it with conditional variables
+  while (stage2 !=2) ;
   //stage 3
   if (tid == 0)
   {
