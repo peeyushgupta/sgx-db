@@ -720,10 +720,10 @@ int pad_schema(schema_t *old_sc, int num_pad_bytes, schema_t *new_sc){
     if (old_sc->num_fields >= MAX_COLS)
         return -1;
     int i;
-    for (i = 0; i < old_schema->num_fields; i++) {
+    for (i = 0; i < old_sc->num_fields; i++) {
         new_sc->offsets[i] = old_sc->offsets[i];
         new_sc->sizes[i] = old_sc->sizes[i];
-        new_sc->types[i] = old_schema->types[i];
+        new_sc->types[i] = old_sc->types[i];
     }
     new_sc->offsets[i] = old_sc->row_size;
     new_sc->sizes[i] = num_pad_bytes;
@@ -880,7 +880,6 @@ int project_promote_pad_table(
     }
     ret = promote_schema(&project_sc,
                          promote_columns,
-                         sizeof(promote_columns) / sizeof(int),
                          &project_promote_sc);
     if (ret) {
         ERR("promote_schema failed:%d\n", ret);

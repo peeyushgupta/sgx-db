@@ -316,7 +316,7 @@ void assert_schema_same_except_for_padding_at_end(schema_t sc1, schema_t sc2, in
     assert(sc2.offsets[padding_field_num] == sc2.offsets[padding_field_num - 1] 
                                              + sc2.sizes[padding_field_num - 1]);
     assert(sc2.types[padding_field_num] == PADDING);
-    assert(sc2.size[padding_field_num] == num_pad_bytes);
+    assert(sc2.sizes[padding_field_num] == num_pad_bytes);
 }
 
 int test_pad_schema() {
@@ -339,7 +339,7 @@ int test_pad_schema() {
     for(int i = 0; i < 3; i++)
     {
         num_pad_bytes = num_pad_bytes_values[i];
-        pad_schema(sc_old, sc_new, num_pad_bytes);
+        pad_schema(&sc_old, num_pad_bytes, &sc_new);
         assert_schema_same_except_for_padding_at_end(sc_old, sc_new, num_pad_bytes);
     }
 }
