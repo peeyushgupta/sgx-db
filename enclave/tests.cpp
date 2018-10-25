@@ -111,6 +111,27 @@ int ecall_promote_table_dbg(int db_id, int table_id, int column, int *promoted_t
 	return ret; 
 }
 
+/* Test the function that sorts the table with column sort */
+int ecall_column_sort_table_dbg(int db_id, int table_id, int r, int s) {
+	int ret; 
+	data_base_t *db;
+	table_t *table;
+
+	if ((db_id > (MAX_DATABASES - 1)) || !g_dbs[db_id] )
+		return -1; 
+
+	db = g_dbs[db_id]; 
+	
+	if ((table_id > (MAX_TABLES - 1)) || !db->tables[table_id])
+		return -2; 
+
+	table = db->tables[table_id];
+
+	ret = column_sort_table(db, table, r, s); 
+
+	return ret; 
+}
+
 /* Test thread-safety of the buffer cache */
 
 int bcache_test_create_read_write_table(data_base_t *db, table_t *tbl, table_t **test_tbl) {

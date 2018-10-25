@@ -806,6 +806,128 @@ cleanup:
 	return ret; 
 };
 
+/* r -- number of rows
+   s -- number of columns
+*/
+
+int column_sort_table(data_base_t *db, table_t *table, int r, int s) {
+	int ret;
+	std::string tmp_tbl_name;  
+	table_t **s_tables, **st_tables;
+	void *row;
+	unsigned long row_num;  
+
+	s_tables = (table_t **)malloc(s * sizeof(table_t *)); 
+	if(!s_tables) {
+		ERR("failed to allocate s_tables\n");
+		goto cleanup; 
+	}
+
+	st_tables = (table_t **)malloc(s * sizeof(table_t *)); 
+	if(!st_tables) {
+		ERR("failed to allocate s_tables\n");
+		goto cleanup; 
+	}
+
+	/* Create s temporary column tables */
+	for (int i = 0; i < s; i++) {
+
+		tmp_tbl_name = "s" + std::to_string(i) + ":" + table->name ; 
+
+		ret = create_table(db, tmp_tbl_name, &table->sc, &s_tables[i]);
+		if (ret) {
+			ERR("create table:%d\n", ret);
+			goto cleanup; 
+		}
+
+		DBG("Created tmp table %s, id:%d\n", 
+            		tmp_tbl_name.c_str(), s_tables[i]->id); 
+	}
+
+	/* Create another set of s transposed column tables */
+	for (int i = 0; i < s; i++) {
+
+		tmp_tbl_name = "st" + std::to_string(i) + ":" + table->name ; 
+
+		ret = create_table(db, tmp_tbl_name, &table->sc, &st_tables[i]);
+		if (ret) {
+			ERR("create table:%d\n", ret);
+			goto cleanup; 
+		}
+
+		DBG("Created tmp table %s, id:%d\n", 
+            		tmp_tbl_name.c_str(), st_tables[i]->id); 
+	}
+
+	row = malloc(MAX_ROW_SIZE);
+	if(!row)
+		goto cleanup;
+
+	if ( r * s > table->num_rows ) {
+		ERR("r (%d) * s (%d) > num_rows (%d)\n", r, s, table->num_rows); 
+		goto cleanup; 
+	}
+
+	row_num = 0; 
+
+	/* Rewrite the table as s column tables  */
+	for (unsigned int i = 0; i < s; i ++) {
+
+		for (unsigned int j = 0; j < r; j ++) {
+
+			// Read old row
+			ret = read_row(table, row_num, row);
+			if(ret) {
+				ERR("failed to read row %d of table %s\n",
+					row_num, table->name.c_str());
+				goto cleanup;
+			}
+
+				
+			/* Add row to the r table */
+			ret = insert_row_dbg(s_tables[i], row);
+			if(ret) {
+				ERR("failed to insert row %d of promoted table %s\n",
+					row_num, s_tables[i]->name.c_str());
+				goto cleanup;
+			}
+			row_num ++;
+		}
+	}
+
+
+
+	ret = 0;
+cleanup: 
+	if (row)
+		free(row); 
+
+	if (s_tables) {
+		for (unsigned int i = 0; i < s; i++) {
+			if (s_tables[i]) {
+				bflush(s_tables[i]);
+				free(s_tables[i]);
+			}
+		}
+		free(s_tables);
+	};
+
+	if (st_tables) {
+		for (unsigned int i = 0; i < s; i++) {
+			if (st_tables[i]) {
+				bflush(st_tables[i]);
+				free(st_tables[i]);
+			}
+		}
+		free(st_tables);
+	};
+		
+	return ret; 
+};
+
+
+
+
 /// Bitonic sort functions ////
 /** INLINE procedure exchange() : pair swap **/
 inline int exchange(table_t *tbl, int i, int j, void *row_i, void *row_j) {

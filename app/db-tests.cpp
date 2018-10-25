@@ -127,7 +127,7 @@ int test_rankings(sgx_enclave_id_t eid) {
 	std::string db_name("rankings-and-udata");
 	std::string table_name("rankings");
 	std::string udata_table_name("udata");
-	int i, db_id, table_id, udata_table_id, join_table_id, ret; 
+	int i, db_id, rankings_table_id, udata_table_id, join_table_id, ret; 
 	join_condition_t c;
 	char line[MAX_ROW_SIZE]; 
 	char data[MAX_ROW_SIZE];
@@ -158,7 +158,7 @@ int test_rankings(sgx_enclave_id_t eid) {
 		return ret; 
 	}
 
-	sgx_ret = ecall_create_table(eid, &ret, db_id, table_name.c_str(), table_name.length(), &sc, &table_id);
+	sgx_ret = ecall_create_table(eid, &ret, db_id, table_name.c_str(), table_name.length(), &sc, &rankings_table_id);
 	if (sgx_ret || ret) {
 		ERR("create table error:%d (sgx ret:%d)\n", ret, sgx_ret);
 		return ret; 
@@ -190,7 +190,7 @@ int test_rankings(sgx_enclave_id_t eid) {
 
 		//DBG_ON(VERBOSE_INSERT, "insert row:%s\n", (char*)row); 
 	
-		sgx_ret = ecall_insert_row_dbg(eid, &ret, db_id, table_id, row);
+		sgx_ret = ecall_insert_row_dbg(eid, &ret, db_id, rankings_table_id, row);
 		if (sgx_ret) {
 			ERR("insert row:%d, err:%d (sgx ret:%d)\n", i, ret, sgx_ret);
 			return ret; 
@@ -199,7 +199,7 @@ int test_rankings(sgx_enclave_id_t eid) {
 	
 	}
 
-	ecall_flush_table(eid, &ret, db_id, table_id);
+	ecall_flush_table(eid, &ret, db_id, rankings_table_id);
 	printf("created rankings table\n");
 
 	sc_udata.num_fields = 10;
@@ -281,7 +281,7 @@ int test_rankings(sgx_enclave_id_t eid) {
 
 #if defined(TABLE_SCAN_TESTS)
 	for (i = 0; i < 10; i++) {
-		ecall_scan_table_dbg(eid, &ret, db_id, table_id);
+		ecall_scan_table_dbg(eid, &ret, db_id, rankings_table_id);
 	}
 
 	for (i = 0; i < 10; i++) {
@@ -291,23 +291,35 @@ int test_rankings(sgx_enclave_id_t eid) {
 
 	/* Buffer cache testst */
 	{	
-		bcache_test(eid, db_id, table_id);
+		bcache_test(eid, db_id, rankings_table_id);
 	}
 
 	/* Promote column tests */
 	{
-		int p_rankings_id;
-		ecall_promote_table_dbg(eid, &ret, db_id, table_id, 1, &p_rankings_id);
-		ecall_flush_table(eid, &ret, db_id, p_rankings_id);
+		int p_rankings_table_id;
+		ecall_promote_table_dbg(eid, &ret, db_id, rankings_table_id, 1, &p_rankings_table_id);
+		ecall_flush_table(eid, &ret, db_id, p_rankings_table_id);
 		printf("promoted rankings table\n");
-		ecall_print_table_dbg(eid, &ret, db_id, table_id, 359990, 360020);
-		ecall_print_table_dbg(eid, &ret, db_id, p_rankings_id, 359990, 360020);
+		ecall_print_table_dbg(eid, &ret, db_id, rankings_table_id, 359990, 360020);
+		ecall_print_table_dbg(eid, &ret, db_id, p_rankings_table_id, 359990, 360020);
+	}
+
+	/* Column sort tests */
+	{
+		unsigned int r, s;
+
+		r = 35000;
+		s = 10; 
+		
+		ecall_column_sort_table_dbg(eid, &ret, db_id, rankings_table_id, r, s);
+		printf("sorted rankings table with column sort\n");
+		ecall_print_table_dbg(eid, &ret, db_id, rankings_table_id, 359990, 360020);
+	//	ecall_print_table_dbg(eid, &ret, db_id, p_rankings_table_id, 359990, 360020);
 	}
 
 
-
 	c.num_conditions = 1; 
-	c.table_left = table_id; 
+	c.table_left = rankings_table_id; 
 	c.table_right = udata_table_id; 
 	c.fields_left[0] = 1;
 	c.fields_right[0] = 2;
