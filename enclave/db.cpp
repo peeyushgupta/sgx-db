@@ -884,7 +884,7 @@ int column_sort_table(data_base_t *db, table_t *table, int r, int s) {
 			}
 
 				
-			/* Add row to the r table */
+			/* Add row to the s table */
 			ret = insert_row_dbg(s_tables[i], row);
 			if(ret) {
 				ERR("failed to insert row %d of promoted table %s\n",
@@ -895,6 +895,56 @@ int column_sort_table(data_base_t *db, table_t *table, int r, int s) {
 		}
 	}
 
+	/* Transpose s column tables into s transposed tables  */
+	for (unsigned int i = 0; i < s; i ++) {
+
+		for (unsigned int j = 0; j < r; j ++) {
+
+			// Read old row
+			ret = read_row(s_tables[i], j, row);
+			if(ret) {
+				ERR("failed to read row %d of table %s\n",
+					row_num, table->name.c_str());
+				goto cleanup;
+			}
+
+				
+			/* Add row to the st table */
+			ret = insert_row_dbg(st_tables[j % s], row);
+			if(ret) {
+				ERR("failed to insert row %d of promoted table %s\n",
+					row_num, st_tables[i]->name.c_str());
+				goto cleanup;
+			}
+		}
+	}
+
+	row_num = 0; 
+
+	/* Untranspose s transposed column tables into s tables  */
+	for (unsigned int i = 0; i < r; i ++) {
+
+		for (unsigned int j = 0; j < s; j ++) {
+
+			/* Read row from st table */
+			ret = read_row(st_tables[j], i, row);
+			if(ret) {
+				ERR("failed to read row %d of table %s\n",
+					row_num, table->name.c_str());
+				goto cleanup;
+			}
+
+				
+			/* Add row to the s table */
+			ret = write_row_dbg(s_tables[row_num / r], row, row_num % r);
+			if(ret) {
+				ERR("failed to insert row %d of promoted table %s\n",
+					row_num, s_tables[i]->name.c_str());
+				goto cleanup;
+			}
+			row_num ++; 
+		}
+	}
 
 
 	ret = 0;
