@@ -16,13 +16,15 @@ enclave {
 		/* BU: ok, this is exploitable... enclave can overwrite it's own memory */
 		int ocall_write_file(int fd, [user_check] void* buf, unsigned long size); 
 		int ocall_read_file(int fd, [user_check] void* buf, unsigned long size);
+		int ocall_seek(int fd, unsigned long offset);
 
 
 		/* RDTSC is illegal instruction inside SGX for SGX v1 */
 		unsigned long long ocall_rdtsc(void); 
 
-		int ocall_seek(int fd, unsigned long offset);
-		void ocall_null_ocall(void);	
+		/* Various tests */
+		void ocall_null_ocall(void);
+	
 	};
  
 	trusted {
@@ -31,12 +33,23 @@ enclave {
 		public int ecall_insert_row_dbg(int db_id, int table_id, [user_check] void *row);
 		public int ecall_flush_table(int db_id, int table_id);
 		public int ecall_join(int db_id, [user_check]join_condition_t *c, [out] int *join_tbl_id);
-		public int ecall_scan_table_dbg(int db_id, int table_id);
 		public int ecall_print_table_dbg(int db_id, int table_id, int start, int end);
 
+		public int ecall_promote_table_dbg(int db_id, int table_id, int column, [out] int *promoted_table_id);
+		public int ecall_sort_table(int db_id, int table_id, int column, [out] int *sorted_table_id);
+		public int ecall_sort_table_parallel(int db_id, int table_id, int field, int tid);
+
+		/* Various tests */
+		public int ecall_spinlock_inc(unsigned long count);
+		public int ecall_scan_table_dbg(int db_id, int table_id);
 		public void ecall_test_null_ocall(void);
 		public void ecall_null_ecall(void); 
-		public int ecall_promote_table_dbg(int db_id, int table_id, int column, [out] int *promoted_table_id);
+
+		/* Buffer cache concurrent read/write test */
+		public int ecall_bcache_test_create_read_write_table(int db_id, int from_table_id, [out]int *to_table_id);
+		public int ecall_bcache_test_read_write(int db_id, int from_table_id, int to_table_id);
+		public int ecall_bcache_test_cmp_read_write(int db_id, int from_table_id, int to_table_id);
+
 
 	};
 

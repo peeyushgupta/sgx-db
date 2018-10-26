@@ -27,9 +27,7 @@ int main(){
     	}
 
 	DBG("Created enclave... starting DB tests\n");
-
-        test_project_schema();
-        return 0;
+	test_spinlock_inc(eid, 10000);
 
 #if defined(OCALL_ECALL_TESTS)
 	test_null_ocalls(eid);
@@ -38,7 +36,12 @@ int main(){
 	test_threads(eid);
 #endif
 
+	test_bitonic_sort(eid);
+	
 	test_rankings(eid);
+
+
+	
 
 	/* Destroy the enclave */
 	sgx_destroy_enclave(eid);

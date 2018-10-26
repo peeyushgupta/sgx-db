@@ -27,6 +27,8 @@ void binit(bcache_t *bcache)
 {
 	data_block_t *b;
 
+	initlock(&bcache->lock, std::string("bcache"));
+
 	// Create linked list of buffers
 	bcache->head.prev = &bcache->head;
 	bcache->head.next = &bcache->head;
@@ -35,14 +37,16 @@ void binit(bcache_t *bcache)
 		b = &bcache->data_blks[i];
 		b->next = bcache->head.next;
 		b->prev = &bcache->head;
+		initlock(&b->lock, std::string("block"));
 		bcache->head.next->prev = b;
 		bcache->head.next = b;
 	}
 }
 
-// Look through buffer cache for a block on device dev.
-// If not found, allocate a buffer.
-// In either case, return locked buffer.
+// Look through buffer cache for a block with a specific number
+// If not found, allocate a buffer
+// If successfully found a buffer or managed to get a new one 
+// return a locked buffer, if not return NULL
 data_block_t *bget(struct table *table, unsigned int blk_num)
 {
 	data_block_t *b;
@@ -50,10 +54,16 @@ data_block_t *bget(struct table *table, unsigned int blk_num)
 
 	bcache_t *bcache = &table->db->bcache;
 
+	acquire(&bcache->lock);
+
 	// Is the block already cached?
 	for(b = bcache->head.next; b != &bcache->head; b = b->next){
 		if(b->table == table && b->blk_num == blk_num){
-			b->refcnt++;
+			// Atomic increment, relies on GCC builtins
+			__sync_fetch_and_add(&b->refcnt, 1);
+			release(&bcache->lock);
+			acquire(&b->lock);
+
 			DBG_ON(VERBOSE_BCACHE, "blk:%p (flags:%x), num:%d, b->table:%s for table:%s\n", 
 				b, b->flags, blk_num, b->table->name.c_str(), table->name.c_str()); 
 			return b;
@@ -69,7 +79,9 @@ data_block_t *bget(struct table *table, unsigned int blk_num)
 				ret = write_data_block(b->table, b->blk_num, b->data);
 				if (ret) {
 					ERR("writing dirty block:%lu for table %s\n", 
-						b->blk_num, b->table->name.c_str()); 
+						b->blk_num, b->table->name.c_str());
+ 					release(&bcache->lock);
+					//acquire(&b->lock);
 					return NULL;
 				}
 			}
@@ -81,10 +93,22 @@ data_block_t *bget(struct table *table, unsigned int blk_num)
 			b->blk_num = blk_num;
 			b->flags = 0;
 			b->refcnt = 1;
+			release(&bcache->lock);
+			acquire(&b->lock);
+
 			return b;
 		}
 	}
 	ERR("panic: no buffers\n");
+
+	/* print buffer cache */
+	for(b = bcache->head.next; b != &bcache->head; b = b->next){
+		ERR("table: %s, blk:%d, refcnt:%d, flags:%x\n", 
+			b->table->name.c_str(), b->blk_num, b->refcnt, b->flags);
+	}
+
+
+	release(&bcache->lock);
 	return NULL;
 }
 
@@ -95,6 +119,8 @@ int bflush(struct table *table)
 
 	bcache_t *bcache = &table->db->bcache;
 
+	acquire(&bcache->lock);
+
 	// Is the block already cached?
 	for(b = bcache->head.next; b != &bcache->head; b = b->next) {
 		if(b->table == table && b->flags & B_DIRTY) {
@@ -104,21 +130,29 @@ int bflush(struct table *table)
 			if (ret) {
 				ERR("writing dirty block:%lu for table %s\n", 
 					b->blk_num, table->name.c_str()); 
+
+				release(&bcache->lock);
 				return -1;
 			}
 			b->flags &= ~B_DIRTY; 
 		}
 	}
 
+	release(&bcache->lock);
 	return 0;
 }
-// Return a locked buf with the contents of the indicated block.
+// Return a buf with the contents of the indicated block.
+// Note the buffer is unlocked so multiple threads can use 
+// it in parallel
 data_block_t* bread(table_t *table, unsigned int blk_num)
 {
 	data_block_t *b;
 	int ret; 
 
 	b = bget(table, blk_num);
+	if(b == NULL)
+		return NULL; 
+	
 	if((b->flags & B_VALID) == 0) {
 		DBG_ON(VERBOSE_BCACHE, "read block: %p (data:%p), num:%lu, table:%s\n", 
 			b, b->data, b->blk_num, table->name.c_str()); 
@@ -126,11 +160,13 @@ data_block_t* bread(table_t *table, unsigned int blk_num)
 		ret = read_data_block(table, blk_num, b->data);
 		if (ret) {
 			ERR("failed reading data block %d for table:%s\n", 
-				blk_num, table->name.c_str()); 
+				blk_num, table->name.c_str());
+			release(&b->lock);
 			return NULL;
 		}
 		b->flags |= B_VALID; 
 	}
+	release(&b->lock);
 	return b;
 }
 
@@ -139,20 +175,30 @@ void bwrite(data_block_t *b)
 {
 	DBG_ON(VERBOSE_BCACHE, "marking dirty blk:%p (flags:%x), num:%lu, b->table:%s\n", 
 		b, b->flags, b->blk_num, b->table->name.c_str()); 
-
+	acquire(&b->lock); 
 	b->flags |= B_DIRTY;
+	release(&b->lock);
 }
 
 // Release a buffer.
 // Move to the head of the MRU list.
 void brelse(data_block_t *b)
 {
+	int old; 
 	bcache_t *bcache = &b->table->db->bcache;
+	//releasesleep(&b->lock);
 
-	b->refcnt--;
-	if (b->refcnt != 0) 
+	acquire(&b->lock);
+
+	//b->refcnt--;
+	old = __sync_fetch_and_sub(&b->refcnt, 1);
+	if (old != 1) {
+		release(&b->lock);
 		return; 
-		
+	}	
+
+	acquire(&bcache->lock);
+
 	// no one is waiting for it.
 	b->next->prev = b->prev;
 	b->prev->next = b->next;
@@ -160,5 +206,9 @@ void brelse(data_block_t *b)
 	b->prev = &bcache->head;
 	bcache->head.next->prev = b;
 	bcache->head.next = b;
+
+	release(&bcache->lock);
+	release(&b->lock);
+
 	return;
 }

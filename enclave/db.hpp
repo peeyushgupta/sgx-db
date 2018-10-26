@@ -5,15 +5,18 @@
 #include "dbg.hpp"
 #include "bcache.hpp"
 
-#define MAX_DATABASES 1
+#define MAX_DATABASES 2
 #define MAX_ROWS (1 << 20) /* 1 M for now */
 #define MAX_ROW_SIZE (1 << 12) /* 4096 for now */
 #define MAX_TABLES 10
 #define MAX_COLS 20
 #define MAX_CONDITIONS 3 // number of ORs allowed in one clause of a condition
-#define THREADS_PER_DB 1 // number of threads concurrently working on DB
+#define THREADS_PER_DB 8 // number of threads concurrently working on DB
 
-#define ECALL_TEST_LENGTH 10000
+int reserve_tid();
+void reset_tids();
+int tid();
+
 
 typedef enum schema_type {
 	BOOLEAN = 1,
@@ -24,8 +27,8 @@ typedef enum schema_type {
 	VARCHAR = 6,
 	INTEGER = 7,
 	TINYTEXT = 8,
-        PADDING = 9
 } schema_type_t;
+
 
 #if 0 
 struct Column{
@@ -93,15 +96,27 @@ struct join_condition {
 	join_condition_t *next;  /* not supported at the moment */
 };
 
-
+int create_table(data_base_t *db, std::string &name, schema_t *schema, table_t **new_table);
+int read_row(table_t *table, unsigned int row_num, void *row);
+int write_row_dbg(table_t *table, void *new_data, int row_num);
+int print_row(schema_t *sc, void *row); 
 
 int read_data_block(table *table, unsigned long blk_num, void *buf);
 int write_data_block(table *table, unsigned long blk_num, void *buf); 
 
 int insert_row_dbg(table_t *table, void *row);
+int write_row_dbg(table_t *table, void *new_data, int row_num);
+
 int project_schema(schema_t *old_sc, int* columns, int num_columns, schema_t *new_sc);
 int pad_schema(schema_t *old_sc, int num_pad_bytes, schema_t *new_sc);
 int project_row(void *old_row, schema_t *sc, void* new_row);
+int promote_table(data_base_t *db, table_t *tbl, int column, table_t **p_tbl);
+
+
+inline int exchange(table_t *tbl, int i, int j, void *row_i, void *row_j);
+int compare(table_t *tbl, int column, int i, int j, int dir);
+void bitonicMerge(table_t *tbl, int lo, int column, int cnt, int dir);
+void recBitonicSort(table_t *tbl, int lo, int column, int cnt, int dir);
 
 /* Enclave interface */
 #if NO_SGX
@@ -111,4 +126,3 @@ int ecall_insert_row_dbg(int db_id, int table_id, void *row);
 int ecall_flush_table(int db_id, int table_id);
 int ecall_join(int db_id, join_condition_t *c, int *join_tbl_id);
 #endif
-

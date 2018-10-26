@@ -8,32 +8,36 @@
 #include <time.hpp>
 #include <thread>
 #include <assert.h>
-using namespace std;
 
+using namespace std;
+#define OCALL_TEST_LENGTH 10000
+
+/* Test timings for ocalls */
 int test_null_ocalls(sgx_enclave_id_t eid) {
 
 	unsigned long long start, end; 
 
-	printf("Testing: null ecall for %d iterations\n", ECALL_TEST_LENGTH);
+	printf("Testing: null ecall for %d iterations\n", OCALL_TEST_LENGTH);
 	start = RDTSC();
-	for (int i = 0; i < ECALL_TEST_LENGTH; i++) {
+	for (int i = 0; i < OCALL_TEST_LENGTH; i++) {
 		ecall_null_ecall(eid);
 	}
 	end = RDTSC();
-	printf("Null ecall %llu cycles\n", (end - start)/ECALL_TEST_LENGTH);
+	printf("Null ecall %llu cycles\n", (end - start)/OCALL_TEST_LENGTH);
 
 	ecall_test_null_ocall(eid);
 };
 
-void thread_fn(void) {
-	ecall_null_ecall(1);
+/* Trivial thread test, each does a null ecall */
+void thread_fn(sgx_enclave_id_t eid) {
+	ecall_null_ecall(eid);
 }
 
 int test_threads(sgx_enclave_id_t eid) {
 	printf("Creating threads\n");
-	thread t1(thread_fn);
-	thread t2(thread_fn);
-	thread t3(thread_fn);
+	thread t1(thread_fn, eid);
+	thread t2(thread_fn, eid);
+	thread t3(thread_fn, eid);
 
 	t1.join();
 	t2.join();
@@ -41,6 +45,82 @@ int test_threads(sgx_enclave_id_t eid) {
 	printf("Joining threads\n");
 	return 0;
 }
+
+/* Test correctness of spinlocks */
+void spinlock_inc_fn(sgx_enclave_id_t eid, unsigned long count) 
+{
+	int ret;
+	ecall_spinlock_inc(eid, &ret, count); 
+}
+
+void test_spinlock_inc(sgx_enclave_id_t eid, unsigned long count)
+{
+	thread t1(spinlock_inc_fn, eid, count);
+	thread t2(spinlock_inc_fn, eid, count);
+	thread t3(spinlock_inc_fn, eid, count);
+	thread t4(spinlock_inc_fn, eid, count);
+
+	t1.join();
+	t2.join();
+	t3.join(); 
+	t4.join(); 
+}
+
+/* Test thread-safety of the buffer cache */
+void bcache_read_write_fn(sgx_enclave_id_t eid, int db_id, int from_table_id, int to_table_id) 
+{
+	int ret;
+	sgx_status_t sgx_ret = SGX_ERROR_UNEXPECTED;
+
+	sgx_ret = ecall_bcache_test_read_write(eid, &ret, db_id, from_table_id, to_table_id);
+	if (sgx_ret || ret) {
+		ERR("error:%d (sgx ret:%d)\n", ret, sgx_ret);
+		return;
+	}
+
+	return;  
+}
+
+void bcache_test_run_threads(sgx_enclave_id_t eid, int db_id, int from_table_id, int to_table_id)
+{
+
+	thread t1(bcache_read_write_fn, eid, db_id, from_table_id, to_table_id);
+	thread t2(bcache_read_write_fn, eid, db_id, from_table_id, to_table_id);
+	thread t3(bcache_read_write_fn, eid, db_id, from_table_id, to_table_id);
+	thread t4(bcache_read_write_fn, eid, db_id, from_table_id, to_table_id);
+
+	t1.join();
+	t2.join();
+	t3.join(); 
+	t4.join(); 
+}
+
+int bcache_test(sgx_enclave_id_t eid, int db_id, int from_table_id)
+{
+	int ret; 
+	sgx_status_t sgx_ret = SGX_ERROR_UNEXPECTED;
+	int to_table_id;
+
+	printf("%s:starting buffer cache test\n", __func__); 
+
+	sgx_ret = ecall_bcache_test_create_read_write_table(eid, &ret, db_id, from_table_id, &to_table_id);
+	if (sgx_ret || ret) {
+		ERR("error:%d (sgx ret:%d)\n", ret, sgx_ret);
+		return ret;
+	}
+
+	bcache_test_run_threads(eid, db_id, from_table_id, to_table_id);
+
+	sgx_ret = ecall_bcache_test_cmp_read_write(eid, &ret, db_id, from_table_id, to_table_id);
+	if (sgx_ret || ret) {
+		ERR("error:%d (sgx ret:%d)\n", ret, sgx_ret);
+		return ret;
+	}
+
+	printf("%s:buffer cache test passed\n", __func__); 
+	return 0;
+}
+
 
 int test_rankings(sgx_enclave_id_t eid) {
  	
@@ -210,13 +290,19 @@ int test_rankings(sgx_enclave_id_t eid) {
 	}
 #endif
 
+	/* Buffer cache testst */
+	{	
+		bcache_test(eid, db_id, table_id);
+	}
+
 	/* Promote column tests */
 	{
 		int p_rankings_id;
 		ecall_promote_table_dbg(eid, &ret, db_id, table_id, 1, &p_rankings_id);
+		ecall_flush_table(eid, &ret, db_id, p_rankings_id);
 		printf("promoted rankings table\n");
-		ecall_print_table_dbg(eid, &ret, db_id, table_id, 0, 20);
-		ecall_print_table_dbg(eid, &ret, db_id, p_rankings_id, 0, 20);
+		ecall_print_table_dbg(eid, &ret, db_id, table_id, 359990, 360020);
+		ecall_print_table_dbg(eid, &ret, db_id, p_rankings_id, 359990, 360020);
 	}
 
 
@@ -344,4 +430,99 @@ int test_pad_schema() {
     }
 }
 
+void bitonic_sorter_fn(sgx_enclave_id_t eid, int db_id, int table_id, int field, int tid) 
+{
+	int ret;
+	ecall_sort_table_parallel(eid, &ret, db_id, table_id, field, tid);
+}
 
+void bitonic_sort_parallel(sgx_enclave_id_t eid, int db_id, int table_id, int field)
+{
+	thread t1(bitonic_sorter_fn, eid, db_id, table_id, field, 0);
+	thread t2(bitonic_sorter_fn, eid, db_id, table_id, field, 1);
+	t1.join();
+	t2.join();
+}
+
+int test_bitonic_sort(sgx_enclave_id_t eid)
+{
+	schema_t sc;
+	std::string db_name("random-integers");
+	std::string table_name("rand_int");
+	int i, db_id, table_id, join_table_id, ret;
+	char line[MAX_ROW_SIZE] = {0};
+	char data[MAX_ROW_SIZE] = {0};
+	uint8_t *row;
+	sgx_status_t sgx_ret = SGX_ERROR_UNEXPECTED;
+
+	sc.num_fields = 1;
+	sc.offsets[0] = 0;
+	sc.sizes[0] = 4;
+	sc.types[0] = INTEGER;
+	sc.row_size = sc.offsets[sc.num_fields - 1] + sc.sizes[sc.num_fields - 1];
+
+	//row = (uint7_t*)malloc(sc.row_size);
+	row = (uint8_t*)malloc(MAX_ROW_SIZE);
+
+	sgx_ret = ecall_create_db(eid, &ret, db_name.c_str(), db_name.length(), &db_id);
+	if (sgx_ret || ret) {
+		ERR("create db error:%d (sgx ret:%d)\n", ret, sgx_ret);
+		return ret;
+	}
+
+	sgx_ret = ecall_create_table(eid, &ret, db_id, table_name.c_str(), table_name.length(), &sc, &table_id);
+	if (sgx_ret || ret) {
+		ERR("create table error:%d (sgx ret:%d)\n", ret, sgx_ret);
+		return ret;
+	}
+
+	std::ifstream file("rand.csv");
+
+	for(int i = 0; i < 8; i++) {
+
+		memset(row, 0x0, MAX_ROW_SIZE);
+		file.getline(line, MAX_ROW_SIZE); //get the field
+		std::istringstream ss(line);
+		for(int j = 0; j < sc.num_fields; j++) {
+			if(!ss.getline(data, MAX_ROW_SIZE, ',')) {
+				ERR("something is wrong with data (skipping):%s\n", line);
+				break;
+			}
+			if(sc.types[j] == INTEGER) {
+				int d = 0;
+				d = atoi(data);
+				//printf("%s, row %d | data %s : %d\n", __func__, i, data, atoi(data));
+				memcpy(&row[sc.offsets[j]], &d, 4);
+			}
+		}
+
+		sgx_ret = ecall_insert_row_dbg(eid, &ret, db_id, table_id, row);
+		if (sgx_ret) {
+			ERR("insert row:%d, err:%d (sgx ret:%d)\n", i, ret, sgx_ret);
+			return ret;
+		}
+	}
+
+	ecall_flush_table(eid, &ret, db_id, table_id);
+	printf("created random table\n");
+#define PRINT_SORTED_TABLE
+	{
+		int sorted_id;
+		unsigned long long start, end;
+		start = RDTSC_START();
+		//ecall_sort_table(eid, &ret, db_id, table_id, 0, &sorted_id);
+
+		bitonic_sort_parallel(eid, db_id, table_id, 0);
+#ifdef CREATE_SORTED_TABLE
+		ecall_flush_table(eid, &ret, db_id, sorted_id);
+#endif
+		ecall_flush_table(eid, &ret, db_id, table_id);
+		end = RDTSCP();
+		printf("Sorting random table (in-place) + flushing took %llu cycles\n", end - start);
+#ifdef PRINT_SORTED_TABLE
+		ecall_print_table_dbg(eid, &ret, db_id, table_id, 0, 8);
+#endif
+	}
+
+	return 0;
+}

@@ -14,14 +14,30 @@
 #include <cstdio>
 
 #include <string.h>
-
+#include <atomic>
 //#define FILE_READ_SIZE (1 << 12)
 
 #define FILE_READ_SIZE DATA_BLOCK_SIZE
 
 data_base_t* g_dbs[MAX_DATABASES];
 
-static inline int tid() { return 0; }
+const int ASCENDING  = 1;
+const int DESCENDING = 0;
+
+static unsigned int g_thread_id = 0;
+thread_local int thread_id; 
+
+int reserve_tid() { 
+	thread_id = __sync_fetch_and_add(&g_thread_id, 1);
+	return thread_id; 
+}
+
+void reset_tids() { 
+	g_thread_id = 0;
+}
+
+int tid() { return thread_id; }
+
 
 #if 0
 
@@ -686,7 +702,7 @@ int promote_schema(schema_t *old_sc, int column, schema_t *new_sc) {
 	}
 
 	for(int i = column + 1;  i < old_sc->num_fields; i++) {
-		new_sc->offsets[i] = old_sc->offsets[i] + size;
+		new_sc->offsets[i] = old_sc->offsets[i];
 		new_sc->sizes[i] = old_sc->sizes[i];
 		new_sc->types[i] = old_sc->types[i];	
 	}
@@ -701,39 +717,6 @@ int promote_schema(schema_t *old_sc, int column, schema_t *new_sc) {
 	return 0;
 }
 
-int project_schema(schema_t *old_sc, int* columns, int num_columns, schema_t *new_sc) {
-    int j;
-    int size;
-    for(int i = 0; i < num_columns; i++) {
-        j = columns[i];
-        new_sc->offsets[i] = old_sc->offsets[j];
-        new_sc->sizes[i] = old_sc->sizes[j];
-        size += new_sc->sizes[i];
-        new_sc->types[i] = old_sc->types[j];
-    }
-    new_sc->num_fields = num_columns;
-    new_sc->row_size = size;
-    return 0;
-}
-
-int pad_schema(schema_t *old_sc, int num_pad_bytes, schema_t *new_sc){
-    if (old_sc->num_fields >= MAX_COLS)
-        return -1;
-    int i;
-    for (i = 0; i < old_sc->num_fields; i++) {
-        new_sc->offsets[i] = old_sc->offsets[i];
-        new_sc->sizes[i] = old_sc->sizes[i];
-        new_sc->types[i] = old_sc->types[i];
-    }
-    new_sc->offsets[i] = old_sc->row_size;
-    new_sc->sizes[i] = num_pad_bytes;
-    new_sc->types[i] = schema_type::PADDING;
-
-    new_sc->num_fields++;
-    new_sc->row_size += num_pad_bytes;
-    return 0; 
-}
-
 int promote_row(void *old_row, schema_t *sc, int column, void * new_row) {
        
 	memcpy(new_row, (char*)old_row + sc->offsets[column], sc->sizes[column]); 
@@ -744,16 +727,6 @@ int promote_row(void *old_row, schema_t *sc, int column, void * new_row) {
 	
         return 0; 
 }; 
-
-int project_row(void *old_row, schema_t *sc, void* new_row) {
-    int offset = 0;
-    for(int i = 0; i < sc->num_fields; i++) {
-        memcpy(new_row + offset, (char*)old_row + sc->offsets[i], sc->sizes[i]);
-        offset += sc->sizes[i];
-    }
-    return 0; 
-}
-
 
 /* Before sorting the table we promote the column that we sort on 
    to the front -- this allows us to compare the bits of the columns 
@@ -833,11 +806,126 @@ cleanup:
 	return ret; 
 };
 
-/* Promote column in a table to the front */
-int ecall_promote_table_dbg(int db_id, int table_id, int column, int *promoted_table_id) {
+/// Bitonic sort functions ////
+/** INLINE procedure exchange() : pair swap **/
+inline int exchange(table_t *tbl, int i, int j, void *row_i, void *row_j) {
+  void *row_tmp;
+
+  row_tmp = malloc(MAX_ROW_SIZE);
+
+  if(!row_tmp)
+    return -4;
+
+  memcpy(row_tmp, row_i, MAX_ROW_SIZE); 
+
+  write_row_dbg(tbl, row_j, i);
+  write_row_dbg(tbl, row_tmp, j);
+
+  free(row_tmp);
+
+  return 0;
+}
+
+
+
+/** procedure compare() 
+   The parameter dir indicates the sorting direction, ASCENDING 
+   or DESCENDING; if (a[i] > a[j]) agrees with the direction, 
+   then a[i] and a[j] are interchanged.
+**/
+int compare(table_t *tbl, int column, int i, int j, int dir) {
+  void *row_i, *row_j;
+  int val_i, val_j;
+
+  row_i = malloc(MAX_ROW_SIZE);
+  if(!row_i)
+    return -5;
+
+  row_j = malloc(MAX_ROW_SIZE);
+  if(!row_j)
+    return -6;
+
+  read_row(tbl, i, (void *)row_i);
+  read_row(tbl, j, (void *)row_j);
+
+  val_i = *((int*)get_column(&tbl->sc, column, row_i));
+  val_j = *((int*)get_column(&tbl->sc, column, row_j));
+
+	if (dir==(val_i>val_j)) {
+		exchange(tbl, i,j, row_i, row_j);
+	}
+
+  free(row_i);
+  free(row_j);
+  return 0;
+}
+
+
+
+/** Procedure bitonicMerge() 
+   It recursively sorts a bitonic sequence in ascending order, 
+   if dir = ASCENDING, and in descending order otherwise. 
+   The sequence to be sorted starts at index position lo,
+   the parameter cbt is the number of elements to be sorted. 
+ **/
+void bitonicMerge(table_t *tbl, int lo, int column, int cnt, int dir) {
+  if (cnt>1) {
+    int k=cnt/2;
+    int i;
+    for (i=lo; i<lo+k; i++)
+      compare(tbl, column, i, i+k, dir);
+    bitonicMerge(tbl, lo, column, k, dir);
+    bitonicMerge(tbl, lo+k, column, k, dir);
+  }
+}
+
+
+
+/** function recBitonicSort() 
+    first produces a bitonic sequence by recursively sorting 
+    its two halves in opposite sorting orders, and then
+    calls bitonicMerge to make them in the same order 
+ **/
+void recBitonicSort(table_t *tbl, int lo, int column, int cnt, int dir) {
+  if (cnt>1) {
+    int k=cnt/2;
+    recBitonicSort(tbl, lo, column, k, ASCENDING);
+    recBitonicSort(tbl, lo+k, column, k, DESCENDING);
+    bitonicMerge(tbl, lo, column, cnt, dir);
+  }
+}
+
+
+int bitonic_sort_table(data_base_t *db, table_t *tbl, int column, table_t **p_tbl) {
+	int ret = 0;
+
+#ifdef CREATE_SORTED_TABLE
+	std::string s_tbl_name;  
+        schema_t p_sc;
+
+	s_tbl_name = "s:" + tbl->name; 
+
+	ret = create_table(db, s_tbl_name, &p_sc, p_tbl);
+	if (ret) {
+		ERR("create table:%d\n", ret);
+		return ret; 
+	}
+
+	DBG("Created sorted table %s, id:%d\n", 
+            s_tbl_name.c_str(), s_tbl->id); 
+#endif
+	recBitonicSort(tbl, 0, column, tbl->num_rows, ASCENDING);
+
+#ifdef CREATE_SORTED_TABLE
+	bflush(*p_tbl);
+#endif
+	return ret; 
+}
+
+int ecall_sort_table(int db_id, int table_id, int field, int *sorted_id) {
 	int ret; 
 	data_base_t *db;
-	table_t *table, *p_table;
+	table_t *table, *s_table;
 
 	if ((db_id > (MAX_DATABASES - 1)) || !g_dbs[db_id] )
 		return -1; 
@@ -849,101 +937,162 @@ int ecall_promote_table_dbg(int db_id, int table_id, int column, int *promoted_t
 
 	table = db->tables[table_id];
 
-	ret = promote_table(db, table, column, &p_table); 
-	*promoted_table_id = p_table->id; 
+	ret = bitonic_sort_table(db, table, field, &s_table); 
 
+#ifdef CREATE_SORTED_TABLE
+	*sorted_id = s_table->id; 
+#endif
 	return ret; 
 }
 
-int project_promote_pad_table(
-    data_base_t *db, 
-    table_t *tbl, 
-    int project_columns [], 
-    int promote_columns [],
-    int num_pad_bytes,
-    table_t **p3_tbl    
-)
+int print_table_dbg(table_t *table, int start, int end);
+
+int bitonicSplit(table_t *tbl, int start_i, int start_j, int end, int column)
 {
-    int ret;
-    std::string p3_tbl_name;
-    schema_t project_sc, project_promote_sc, project_promote_pad_sc;
-    void *row_old, *row_new;
-    p3_tbl_name = "p3:" + tbl->name;
+	for (int i = start_i, j = start_j; i < end; i++, j++) {
+		void *row_i, *row_j;
+		int val_i, val_j;
 
-    ret = project_schema(&tbl->sc, 
-                         project_columns, 
-                         sizeof(project_columns) / sizeof(int), 
-                         &project_sc);
-    if (ret) {
-        ERR("project_schema failed:%d\n", ret);
-        return ret;
-    }
-    ret = promote_schema(&project_sc,
-                         promote_columns,
-                         &project_promote_sc);
-    if (ret) {
-        ERR("promote_schema failed:%d\n", ret);
-        return ret;
-    }
-    ret = pad_schema(&project_promote_sc,
-                     num_pad_bytes,
-                     &project_promote_pad_sc);
-    if (ret) {
-        ERR("pad_schema failed:%d\n", ret);
-        return ret;
-    }
+		row_i = malloc(MAX_ROW_SIZE);
+		if(!row_i)
+			return -5;
 
-    ret = create_table(db, p3_tbl_name, &project_promote_pad_sc, p3_tbl);
-    if (ret) {
-        ERR("create_table failed:%d\n", ret);
-        return ret;
-    }
+		row_j = malloc(MAX_ROW_SIZE);
 
-    for (unsigned int i = 0; i < tbl->num_rows; i++) {
-        // Read original row
-        ret = read_row(tbl, i, row_old);
-        if(ret) {
-            ERR("read_row failed on row %d of table %s\n", i, tbl->name.c_str());
-            goto cleanup;
-        }
+		if(!row_j)
+			return -6;
 
-        // Project row
-        // Since the schema was projected, promoted, and padded, this is all we need to do.
-        ret = project_row(old_row, project_promote_pad_sc, new_row);
-        if(ret) {
-            ERR("project_row failed on row %d of table %s\n", i, tbl->name.c_str());
-            goto cleanup;
-        }
+		read_row(tbl, i, (void *)row_i);
+		read_row(tbl, j, (void *)row_j);
 
-        // Add row to table
-        ret = insert_row_dbg(p3_tbl, row_new);
-        if(ret) {
-            ERR("insert_row_db failed on row %d of table %s\n", i,
-                (*p3_tbl)->name.c_str());
-            goto cleanup;
-        }
-    }
+		val_i = *((int*)get_column(&tbl->sc, column, row_i));
+		val_j = *((int*)get_column(&tbl->sc, column, row_j));
 
-    bflush(*p3_tbl);
-    ret = 0;
+		if (val_i > val_j)
+			exchange(tbl, i,j, row_i, row_j);
 
-cleanup:
-    if (row_old)
-        free(row_old);
+		free(row_i);
+		free(row_j);
+	}
+	return 0;
+}
+std::atomic_uint stage1, stage2, stage3;
+int ecall_sort_table_parallel(int db_id, int table_id, int column, int tid)
+{
+  int ret;
+  data_base_t *db;
+  table_t *table;
 
-    if (row_new)
-        free(row_new);
+  if ((db_id > (MAX_DATABASES - 1)) || !g_dbs[db_id])
+    return -1;
 
-    return ret;
-    
-} 
+  db = g_dbs[db_id];
 
+  if ((table_id > (MAX_TABLES - 1)) || !db->tables[table_id])
+    return -2;
+
+  table = db->tables[table_id];
+  // printf("%s, num_rows %d | tid = %d\n", __func__, table->num_rows, tid);
+
+  // stage 1. Split it into the number of threads and alternate between ascending and descending
+  if (tid == 0)
+  {
+    recBitonicSort(table, 0, column, (table->num_rows / 2), ASCENDING);
+    stage1++;
+  }
+  else
+  {
+    recBitonicSort(table, (table->num_rows / 2), column, table->num_rows / 2, DESCENDING);
+    stage1++;
+  }
+  if (stage1 == 2)
+  {
+    printf("after stage 1\n");
+    print_table_dbg(table, 0, 8);
+  }
+//int print_table_dbg(table_t *table, int start, int end) {
+
+//bflush(table);
+#define STAGE2
+// stage 2
+// TODO: replace it with conditional variables
+  while (stage1 !=2) ;
+#ifdef STAGE2
+  if (tid == 0)
+  {
+    bitonicSplit(table, 0, table->num_rows / 2, table->num_rows / 4, column);
+    stage2++;
+  }
+  else
+  {
+    bitonicSplit(table, table->num_rows / 4, table->num_rows - (table->num_rows / 4), table->num_rows / 2, column);
+    stage2++;
+  }
+#endif
+  if (stage2 == 2)
+  {
+    printf("after stage 2\n");
+    print_table_dbg(table, 0, 8);
+  }
+#define STAGE3
+  //bflush(table);
+#ifdef STAGE3
+// TODO: replace it with conditional variables
+  while (stage2 !=2) ;
+  //stage 3
+  if (tid == 0)
+  {
+    //printf("stage3, num_rows %d | tid = %d\n", table->num_rows, tid);
+    recBitonicSort(table, 0, column, table->num_rows / 2, ASCENDING);
+    stage3++;
+  }
+  else
+  {
+    recBitonicSort(table, table->num_rows / 2, column, table->num_rows / 2, ASCENDING);
+    stage3++;
+  }
+  if (stage3 == 2)
+  {
+    printf(">>>>> after stage 3\n");
+    print_table_dbg(table, 0, 8);
+  }
+#endif
+#ifdef CREATE_SORTED_TABLE
+  *sorted_id = s_table->id;
+#endif
+  return ret;
+}
 
 /* 
  * 
  * Insecure interfaces... debug only 
  *
  */
+
+int write_row_dbg(table_t *table, void *new_data, int row_num) {
+	unsigned long dblk_num;
+	unsigned long row_off, rows_per_blk; 
+	data_block_t *b;
+
+	if(row_num >= table->num_rows)
+		return -1; 
+
+	rows_per_blk = DATA_BLOCK_SIZE / table->sc.row_size; 
+	dblk_num = row_num / rows_per_blk;
+
+	/* Offset of the row within the data block in bytes */
+	row_off = (row_num - dblk_num * rows_per_blk) * table->sc.row_size; 
+	
+        b = bread(table, dblk_num);
+	 	
+	/* Copy the row into the data block */
+	memcpy((char*)b->data + row_off, new_data, table->sc.row_size); 
+
+	bwrite(b);
+	brelse(b);
+	return 0; 
+}
+
 
 int insert_row_dbg(table_t *table, void *row) {
 	unsigned long dblk_num;
@@ -1142,30 +1291,128 @@ int ecall_print_table_dbg(int db_id, int table_id, int start, int end) {
 	return print_table_dbg(table, start, end); 	
 }
 
-void ecall_null_ecall() {
-	return; 
+
+int project_schema(schema_t *old_sc, int* columns, int num_columns, schema_t *new_sc) {
+    int j;
+    int size;
+    for(int i = 0; i < num_columns; i++) {
+        j = columns[i];
+        new_sc->offsets[i] = old_sc->offsets[j];
+        new_sc->sizes[i] = old_sc->sizes[j];
+        size += new_sc->sizes[i];
+        new_sc->types[i] = old_sc->types[j];
+    }
+    new_sc->num_fields = num_columns;
+    new_sc->row_size = size;
+    return 0;
 }
 
+int pad_schema(schema_t *old_sc, int num_pad_bytes, schema_t *new_sc){
+    if (old_sc->num_fields >= MAX_COLS)
+        return -1;
+    int i;
+    for (i = 0; i < old_sc->num_fields; i++) {
+        new_sc->offsets[i] = old_sc->offsets[i];
+        new_sc->sizes[i] = old_sc->sizes[i];
+        new_sc->types[i] = old_sc->types[i];
+    }
+    new_sc->offsets[i] = old_sc->row_size;
+    new_sc->sizes[i] = num_pad_bytes;
+    new_sc->types[i] = schema_type::PADDING;
 
-void ecall_test_null_ocall() {
-
-	unsigned long long start, end; 
-
-	printf("Testing: null ocall for %llu iterations\n", ECALL_TEST_LENGTH);
-
-	start = RDTSC();
-
-	for (int i = 0; i < ECALL_TEST_LENGTH; i++) {
-	
-		ocall_null_ocall();
-
-	}
-	
-	end = RDTSC();
-
-	printf("Null ocall %llu cycles\n", (end - start)/ECALL_TEST_LENGTH);
-
-	return; 
-
+    new_sc->num_fields++;
+    new_sc->row_size += num_pad_bytes;
+    return 0; 
 }
 
+int project_row(void *old_row, schema_t *sc, void* new_row) {
+    int offset = 0;
+    for(int i = 0; i < sc->num_fields; i++) {
+        memcpy(new_row + offset, (char*)old_row + sc->offsets[i], sc->sizes[i]);
+        offset += sc->sizes[i];
+    }
+    return 0; 
+}
+
+int project_promote_pad_table(
+    data_base_t *db, 
+    table_t *tbl, 
+    int project_columns [], 
+    int promote_columns [],
+    int num_pad_bytes,
+    table_t **p3_tbl    
+)
+{
+    int ret;
+    std::string p3_tbl_name;
+    schema_t project_sc, project_promote_sc, project_promote_pad_sc;
+    void *row_old, *row_new;
+    p3_tbl_name = "p3:" + tbl->name;
+
+    ret = project_schema(&tbl->sc, 
+                         project_columns, 
+                         sizeof(project_columns) / sizeof(int), 
+                         &project_sc);
+    if (ret) {
+        ERR("project_schema failed:%d\n", ret);
+        return ret;
+    }
+    ret = promote_schema(&project_sc,
+                         promote_columns,
+                         &project_promote_sc);
+    if (ret) {
+        ERR("promote_schema failed:%d\n", ret);
+        return ret;
+    }
+    ret = pad_schema(&project_promote_sc,
+                     num_pad_bytes,
+                     &project_promote_pad_sc);
+    if (ret) {
+        ERR("pad_schema failed:%d\n", ret);
+        return ret;
+    }
+
+    ret = create_table(db, p3_tbl_name, &project_promote_pad_sc, p3_tbl);
+    if (ret) {
+        ERR("create_table failed:%d\n", ret);
+        return ret;
+    }
+
+    for (unsigned int i = 0; i < tbl->num_rows; i++) {
+        // Read original row
+        ret = read_row(tbl, i, row_old);
+        if(ret) {
+            ERR("read_row failed on row %d of table %s\n", i, tbl->name.c_str());
+            goto cleanup;
+        }
+
+        // Project row
+        // Since the schema was projected, promoted, and padded, this is all we need to do.
+        ret = project_row(old_row, project_promote_pad_sc, new_row);
+        if(ret) {
+            ERR("project_row failed on row %d of table %s\n", i, tbl->name.c_str());
+            goto cleanup;
+        }
+
+        // Add row to table
+        ret = insert_row_dbg(p3_tbl, row_new);
+        if(ret) {
+            ERR("insert_row_db failed on row %d of table %s\n", i,
+                (*p3_tbl)->name.c_str());
+            goto cleanup;
+        }
+    }
+
+    bflush(*p3_tbl);
+    ret = 0;
+
+cleanup:
+    if (row_old)
+        free(row_old);
+
+    if (row_new)
+        free(row_new);
+
+    return ret;
+    
+} 

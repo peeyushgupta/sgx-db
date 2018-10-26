@@ -1,5 +1,7 @@
 #pragma once
 
+#include "spinlock.hpp"
+
 //#define DATA_BLOCK_SIZE (1 << 12) /* 4 KB */
 #define DATA_BLOCK_SIZE (1 << 19) /* 512 KB */
 
@@ -10,11 +12,13 @@
 //#define DATA_BLKS_PER_DB 7 /* data blocks per DB */
 
 
+
 typedef struct data_block {
   int flags;
   struct table *table;
   unsigned long blk_num;
   unsigned int refcnt;
+  struct spinlock lock;
 
   struct data_block *prev; // LRU cache list
   struct data_block *next;
@@ -26,6 +30,7 @@ typedef struct data_block {
 #define B_DIRTY 0x4  // buffer needs to be written to disk
 
 typedef struct bcache {
+	struct spinlock lock;
 	data_block_t data_blks[DATA_BLKS_PER_DB];
 	int fd; 
 
