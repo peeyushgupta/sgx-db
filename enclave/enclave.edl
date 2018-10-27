@@ -36,7 +36,7 @@ enclave {
 		public int ecall_print_table_dbg(int db_id, int table_id, int start, int end);
 
 		public int ecall_promote_table_dbg(int db_id, int table_id, int column, [out] int *promoted_table_id);
-		public int ecall_column_sort_table_dbg(int db_id, int table_id, int r, int s);
+		public int ecall_column_sort_table_dbg(int db_id, int table_id, int r, int s, int column);
 
 		public int ecall_sort_table(int db_id, int table_id, int column, [out] int *sorted_table_id);
 		public int ecall_sort_table_parallel(int db_id, int table_id, int field, int tid);

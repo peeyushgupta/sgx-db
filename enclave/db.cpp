@@ -816,10 +816,10 @@ cleanup:
    s -- number of columns
 */
 
-int column_sort_table(data_base_t *db, table_t *table, int r, int s) {
+int column_sort_table(data_base_t *db, table_t *table, int r, int s, int column) {
 	int ret;
 	std::string tmp_tbl_name;  
-	table_t **s_tables, **st_tables;
+	table_t **s_tables, **st_tables, *tmp_table;
 	void *row;
 	unsigned long row_num;  
 	unsigned long shift;
@@ -913,8 +913,20 @@ int column_sort_table(data_base_t *db, table_t *table, int r, int s) {
 		}
 	}
 
+	
 #if defined(COLUMNSORT_DBG)
 	printf("Column tables\n");
+	for (unsigned int i = 0; i < s; i++) {
+		print_table_dbg(s_tables[i], 0, s_tables[i]->num_rows);
+	}
+#endif
+
+	for (unsigned int i = 0; i < s; i++) {
+		bitonic_sort_table(db, s_tables[i], column, &tmp_table);
+	}
+
+#if defined(COLUMNSORT_DBG)
+	printf("Step 1: Sorted column tables\n");
 	for (unsigned int i = 0; i < s; i++) {
 		print_table_dbg(s_tables[i], 0, s_tables[i]->num_rows);
 	}
@@ -949,14 +961,24 @@ int column_sort_table(data_base_t *db, table_t *table, int r, int s) {
 		}
 	}
 
+
 #if defined(COLUMNSORT_DBG)
-	printf("Transposed column tables\n");
+	printf("Step 2: Transposed column tables\n");
 	for (unsigned int i = 0; i < s; i++) {
 		print_table_dbg(st_tables[i], 0, st_tables[i]->num_rows);
 	}
 #endif
 
+	for (unsigned int i = 0; i < s; i++) {
+		bitonic_sort_table(db, st_tables[i], column, &tmp_table);
+	}
 
+#if defined(COLUMNSORT_DBG)
+	printf("Step 3: Sorted transposed column tables\n");
+	for (unsigned int i = 0; i < s; i++) {
+		print_table_dbg(st_tables[i], 0, st_tables[i]->num_rows);
+	}
+#endif
 	row_num = 0; 
 
 	/* Untranspose st transposed column tables into s tables  */
@@ -985,13 +1007,22 @@ int column_sort_table(data_base_t *db, table_t *table, int r, int s) {
 	}
 
 #if defined(COLUMNSORT_DBG)
-	printf("Untransposed column tables\n");
+	printf("Step 4: Untransposed column tables\n");
 	for (unsigned int i = 0; i < s; i++) {
 		print_table_dbg(s_tables[i], 0, s_tables[i]->num_rows);
 	}
 #endif
 
+	for (unsigned int i = 0; i < s; i++) {
+		bitonic_sort_table(db, s_tables[i], column, &tmp_table);
+	}
 
+#if defined(COLUMNSORT_DBG)
+	printf("Step 5: Sorted untransposed column tables\n");
+	for (unsigned int i = 0; i < s; i++) {
+		print_table_dbg(s_tables[i], 0, s_tables[i]->num_rows);
+	}
+#endif
 
 	shift = r / 2 ;
 	row_num = 0;  
@@ -1030,7 +1061,17 @@ int column_sort_table(data_base_t *db, table_t *table, int r, int s) {
 	}
 
 #if defined(COLUMNSORT_DBG)
-	printf("Shifted column tables\n");
+	printf("Step 6: Shifted column tables\n");
+	for (unsigned int i = 0; i < s; i++) {
+		print_table_dbg(st_tables[i], 0, st_tables[i]->num_rows);
+	}
+#endif
+	for (unsigned int i = 0; i < s; i++) {
+		bitonic_sort_table(db, st_tables[i], column, &tmp_table);
+	}
+
+#if defined(COLUMNSORT_DBG)
+	printf("Step 7: Sorted shifted column tables\n");
 	for (unsigned int i = 0; i < s; i++) {
 		print_table_dbg(st_tables[i], 0, st_tables[i]->num_rows);
 	}
@@ -1072,7 +1113,7 @@ int column_sort_table(data_base_t *db, table_t *table, int r, int s) {
 	}
 
 #if defined(COLUMNSORT_DBG)
-	printf("Unshifted column tables\n");
+	printf("Step 8: Unshifted column tables\n");
 	for (unsigned int i = 0; i < s; i++) {
 		print_table_dbg(s_tables[i], 0, s_tables[i]->num_rows);
 	}

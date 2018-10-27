@@ -484,15 +484,16 @@ int test_column_sort(sgx_enclave_id_t eid)
 
 	/* Column sort tests */
 		
-	unsigned int r, s;
+	unsigned int r, s, column;
 
 	r = 8;
 	s = 2; 
+	column = 0; 
 		
 	unsigned long long start, end;
 	start = RDTSC_START();
 
-	ecall_column_sort_table_dbg(eid, &ret, db_id, table_id, r, s);
+	ecall_column_sort_table_dbg(eid, &ret, db_id, table_id, r, s, column);
 	ecall_flush_table(eid, &ret, db_id, table_id);
 	end = RDTSCP();
 	printf("Sorting columnsort table + flushing took %llu cycles\n", end - start);

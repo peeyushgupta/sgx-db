@@ -112,7 +112,7 @@ int ecall_promote_table_dbg(int db_id, int table_id, int column, int *promoted_t
 }
 
 /* Test the function that sorts the table with column sort */
-int ecall_column_sort_table_dbg(int db_id, int table_id, int r, int s) {
+int ecall_column_sort_table_dbg(int db_id, int table_id, int r, int s, int column) {
 	int ret; 
 	data_base_t *db;
 	table_t *table;
@@ -127,7 +127,7 @@ int ecall_column_sort_table_dbg(int db_id, int table_id, int r, int s) {
 
 	table = db->tables[table_id];
 
-	ret = column_sort_table(db, table, r, s); 
+	ret = column_sort_table(db, table, r, s, column); 
 
 	return ret; 
 }

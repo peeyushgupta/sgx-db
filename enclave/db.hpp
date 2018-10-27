@@ -108,7 +108,7 @@ int insert_row_dbg(table_t *table, void *row);
 int write_row_dbg(table_t *table, void *new_data, int row_num);
 
 int promote_table(data_base_t *db, table_t *tbl, int column, table_t **p_tbl);
-int column_sort_table(data_base_t *db, table_t *table, int r, int s);
+int column_sort_table(data_base_t *db, table_t *table, int r, int s, int column);
 
 int print_table_dbg(table_t *table, int start, int end);
 
@@ -116,7 +116,8 @@ inline int exchange(table_t *tbl, int i, int j, void *row_i, void *row_j);
 int compare(table_t *tbl, int column, int i, int j, int dir);
 void bitonicMerge(table_t *tbl, int lo, int column, int cnt, int dir);
 void recBitonicSort(table_t *tbl, int lo, int column, int cnt, int dir);
-
+int bitonic_sort_table(data_base_t *db, table_t *tbl, int column, table_t **p_tbl);
+ 
 /* Enclave interface */
 #if NO_SGX
 int ecall_create_db(const char *cname, int name_len, int *db_id);
