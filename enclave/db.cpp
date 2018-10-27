@@ -19,6 +19,11 @@
 
 #define FILE_READ_SIZE DATA_BLOCK_SIZE
 
+#define OCALL_VERBOSE 0
+#define JOIN_VERBOSE 0
+#define COLUMNSORT_VERBOSE 1
+#define IO_VERBOSE 0
+
 data_base_t* g_dbs[MAX_DATABASES];
 
 const int ASCENDING  = 1;
@@ -235,7 +240,7 @@ int read_data_block(table *table, unsigned long blk_num, void *buf) {
 	ocall_seek(&ret, table->fd, blk_num*DATA_BLOCK_SIZE); 
 	
 	end = RDTSC();
-	DBG("ocall_seek: %llu cycles\n", end - start);
+	DBG_ON(IO_VERBOSE, "ocall_seek: %llu cycles\n", end - start);
 
 	start = RDTSC();
 
@@ -261,7 +266,8 @@ int read_data_block(table *table, unsigned long blk_num, void *buf) {
 	}
 
 	end = RDTSC();
-	DBG("ocall_read_file: %llu cycles\n", end - start);
+	DBG_ON(IO_VERBOSE, 
+		"ocall_read_file: %llu cycles\n", end - start);
 
 	return 0; 
 }
@@ -467,7 +473,7 @@ bool cmp_row(table_t *tbl_left, void *row_left, int field_left, table_t *tbl_rig
 		char *left = (char*)get_column(&tbl_left->sc, field_left, row_left); 
 		char *right = (char*)get_column(&tbl_right->sc, field_right, row_right);
 
-		DBG("left:%s, right:%s\n", left, right); 
+		DBG_ON(JOIN_VERBOSE, "left:%s, right:%s\n", left, right); 
 
 		int ret = strncmp(left, right, MAX_ROW_SIZE);
 		if (ret == 0) 
@@ -754,7 +760,7 @@ int promote_table(data_base_t *db, table_t *tbl, int column, table_t **p_tbl) {
 	}
 
 	DBG("Created promoted table %s, id:%d\n", 
-            p_tbl_name.c_str(), p_tbl->id); 
+            p_tbl_name.c_str(), (*p_tbl)->id); 
 
 	row_old = malloc(MAX_ROW_SIZE);
 	if(!row_old)
@@ -816,7 +822,19 @@ int column_sort_table(data_base_t *db, table_t *table, int r, int s) {
 	table_t **s_tables, **st_tables;
 	void *row;
 	unsigned long row_num;  
+	unsigned long shift;
 
+	if( r % s != 0) {
+		ERR("r (%d) is not divisible by s (%d)\n", r, s);
+		return -1;
+	}
+
+	if ( r < 2*(s - 1)*(s - 1)) {
+		ERR("r (%d) is < 2*(s - 1)^2 (%d), where r=%d, s=%d\n", 
+			r, 2*(s - 1)*(s - 1), r, s);  
+		return -1; 
+	}
+ 
 	s_tables = (table_t **)malloc(s * sizeof(table_t *)); 
 	if(!s_tables) {
 		ERR("failed to allocate s_tables\n");
@@ -887,13 +905,20 @@ int column_sort_table(data_base_t *db, table_t *table, int r, int s) {
 			/* Add row to the s table */
 			ret = insert_row_dbg(s_tables[i], row);
 			if(ret) {
-				ERR("failed to insert row %d of promoted table %s\n",
+				ERR("failed to insert row %d of column table %s\n",
 					row_num, s_tables[i]->name.c_str());
 				goto cleanup;
 			}
 			row_num ++;
 		}
 	}
+
+#if defined(COLUMNSORT_DBG)
+	printf("Column tables\n");
+	for (unsigned int i = 0; i < s; i++) {
+		print_table_dbg(s_tables[i], 0, s_tables[i]->num_rows);
+	}
+#endif
 
 	/* Transpose s column tables into s transposed tables  */
 	for (unsigned int i = 0; i < s; i ++) {
@@ -904,24 +929,37 @@ int column_sort_table(data_base_t *db, table_t *table, int r, int s) {
 			ret = read_row(s_tables[i], j, row);
 			if(ret) {
 				ERR("failed to read row %d of table %s\n",
-					row_num, table->name.c_str());
+					j, s_tables[i]->name.c_str());
 				goto cleanup;
 			}
 
 				
 			/* Add row to the st table */
+			//DBG_ON(COLUMNSORT_VERBOSE,
+			//	"insert row %d of transposed table #%d (%s)\n", 
+			//	st_tables[j % s]->num_rows, j % s, 
+			//	st_tables[j % s]->name.c_str()); 
+
 			ret = insert_row_dbg(st_tables[j % s], row);
 			if(ret) {
-				ERR("failed to insert row %d of promoted table %s\n",
-					row_num, st_tables[i]->name.c_str());
+				ERR("failed to insert row %d of transposed column table %s\n",
+					j, st_tables[j % s]->name.c_str());
 				goto cleanup;
 			}
 		}
 	}
 
+#if defined(COLUMNSORT_DBG)
+	printf("Transposed column tables\n");
+	for (unsigned int i = 0; i < s; i++) {
+		print_table_dbg(st_tables[i], 0, st_tables[i]->num_rows);
+	}
+#endif
+
+
 	row_num = 0; 
 
-	/* Untranspose s transposed column tables into s tables  */
+	/* Untranspose st transposed column tables into s tables  */
 	for (unsigned int i = 0; i < r; i ++) {
 
 		for (unsigned int j = 0; j < s; j ++) {
@@ -930,7 +968,7 @@ int column_sort_table(data_base_t *db, table_t *table, int r, int s) {
 			ret = read_row(st_tables[j], i, row);
 			if(ret) {
 				ERR("failed to read row %d of table %s\n",
-					row_num, table->name.c_str());
+					i, st_tables[j]->name.c_str());
 				goto cleanup;
 			}
 
@@ -938,14 +976,138 @@ int column_sort_table(data_base_t *db, table_t *table, int r, int s) {
 			/* Add row to the s table */
 			ret = write_row_dbg(s_tables[row_num / r], row, row_num % r);
 			if(ret) {
-				ERR("failed to insert row %d of promoted table %s\n",
-					row_num, s_tables[i]->name.c_str());
+				ERR("failed to insert row %d of untransposed column table %s\n",
+					row_num / r, s_tables[i]->name.c_str());
 				goto cleanup;
 			}
 			row_num ++; 
 		}
 	}
 
+#if defined(COLUMNSORT_DBG)
+	printf("Untransposed column tables\n");
+	for (unsigned int i = 0; i < s; i++) {
+		print_table_dbg(s_tables[i], 0, s_tables[i]->num_rows);
+	}
+#endif
+
+
+
+	shift = r / 2 ;
+	row_num = 0;  
+	
+	/* Shift s tables into st tables  */
+	for (unsigned int i = 0; i < s; i ++) {
+
+		for (unsigned int j = 0; j < r; j ++) {
+
+			/* Read row from s table */
+			ret = read_row(s_tables[i], j, row);
+			if(ret) {
+				ERR("failed to read row %d of table %s\n",
+					row_num, s_tables[i]->name.c_str());
+				goto cleanup;
+			}
+
+			/* Add row to the st table */
+			//DBG_ON(COLUMNSORT_VERBOSE,
+			//	"insert row %d of shifted table (%s) at row %d, row_num:%d, shitf:%d\n", 
+			//	j, st_tables[((row_num + shift) / r) % s]->name.c_str(), 
+			//	(row_num + shift) % r, row_num, shift); 
+
+
+				
+			/* Add row to the st table */
+			ret = write_row_dbg(st_tables[((row_num + shift) / r) % s], 
+						row, (row_num + shift) % r);
+			if(ret) {
+				ERR("failed to insert row %d of shifted column table %s\n",
+					row, st_tables[i]->name.c_str());
+				goto cleanup;
+			}
+			row_num ++;
+		}
+	}
+
+#if defined(COLUMNSORT_DBG)
+	printf("Shifted column tables\n");
+	for (unsigned int i = 0; i < s; i++) {
+		print_table_dbg(st_tables[i], 0, st_tables[i]->num_rows);
+	}
+#endif
+
+	row_num = 0;  
+	
+	/* Unshift st tables into s tables  */
+	for (unsigned int i = 0; i < s; i ++) {
+
+		for (unsigned int j = 0; j < r; j ++) {
+
+			/* Read row from st table */
+			ret = read_row(st_tables[i], j, row);
+			if(ret) {
+				ERR("failed to read row %d of table %s\n",
+					row_num, st_tables[i]->name.c_str());
+				goto cleanup;
+			}
+
+			/* Add row to the st table */
+			DBG_ON(COLUMNSORT_VERBOSE,
+				"insert row %d of unshifted table (%s) at row %d, row_num:%d, shitf:%d\n", 
+				j, s_tables[((row_num + (r * s) - shift) / r) % s]->name.c_str(), 
+				(row_num + (r * s) - shift) % r, row_num, shift); 
+
+
+				
+			/* Add row to the s table */
+			ret = write_row_dbg(s_tables[((row_num + (r * s) - shift) / r) % s], 
+						row, (row_num + (r * s) - shift) % r);
+			if(ret) {
+				ERR("failed to insert row %d of unshifted column table %s\n",
+					row, s_tables[i]->name.c_str());
+				goto cleanup;
+			}
+			row_num ++;
+		}
+	}
+
+#if defined(COLUMNSORT_DBG)
+	printf("Unshifted column tables\n");
+	for (unsigned int i = 0; i < s; i++) {
+		print_table_dbg(s_tables[i], 0, s_tables[i]->num_rows);
+	}
+#endif
+
+	row_num = 0;  
+	
+	/* Write sorted table back  */
+	for (unsigned int i = 0; i < s; i ++) {
+
+		for (unsigned int j = 0; j < r; j ++) {
+
+			/* Read row from s table */
+			ret = read_row(s_tables[i], j, row);
+			if(ret) {
+				ERR("failed to read row %d of table %s\n",
+					row_num, s_tables[i]->name.c_str());
+				goto cleanup;
+			}
+
+			/* Add row to the st table */
+			ret = write_row_dbg(table, row, row_num);
+			if(ret) {
+				ERR("failed to insert row %d of sorted table %s\n",
+					row_num, table->name.c_str());
+				goto cleanup;
+			}
+			row_num ++;
+		}
+	}
+
+#if defined(COLUMNSORT_DBG)
+	printf("Sorted table\n");
+	print_table_dbg(table, 0, table->num_rows);
+#endif
 
 	ret = 0;
 cleanup: 

@@ -148,7 +148,7 @@ int bcache_test_create_read_write_table(data_base_t *db, table_t *tbl, table_t *
 	}
 
 	DBG("Created a table for concurrent read_write test %s, id:%d\n", 
-            p_tbl_name.c_str(), p_tbl->id); 
+            test_tbl_name.c_str(), (*test_tbl)->id); 
 
 	return 0; 
 }

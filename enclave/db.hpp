@@ -5,7 +5,7 @@
 #include "dbg.hpp"
 #include "bcache.hpp"
 
-#define MAX_DATABASES 2
+#define MAX_DATABASES 10
 #define MAX_ROWS (1 << 20) /* 1 M for now */
 #define MAX_ROW_SIZE (1 << 12) /* 4096 for now */
 #define MAX_TABLES 100
@@ -110,6 +110,7 @@ int write_row_dbg(table_t *table, void *new_data, int row_num);
 int promote_table(data_base_t *db, table_t *tbl, int column, table_t **p_tbl);
 int column_sort_table(data_base_t *db, table_t *table, int r, int s);
 
+int print_table_dbg(table_t *table, int start, int end);
 
 inline int exchange(table_t *tbl, int i, int j, void *row_i, void *row_j);
 int compare(table_t *tbl, int column, int i, int j, int dir);

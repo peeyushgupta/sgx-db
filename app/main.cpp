@@ -27,17 +27,23 @@ int main(){
     	}
 
 	DBG("Created enclave... starting DB tests\n");
+
+#if defined(COLUMNSORT_TESTS)
 	test_spinlock_inc(eid, 10000);
+#endif
 
 #if defined(OCALL_ECALL_TESTS)
 	test_null_ocalls(eid);
 #endif
+
 #if defined(TEST_THREADS)
 	test_threads(eid);
 #endif
 
+	test_column_sort(eid);
+
 	test_bitonic_sort(eid);
-	
+
 	test_rankings(eid);
 
 

@@ -8,6 +8,8 @@
 
 #include "enclave_u.h"
 
+#define IO_VERBOSE 0
+
 void ocall_null_ocall(void) {
 
 	return;
@@ -43,17 +45,17 @@ int ocall_open_file(const char *name) {
 	int fd; 
 
 	fd = open(name, O_RDWR | O_CREAT, S_IRUSR | S_IWUSR);
-	DBG("open file, fd:%d\n", fd); 
+	DBG_ON(IO_VERBOSE, "open file, fd:%d\n", fd); 
 	return fd; 
 };
 
 int ocall_write_file(int fd, void* buf, unsigned long size) {
-	DBG("write file fd:%d, buf:%p, size:%lu\n", fd, buf, size);
+	DBG_ON(IO_VERBOSE, "write file fd:%d, buf:%p, size:%lu\n", fd, buf, size);
 	return write(fd, buf, size);
 };
 
 int ocall_read_file(int fd, void* buf, unsigned long size) {
-	DBG("read file fd:%d, buf:%p, size:%lu\n", fd, buf, size);
+	DBG_ON(IO_VERBOSE, "read file fd:%d, buf:%p, size:%lu\n", fd, buf, size);
 	return read(fd, buf, size);
 };
 
