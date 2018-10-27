@@ -822,7 +822,7 @@ int column_sort_table(data_base_t *db, table_t *table, int r, int s, int column)
 	table_t **s_tables, **st_tables, *tmp_table;
 	void *row;
 	unsigned long row_num;  
-	unsigned long shift;
+	unsigned long shift, unshift;
 
 	if( r % s != 0) {
 		ERR("r (%d) is not divisible by s (%d)\n", r, s);
@@ -1080,7 +1080,55 @@ int column_sort_table(data_base_t *db, table_t *table, int r, int s, int column)
 	row_num = 0;  
 	
 	/* Unshift st tables into s tables  */
-	for (unsigned int i = 0; i < s; i ++) {
+
+	/* In Shantanu's implementation (no +/-infinity) the first column
+           is special --- it's sorted so instead of shifting we have to 
+           splice it: first half of the column stays in it's place, the 
+	   second half (the max elements) go to the last column */
+
+	unshift = r - r / 2; 	
+	for (unsigned int j = 0; j < unshift; j ++) {
+
+		/* Read row from st table */
+		ret = read_row(st_tables[0], j, row);
+		if(ret) {
+			ERR("failed to read row %d of table %s\n",
+				row_num, st_tables[0]->name.c_str());
+			goto cleanup;
+		}
+
+		/* Add row to the s table */
+		ret = write_row_dbg(s_tables[0], row, j);
+		if(ret) {
+			ERR("failed to insert row %d of unshifted column table %s\n",
+				row, s_tables[0]->name.c_str());
+			goto cleanup;
+		}
+		row_num ++;
+	}
+
+	for (unsigned int j = unshift; j < s; j ++) {
+
+		/* Read row from st table */
+		ret = read_row(st_tables[0], j, row);
+		if(ret) {
+			ERR("failed to read row %d of table %s\n",
+				row_num, st_tables[0]->name.c_str());
+			goto cleanup;
+		}
+
+		/* Add row to the s table */
+		ret = write_row_dbg(s_tables[s - 1], row, j);
+		if(ret) {
+			ERR("failed to insert row %d of unshifted column table %s\n",
+				row, s_tables[s - 1]->name.c_str());
+			goto cleanup;
+		}
+		row_num ++;
+	}
+
+	/* Now shift the rest of the table */
+	for (unsigned int i = 1; i < s; i ++) {
 
 		for (unsigned int j = 0; j < r; j ++) {
 
