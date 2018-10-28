@@ -1328,7 +1328,7 @@ int pad_schema(schema_t *old_sc, int num_pad_bytes, schema_t *new_sc){
 int project_row(void *old_row, schema_t *sc, void* new_row) {
     int offset = 0;
     for(int i = 0; i < sc->num_fields; i++) {
-        memcpy(new_row + offset, (char*)old_row + sc->offsets[i], sc->sizes[i]);
+        memcpy((char *)new_row + offset, (char*)old_row + sc->offsets[i], sc->sizes[i]);
         offset += sc->sizes[i];
     }
     return 0; 
@@ -1338,6 +1338,7 @@ int project_promote_pad_table(
     data_base_t *db, 
     table_t *tbl, 
     int project_columns [], 
+    int num_project_columns,
     int promote_columns [],
     int num_pad_bytes,
     table_t **p3_tbl    
@@ -1351,14 +1352,14 @@ int project_promote_pad_table(
 
     ret = project_schema(&tbl->sc, 
                          project_columns, 
-                         sizeof(project_columns) / sizeof(int), 
+                         num_project_columns, 
                          &project_sc);
     if (ret) {
         ERR("project_schema failed:%d\n", ret);
         return ret;
     }
     ret = promote_schema(&project_sc,
-                         promote_columns,
+                         promote_columns[0],
                          &project_promote_sc);
     if (ret) {
         ERR("promote_schema failed:%d\n", ret);
@@ -1388,14 +1389,14 @@ int project_promote_pad_table(
 
         // Project row
         // Since the schema was projected, promoted, and padded, this is all we need to do.
-        ret = project_row(old_row, project_promote_pad_sc, new_row);
+        ret = project_row(row_old, &project_promote_pad_sc, row_new);
         if(ret) {
             ERR("project_row failed on row %d of table %s\n", i, tbl->name.c_str());
             goto cleanup;
         }
 
         // Add row to table
-        ret = insert_row_dbg(p3_tbl, row_new);
+        ret = insert_row_dbg(*p3_tbl, row_new);
         if(ret) {
             ERR("insert_row_db failed on row %d of table %s\n", i,
                 (*p3_tbl)->name.c_str());

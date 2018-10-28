@@ -316,3 +316,117 @@ int ecall_bcache_test_cmp_read_write(int db_id, int from_table_id, int to_table_
 	return ret; 
 };
 
+void assert_schemas_entries_same(schema_t sc1, schema_t sc2, int i, int j)
+{
+    assert(sc1.offsets[i] == sc2.offsets[j]);
+    assert(sc1.types[i] == sc2.offsets[j]);
+    assert(sc1.sizes[i] == sc2.sizes[j]);
+}
+
+int test_project_schema() {
+    schema_t sc_old, sc_new;
+    int *columns;
+    sc_old.num_fields = 3; 
+
+    sc_old.offsets[0] = 0;
+    sc_old.types[0] = BOOLEAN;
+    sc_old.sizes[0] = 1;
+
+    sc_old.offsets[1] = 1;
+    sc_old.types[1] = INTEGER;
+    sc_old.sizes[1] = 4;
+
+    sc_old.offsets[2] = 5;
+    sc_old.types[2] = TINYTEXT;
+    sc_old.sizes[2] = 10;
+
+    sc_old.row_size = sc_old.sizes[0] + sc_old.sizes[1] + sc_old.sizes[2];
+
+    // all columns
+    columns = new int[3];
+    columns[0] = 0; columns[1] = 1; columns[2] = 2;
+    project_schema(&sc_old, columns, 3, &sc_new);
+    assert(sc_new.row_size == sc_old.row_size);
+    assert(sc_new.num_fields == 3);
+    for(int i = 0; i < 3; i++)
+    {
+        assert_schemas_entries_same(sc_new, sc_old, i, i);
+    }
+    delete [] columns;
+
+    // columns 0 and 2
+    columns = new int[2];
+    columns[0] = 0; columns[1] = 2;
+    project_schema(&sc_old, columns, 2, &sc_new);
+    assert(sc_new.row_size == sc_old.sizes[0] + sc_old.sizes[2]);
+    assert(sc_new.num_fields == 2);
+
+    assert_schemas_entries_same(sc_new, sc_old, 0, 0);
+    assert_schemas_entries_same(sc_new, sc_old, 1, 2);
+    
+    // columns 0 and 1
+    columns[1] = 1;
+    project_schema(&sc_old, columns, 2, &sc_new);
+    assert(sc_new.row_size == sc_old.sizes[0] + sc_old.sizes[1]);
+    assert(sc_new.num_fields == 2);
+
+    assert_schemas_entries_same(sc_new, sc_old, 0, 0);
+    assert_schemas_entries_same(sc_new, sc_old, 1, 1);
+
+    // columns 2 and 0
+    columns[0] = 2; columns[1] = 0;
+    project_schema(&sc_old, columns, 2, &sc_new);
+    assert(sc_new.row_size == sc_old.sizes[2] + sc_old.sizes[0]);
+    assert(sc_new.num_fields == 2);
+
+    assert_schemas_entries_same(sc_new, sc_old, 0, 2);
+    assert_schemas_entries_same(sc_new, sc_old, 1, 0);
+}
+
+void assert_schema_same_except_for_padding_at_end(schema_t sc1, schema_t sc2, int num_pad_bytes) {
+    for(int i = 0; i < sc1.num_fields; i++) {
+        assert_schemas_entries_same(sc1, sc2, i, i);
+    }
+    assert(sc2.num_fields == sc1.num_fields + 1);
+    int padding_field_num = sc1.num_fields;
+    assert(sc2.offsets[padding_field_num] == sc2.offsets[padding_field_num - 1] 
+                                             + sc2.sizes[padding_field_num - 1]);
+    assert(sc2.types[padding_field_num] == PADDING);
+    assert(sc2.sizes[padding_field_num] == num_pad_bytes);
+}
+
+int test_pad_schema() {
+    schema_t sc_old, sc_new;
+
+    sc_old.offsets[0] = 0;
+    sc_old.types[0] = INTEGER;
+    sc_old.sizes[0] = 8;
+
+    sc_old.offsets[1] = 1;
+    sc_old.types[1] = TINYTEXT;
+    sc_old.sizes[1] = 15;
+
+    sc_old.offsets[2] = 5;
+    sc_old.types[2] = BOOLEAN;
+    sc_old.sizes[2] = 1;
+
+    int num_pad_bytes_values[3] = {0, 4, 7};
+    int num_pad_bytes;
+    for(int i = 0; i < 3; i++)
+    {
+        num_pad_bytes = num_pad_bytes_values[i];
+        pad_schema(&sc_old, num_pad_bytes, &sc_new);
+        assert_schema_same_except_for_padding_at_end(sc_old, sc_new, num_pad_bytes);
+    }
+}
+
+int ecall_test_project_schema() 
+{
+    return test_project_schema();
+}
+
+int ecall_test_pad_schema()
+{
+    return test_pad_schema();
+}
+
