@@ -16,7 +16,7 @@ int test_null_ocalls(sgx_enclave_id_t eid) {
 
 	unsigned long long start, end; 
 
-	printf("Testing: null ecall for %d iterations\n", OCALL_TEST_LENGTH);
+	printf(TXT_FG_YELLOW "Testing null ecall" TXT_NORMAL " for %d iterations\n", OCALL_TEST_LENGTH);
 	start = RDTSC();
 	for (int i = 0; i < OCALL_TEST_LENGTH; i++) {
 		ecall_null_ecall(eid);
@@ -33,7 +33,7 @@ void thread_fn(sgx_enclave_id_t eid) {
 }
 
 int test_threads(sgx_enclave_id_t eid) {
-	printf("Creating threads\n");
+	printf(TXT_FG_YELLOW "Simple threads test" TXT_NORMAL ": Creating threads\n");
 	thread t1(thread_fn, eid);
 	thread t2(thread_fn, eid);
 	thread t3(thread_fn, eid);
@@ -100,7 +100,7 @@ int bcache_test(sgx_enclave_id_t eid, int db_id, int from_table_id)
 	sgx_status_t sgx_ret = SGX_ERROR_UNEXPECTED;
 	int to_table_id;
 
-	printf("%s:starting buffer cache test\n", __func__); 
+	printf(TXT_FG_YELLOW "%s:starting buffer cache test" TXT_NORMAL "\n", __func__); 
 
 	sgx_ret = ecall_bcache_test_create_read_write_table(eid, &ret, db_id, from_table_id, &to_table_id);
 	if (sgx_ret || ret) {
@@ -297,6 +297,9 @@ int test_rankings(sgx_enclave_id_t eid) {
 	/* Promote column tests */
 	{
 		int p_rankings_table_id;
+
+		printf(TXT_FG_YELLOW "Promote column test" TXT_NORMAL ": promoting rankings table \n"); 
+
 		ecall_promote_table_dbg(eid, &ret, db_id, rankings_table_id, 1, &p_rankings_table_id);
 		ecall_flush_table(eid, &ret, db_id, p_rankings_table_id);
 		printf("promoted rankings table\n");
@@ -304,22 +307,54 @@ int test_rankings(sgx_enclave_id_t eid) {
 		ecall_print_table_dbg(eid, &ret, db_id, p_rankings_table_id, 359990, 360020);
 	}
 
+	{
+		/* Column sort tests */
+		
+		unsigned int r, s, column;
 
-	c.num_conditions = 1; 
-	c.table_left = rankings_table_id; 
-	c.table_right = udata_table_id; 
-	c.fields_left[0] = 1;
-	c.fields_right[0] = 2;
+		// Rankings is 360000 
+		r = 16384;
+		s = 16; 
+		column = 1; 
+		
+		printf(TXT_FG_YELLOW "Column sort test" TXT_NORMAL ": sorting rankings table \n"); 
+			
+		unsigned long long start, end;
+		start = RDTSC_START();
 
-	sgx_ret = ecall_join(eid, &ret, db_id, &c, &join_table_id);
-	if (sgx_ret || ret) {
-		ERR("join failed, err:%d (sgx ret:%d)\n", 
-			ret, sgx_ret);
-		return ret; 
+		ecall_column_sort_table_dbg(eid, &ret, db_id, rankings_table_id, r, s, column);
+		ecall_flush_table(eid, &ret, db_id, rankings_table_id);
+		end = RDTSCP();
+
+		printf("Sorting + flushing took %llu cycles\n", end - start);
+		ecall_print_table_dbg(eid, &ret, db_id, rankings_table_id, 0, 23);
+
 	}
 
-	ecall_flush_table(eid, &ret, db_id, join_table_id);
-	printf("joined successfully\n");
+	{
+
+		// Join tests
+
+		c.num_conditions = 1; 
+		c.table_left = rankings_table_id; 
+		c.table_right = udata_table_id; 
+		c.fields_left[0] = 1;
+		c.fields_right[0] = 2;
+		
+		printf(TXT_FG_YELLOW "Sort join test" TXT_NORMAL ": joining rankings and udata tables \n"); 
+
+	
+		sgx_ret = ecall_join(eid, &ret, db_id, &c, &join_table_id);
+		if (sgx_ret || ret) {
+			ERR("join failed, err:%d (sgx ret:%d)\n", 
+				ret, sgx_ret);
+			return ret; 
+		}
+
+		ecall_flush_table(eid, &ret, db_id, join_table_id);
+		printf("joined successfully\n");
+
+	}
 	return 0;
 
 }
@@ -432,6 +467,9 @@ int test_column_sort(sgx_enclave_id_t eid)
 	uint8_t *row;
 	sgx_status_t sgx_ret = SGX_ERROR_UNEXPECTED;
 
+
+	printf(TXT_FG_YELLOW "Starting column sort test" TXT_NORMAL "\n"); 
+
 	sc.num_fields = 1;
 	sc.offsets[0] = 0;
 	sc.sizes[0] = 4;
@@ -480,6 +518,7 @@ int test_column_sort(sgx_enclave_id_t eid)
 	}
 
 	ecall_flush_table(eid, &ret, db_id, table_id);
+	
 	printf("created columnsort table\n");
 
 	/* Column sort tests */
@@ -496,6 +535,7 @@ int test_column_sort(sgx_enclave_id_t eid)
 	ecall_column_sort_table_dbg(eid, &ret, db_id, table_id, r, s, column);
 	ecall_flush_table(eid, &ret, db_id, table_id);
 	end = RDTSCP();
+	
 	printf("Sorting columnsort table + flushing took %llu cycles\n", end - start);
 	ecall_print_table_dbg(eid, &ret, db_id, table_id, 0, 23);
 

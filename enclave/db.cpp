@@ -21,7 +21,7 @@
 
 #define OCALL_VERBOSE 0
 #define JOIN_VERBOSE 0
-#define COLUMNSORT_VERBOSE 1
+#define COLUMNSORT_VERBOSE 0
 #define IO_VERBOSE 0
 
 data_base_t* g_dbs[MAX_DATABASES];
@@ -644,7 +644,7 @@ int ecall_join(int db_id, join_condition_t *c, int *join_table_id) {
 			}
 
 			for(unsigned int k = 0; k < c->num_conditions; k++) {
-				DBG("comparing (i:%d, j:%d, k:%d\n", i, j, k); 
+				DBG_ON(JOIN_VERBOSE, "comparing (i:%d, j:%d, k:%d\n", i, j, k); 
 
 				eq = cmp_row(tbl_left, row_left, c->fields_left[k], tbl_right, row_right, c->fields_right[k]);
 				if (!eq) {
@@ -654,7 +654,7 @@ int ecall_join(int db_id, join_condition_t *c, int *join_table_id) {
 			}
 
 			if (equal) { 
-				DBG("joining (i:%d, j:%d)\n", i, j); 
+				DBG_ON(JOIN_VERBOSE, "joining (i:%d, j:%d)\n", i, j); 
 
 				ret = join_rows(join_row, join_sc.row_size, row_left, tbl_left->sc.row_size, row_right, tbl_right->sc.row_size); 
 				if(ret) {
@@ -858,7 +858,7 @@ int column_sort_table(data_base_t *db, table_t *table, int r, int s, int column)
 			goto cleanup; 
 		}
 
-		DBG("Created tmp table %s, id:%d\n", 
+		DBG_ON(COLUMNSORT_VERBOSE, "Created tmp table %s, id:%d\n", 
             		tmp_tbl_name.c_str(), s_tables[i]->id); 
 	}
 
