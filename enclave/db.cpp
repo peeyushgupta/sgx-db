@@ -1249,7 +1249,38 @@ inline int exchange(table_t *tbl, int i, int j, void *row_i, void *row_j) {
   return 0;
 }
 
+/* returns ture if column of row_l is found respectively to be greater then column of row_r */
 
+bool compare_rows(schema_t *sc, int column, void *row_l, void *row_r) {
+	bool res; 
+	switch(sc->types[column]) {
+	case BOOLEAN:
+		res = *(bool*)((char*)row_l + sc->offsets[column]) >
+			*(bool*)((char*)row_r + sc->offsets[column]); 
+		break;
+	
+	case CHARACTER: 
+		res = *(char*)((char*)row_l + sc->offsets[column]) >
+			*(char*)((char*)row_r + sc->offsets[column]); 
+		break;
+ 
+	case TINYTEXT:
+	case VARCHAR: {
+		int str_ret = strcmp ((char*)((char*)row_l + sc->offsets[column]), 
+			(char*)((char*)row_r + sc->offsets[column])) ;
+		res = (str_ret > 0);
+		break; 
+	}
+	case INTEGER:
+		res = *(int*)((char*)row_l + sc->offsets[column]) > 
+			*(int*)((char*)row_r + sc->offsets[column]); 
+
+		break; 		
+	default: 
+		res = false;
+	}
+	return res;
+}
 
 /** procedure compare() 
    The parameter dir indicates the sorting direction, ASCENDING 
@@ -1257,30 +1288,27 @@ inline int exchange(table_t *tbl, int i, int j, void *row_i, void *row_j) {
    then a[i] and a[j] are interchanged.
 **/
 int compare(table_t *tbl, int column, int i, int j, int dir) {
-  void *row_i, *row_j;
-  int val_i, val_j;
+	void *row_i, *row_j;
+	int val_i, val_j;
 
-  row_i = malloc(MAX_ROW_SIZE);
-  if(!row_i)
-    return -5;
+	row_i = malloc(MAX_ROW_SIZE);
+	if(!row_i)
+		return -5;
 
-  row_j = malloc(MAX_ROW_SIZE);
-  if(!row_j)
-    return -6;
+	row_j = malloc(MAX_ROW_SIZE);
+	if(!row_j)
+		return -6;
 
-  read_row(tbl, i, (void *)row_i);
-  read_row(tbl, j, (void *)row_j);
+	read_row(tbl, i, (void *)row_i);
+	read_row(tbl, j, (void *)row_j);
 
-  val_i = *((int*)get_column(&tbl->sc, column, row_i));
-  val_j = *((int*)get_column(&tbl->sc, column, row_j));
-
-	if (dir==(val_i>val_j)) {
-		exchange(tbl, i,j, row_i, row_j);
+	if (dir == compare_rows(&tbl->sc, column, row_i, row_j)) {
+		exchange(tbl, i, j, row_i, row_j);
 	}
 
-  free(row_i);
-  free(row_j);
-  return 0;
+	free(row_i);
+	free(row_j);
+	return 0;
 }
 
 
