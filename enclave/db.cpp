@@ -1294,7 +1294,7 @@ int ecall_print_table_dbg(int db_id, int table_id, int start, int end) {
 
 int project_schema(schema_t *old_sc, int* columns, int num_columns, schema_t *new_sc) {
     int j;
-    int size;
+    int size = 0;
     for(int i = 0; i < num_columns; i++) {
         j = columns[i];
         new_sc->offsets[i] = old_sc->offsets[j];
@@ -1320,8 +1320,8 @@ int pad_schema(schema_t *old_sc, int num_pad_bytes, schema_t *new_sc){
     new_sc->sizes[i] = num_pad_bytes;
     new_sc->types[i] = schema_type::PADDING;
 
-    new_sc->num_fields++;
-    new_sc->row_size += num_pad_bytes;
+    new_sc->num_fields = old_sc->num_fields + 1;
+    new_sc->row_size = old_sc->row_size + num_pad_bytes;
     return 0; 
 }
 
@@ -1417,3 +1417,5 @@ cleanup:
     return ret;
     
 } 
+
+// iojfis

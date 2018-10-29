@@ -29,8 +29,7 @@ int main(){
 	DBG("Created enclave... starting DB tests\n");
 
         test_project_schema(eid);
-        //test_pad_schema(eid);
-        //printf("Rob's tests succeeded.");
+        test_pad_schema(eid);
 
 	test_spinlock_inc(eid, 10000);
 

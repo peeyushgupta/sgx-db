@@ -319,11 +319,17 @@ int ecall_bcache_test_cmp_read_write(int db_id, int from_table_id, int to_table_
 void assert_schemas_entries_same(schema_t sc1, schema_t sc2, int i, int j)
 {
     assert(sc1.offsets[i] == sc2.offsets[j]);
-    assert(sc1.types[i] == sc2.offsets[j]);
+    assert(sc1.types[i] == sc2.types[j]);
     assert(sc1.sizes[i] == sc2.sizes[j]);
 }
 
+void print(char* s) 
+{
+    printf("%s", s); 
+}
+
 int test_project_schema() {
+    print("starting test_project_schema");
     schema_t sc_old, sc_new;
     int *columns;
     sc_old.num_fields = 3; 
@@ -389,8 +395,8 @@ void assert_schema_same_except_for_padding_at_end(schema_t sc1, schema_t sc2, in
     }
     assert(sc2.num_fields == sc1.num_fields + 1);
     int padding_field_num = sc1.num_fields;
-    assert(sc2.offsets[padding_field_num] == sc2.offsets[padding_field_num - 1] 
-                                             + sc2.sizes[padding_field_num - 1]);
+    assert(sc2.offsets[padding_field_num] == sc1.offsets[padding_field_num - 1] 
+                                             + sc1.sizes[padding_field_num - 1]);
     assert(sc2.types[padding_field_num] == PADDING);
     assert(sc2.sizes[padding_field_num] == num_pad_bytes);
 }
@@ -402,13 +408,16 @@ int test_pad_schema() {
     sc_old.types[0] = INTEGER;
     sc_old.sizes[0] = 8;
 
-    sc_old.offsets[1] = 1;
+    sc_old.offsets[1] = 8;
     sc_old.types[1] = TINYTEXT;
-    sc_old.sizes[1] = 15;
+    sc_old.sizes[1] = 10;
 
-    sc_old.offsets[2] = 5;
+    sc_old.offsets[2] = 18;
     sc_old.types[2] = BOOLEAN;
     sc_old.sizes[2] = 1;
+
+    sc_old.num_fields = 3;
+    sc_old.row_size = 8 + 10 + 1;
 
     int num_pad_bytes_values[3] = {0, 4, 7};
     int num_pad_bytes;
