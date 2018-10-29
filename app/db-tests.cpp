@@ -310,11 +310,11 @@ int test_rankings(sgx_enclave_id_t eid) {
 	{
 		/* Column sort tests */
 		
-		unsigned int r, s, column;
+		unsigned int column;
 
 		// Rankings is 360000 
-		r = 16384;
-		s = 16; 
+		//r = 16384;
+		//s = 16; 
 		column = 1; 
 		
 		printf(TXT_FG_YELLOW "Column sort test" TXT_NORMAL ": sorting rankings table \n"); 
@@ -322,7 +322,7 @@ int test_rankings(sgx_enclave_id_t eid) {
 		unsigned long long start, end;
 		start = RDTSC_START();
 
-		ecall_column_sort_table_dbg(eid, &ret, db_id, rankings_table_id, r, s, column);
+		ecall_column_sort_table_dbg(eid, &ret, db_id, rankings_table_id, column);
 		ecall_flush_table(eid, &ret, db_id, rankings_table_id);
 		end = RDTSCP();
 
@@ -523,16 +523,14 @@ int test_column_sort(sgx_enclave_id_t eid)
 
 	/* Column sort tests */
 		
-	unsigned int r, s, column;
+	unsigned int column;
 
-	r = 8;
-	s = 2; 
 	column = 0; 
 		
 	unsigned long long start, end;
 	start = RDTSC_START();
 
-	ecall_column_sort_table_dbg(eid, &ret, db_id, table_id, r, s, column);
+	ecall_column_sort_table_dbg(eid, &ret, db_id, table_id, column);
 	ecall_flush_table(eid, &ret, db_id, table_id);
 	end = RDTSCP();
 	

@@ -8,7 +8,7 @@
 #define MAX_DATABASES 10
 #define MAX_ROWS (1 << 20) /* 1 M for now */
 #define MAX_ROW_SIZE (1 << 12) /* 4096 for now */
-#define MAX_TABLES 100
+#define MAX_TABLES 512
 #define MAX_COLS 20
 #define MAX_CONDITIONS 3 // number of ORs allowed in one clause of a condition
 #define THREADS_PER_DB 8 // number of threads concurrently working on DB
@@ -19,6 +19,7 @@ int tid();
 
 
 typedef enum schema_type {
+	FAKE_TUPLE = 0, 
 	BOOLEAN = 1,
 	BINARY = 2,
 	VARBINARY = 3,
@@ -108,7 +109,15 @@ int insert_row_dbg(table_t *table, void *row);
 int write_row_dbg(table_t *table, void *new_data, int row_num);
 
 int promote_table(data_base_t *db, table_t *tbl, int column, table_t **p_tbl);
-int column_sort_table(data_base_t *db, table_t *table, int r, int s, int column);
+
+int column_sort_pick_params(unsigned long num_records, 
+				unsigned long rec_size, 
+				unsigned long bcache_rec_size, 
+				unsigned long sgx_mem_size, 
+				unsigned long *r, 
+				unsigned long *s); 
+
+int column_sort_table(data_base_t *db, table_t *table, int column);
 
 int print_table_dbg(table_t *table, int start, int end);
 

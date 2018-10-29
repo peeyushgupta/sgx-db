@@ -21,7 +21,8 @@
 
 #define OCALL_VERBOSE 0
 #define JOIN_VERBOSE 0
-#define COLUMNSORT_VERBOSE 0
+#define COLUMNSORT_VERBOSE 1
+#define COLUMNSORT_VERBOSE_L2 0
 #define IO_VERBOSE 0
 
 data_base_t* g_dbs[MAX_DATABASES];
@@ -517,8 +518,12 @@ int read_row(table_t *table, unsigned int row_num, void *row) {
 	unsigned long row_off, rows_per_blk; 
 	data_block_t *b;
 
-	if(row_num >= table->num_rows)
-		return -1; 
+	/* Make a fake row if it's outside of the table
+           assuming it's padding */
+	if(row_num >= table->num_rows) {
+		//table->sc.
+		return -1;
+	} 
 
 	rows_per_blk = DATA_BLOCK_SIZE / table->sc.row_size; 
 	dblk_num = row_num / rows_per_blk;
@@ -812,17 +817,100 @@ cleanup:
 	return ret; 
 };
 
+/* 
+   - num_records -- number of records in the table
+   - rec_size -- size of projected record
+   - bcache_rec_size -- size of the buffer cache record
+
+   - r * rec_size + s * bcache_rec_size < sgx_mem_size
+   - r * s >= num_records
+   - r is a power of 2 for bitonic to work
+   - r % s = 0 -- r is divisible by s
+   - r > 2 * (s - 1)^2
+*/
+
+int column_sort_pick_params(unsigned long num_records, 
+				unsigned long rec_size, 
+				unsigned long bcache_rec_size, 
+				unsigned long sgx_mem_size, 
+				unsigned long *r_out, 
+				unsigned long *s_out) 
+{
+
+	bool all_good = false;
+	unsigned long r, s;  
+
+	DBG_ON(COLUMNSORT_VERBOSE, 
+		"Searching for r and s for num_records=%d, rec_size=%d, bcache_rec_size=%d, sgx_mem_size=%d\n", num_records, rec_size, bcache_rec_size, sgx_mem_size);
+
+	/* Initial version of this algorithm will try to minimize r */
+	r = 1; 
+	do {
+		/* Increase r, start over */
+		r = r * 2;
+
+		/* Choose s */
+		for (s = num_records / r; s < r; s ++) {
+		
+ 			DBG_ON(COLUMNSORT_VERBOSE_L2, 
+				"trying r=%d and s=%d\n", r, s);
+
+			if( r % s != 0) {
+				DBG_ON(COLUMNSORT_VERBOSE_L2, 
+				"r (%d) is not divisible by s (%d)\n", r, s);
+				continue;
+			}	
+
+			if ( r < 2*(s - 1)*(s - 1)) {
+				DBG_ON(COLUMNSORT_VERBOSE, 
+					"r (%d) is < 2*(s - 1)^2 (%d), where r=%d, s=%d\n", 
+					r, 2*(s - 1)*(s - 1), r, s);  
+				continue; 
+			}
+		
+			if (r * rec_size + s * bcache_rec_size > sgx_mem_size) {
+				DBG_ON(COLUMNSORT_VERBOSE, 
+					"r * rec_size + s * bcache_rec_size < sgx_mem_size, where r=%d, rec_size %d, s=%d, rec_size:%d, bcache_rec_size:%d, sgx_mem_size:%d\n", 
+					r, rec_size, s, rec_size, bcache_rec_size, sgx_mem_size);  
+				continue; 
+			}
+
+			all_good = true;
+			break;  
+		};
+
+ 	
+	} while (!all_good); 
+
+	DBG_ON(COLUMNSORT_VERBOSE, 
+		"r=%d, s=%d\n", r, s); 
+	*r_out = r; 
+	*s_out = s; 
+
+	return 0;
+}
+
 /* r -- number of rows
    s -- number of columns
 */
 
-int column_sort_table(data_base_t *db, table_t *table, int r, int s, int column) {
+int column_sort_table(data_base_t *db, table_t *table, int column) {
 	int ret;
 	std::string tmp_tbl_name;  
 	table_t **s_tables, **st_tables, *tmp_table;
 	void *row;
 	unsigned long row_num;  
 	unsigned long shift, unshift;
+	unsigned long r, s; 
+
+	ret = column_sort_pick_params(table->num_rows, table->sc.row_size, 
+				DATA_BLOCK_SIZE, 
+				(1 << 20) * 80, 
+				&r, &s);
+	if (ret) {
+		ERR("Can't pick r and s for %s\n", table->name.c_str());
+		return -1;  
+	}
 
 	if( r % s != 0) {
 		ERR("r (%d) is not divisible by s (%d)\n", r, s);
