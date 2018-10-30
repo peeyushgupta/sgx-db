@@ -1308,7 +1308,7 @@ int project_schema(schema_t *old_sc, int* columns, int num_columns, schema_t *ne
 }
 
 int pad_schema(schema_t *old_sc, int num_pad_bytes, schema_t *new_sc){
-    if (old_sc->num_fields >= MAX_COLS)
+    if (old_sc->num_fields == MAX_COLS)
         return -1;
     int i;
     for (i = 0; i < old_sc->num_fields; i++) {
@@ -1418,4 +1418,3 @@ cleanup:
     
 } 
 
-// iojfis

@@ -7,4 +7,5 @@ int test_rankings(sgx_enclave_id_t eid);
 int test_threads(sgx_enclave_id_t eid);
 int test_project_schema(sgx_enclave_id_t eid);
 int test_pad_schema(sgx_enclave_id_t eid);
+int test_project_row(sgx_enclave_id_t eid);
 int test_bitonic_sort(sgx_enclave_id_t eid);

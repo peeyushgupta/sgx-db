@@ -7,6 +7,8 @@
 #include "enclave_t.h"
 #endif
 #include "db.hpp"
+#include <string.h>
+using namespace std;
 
 #define ECALL_TEST_LENGTH 10000
 
@@ -438,4 +440,83 @@ int ecall_test_pad_schema()
 {
     return test_pad_schema();
 }
+
+void test_project_row() { 
+    schema_t sc_old, sc_new;
+    int* columns;
+    char *old_row, *new_row;
+
+    sc_old.offsets[0] = 0;
+    sc_old.types[0] = INTEGER;
+    sc_old.sizes[0] = 4;
+
+    sc_old.offsets[1] = 4;
+    sc_old.types[1] = TINYTEXT;
+    sc_old.sizes[1] = 11;
+
+    sc_old.offsets[2] = 15;
+    sc_old.types[2] = BOOLEAN;
+    sc_old.sizes[2] = 1;
+
+    sc_old.num_fields = 3;
+    sc_old.row_size = 4 + 11 + 1;
+
+    old_row = new char[sc_old.row_size];
+    new_row = new char[sc_old.row_size];
+    int i = 73, i_read;
+    char* s = "Troglodyte", *s_read = new char[10+1];
+    bool b = 1, b_read;
+    memcpy(old_row, (char *)&i, 4);
+    memcpy(old_row + 4, s, 11);
+    memcpy(old_row + 4 + 11, (char *)&b, 1);
+
+    // project 0 1 2
+    columns = new int[3];
+    columns[0] = 0; columns[1] = 1; columns[2] = 2;
+    project_schema(&sc_old, columns, 3, &sc_new);
+    project_row(old_row, &sc_new, new_row);
+    memcpy(&i_read, new_row, 4);
+    memcpy(s_read, new_row + 4, 10 + 1);
+    memcpy(&b_read, new_row + 4 + 10 + 1, 1);
+    assert(i_read == i);
+    assert(string(s) == string(s_read));
+    assert(b_read == b);
+
+    // project 2 0
+    delete [] new_row;
+    new_row = new char[sc_old.row_size];
+    columns[0] = 2; columns[1] = 0;
+    project_schema(&sc_old, columns, 2, &sc_new);
+    project_row(old_row, &sc_new, new_row);
+    memcpy(&b_read, new_row, 1);
+    memcpy(&i_read, new_row + 1, 4);
+    assert(i_read == i);
+    assert(b_read == b);
+
+    // project 1 0
+    delete [] new_row;
+    new_row = new char[sc_old.row_size];
+    columns[0] = 1; columns[1] = 0;
+    project_schema(&sc_old, columns, 2, &sc_new);
+    project_row(old_row, &sc_new, new_row);
+    memcpy(s_read, new_row, 11);
+    memcpy(&i_read, new_row + 11, 4);
+    assert(i_read == i);
+    assert(string(s_read) == string(s));
+
+    // project 2
+    delete [] new_row;
+    new_row = new char[sc_old.row_size];
+    columns[0] = 2; 
+    project_schema(&sc_old, columns, 1, &sc_new);
+    project_row(old_row, &sc_new, new_row);
+    memcpy(&b_read, new_row, 1);
+    assert(b_read == b);
+}
+
+int ecall_test_project_row()
+{
+    test_project_row();
+}
+
 

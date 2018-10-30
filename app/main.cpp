@@ -30,6 +30,7 @@ int main(){
 
         test_project_schema(eid);
         test_pad_schema(eid);
+        test_project_row(eid);
 
 	test_spinlock_inc(eid, 10000);
 

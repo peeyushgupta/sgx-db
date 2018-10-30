@@ -46,6 +46,7 @@ enclave {
 		public void ecall_null_ecall(void); 
                 public int ecall_test_project_schema(void);
                 public int ecall_test_pad_schema(void);
+                public int ecall_test_project_row(void);
 
 		/* Buffer cache concurrent read/write test */
 		public int ecall_bcache_test_create_read_write_table(int db_id, int from_table_id, [out]int *to_table_id);

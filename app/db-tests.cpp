@@ -336,6 +336,10 @@ int test_pad_schema(sgx_enclave_id_t eid) {
     ecall_test_pad_schema(eid, &ret);
 }
 
+int test_project_row(sgx_enclave_id_t eid) {
+    int ret;
+    ecall_test_project_row(eid, &ret);
+}
 
 
 void bitonic_sorter_fn(sgx_enclave_id_t eid, int db_id, int table_id, int field, int tid) 
