@@ -7,6 +7,7 @@ OBJDUMP = $(TOOLPREFIX)objdump
 CFLAGS :=-std=c++11 -Wall -g -D_GNU_SOURCE -pthread -lm -fno-pic -O2 
 CFLAGS +=-fsanitize=address
 SGX_COMMON_CFLAGS +=-DVERBOSE
+SGX_COMMON_CFLAGS +=-DNDEBUG
 #SGX_COMMON_CFLAGS +=-DOCALL_ECALL_TESTS
 #SGX_COMMON_CFLAGS +=-DTABLE_SCAN_TESTS
 #SGX_COMMON_CFLAGS +=-DTEST_THREADS
@@ -149,7 +150,7 @@ else
 endif
 
 Enclave_C_Flags += $(Enclave_Include_Paths)
-Enclave_Cpp_Flags := $(Enclave_C_Flags) -std=c++11 -nostdinc++
+Enclave_Cpp_Flags := -DNDEBUG $(Enclave_C_Flags) -std=c++11 -nostdinc++
 
 # To generate a proper enclave, it is recommended to follow below guideline to link the trusted libraries:
 #    1. Link sgx_trts with the `--whole-archive' and `--no-whole-archive' options,
