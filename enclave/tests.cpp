@@ -185,9 +185,9 @@ int ecall_bcache_test_create_read_write_table(int db_id, int from_table_id, int 
 
 int bcache_test_read_write(data_base_t *db, table_t *from_tbl, table_t *to_tbl) {
 	int ret;  
-	void *row_old, *row_new; 
+	row_t *row_old, *row_new; 
 
-	row_old = malloc(MAX_ROW_SIZE);
+	row_old = (row_t*) malloc(row_size(from_tbl));
 	if(!row_old)
 		return -5;
 
@@ -250,14 +250,14 @@ int ecall_bcache_test_read_write(int db_id, int from_table_id, int to_table_id) 
 };
 
 int bcache_test_cmp_read_write(data_base_t *db, table_t *from_tbl, table_t *to_tbl) { 
-	void *from_row, *to_row; 
+	row_t *from_row, *to_row; 
 	int ret;  
 
-	from_row = malloc(MAX_ROW_SIZE);
+	from_row = (row_t*) malloc(row_size(from_tbl));
 	if(!from_row)
 		return -1;
 
-	to_row = malloc(MAX_ROW_SIZE);
+	to_row = (row_t*) malloc(row_size(to_tbl));
 	if(!to_row)
 		return -2;
 
@@ -287,7 +287,7 @@ int bcache_test_cmp_read_write(data_base_t *db, table_t *from_tbl, table_t *to_t
 			goto cleanup;
 		}
 
-		ret = memcmp(from_row, to_row, from_tbl->sc.row_size); 
+		ret = memcmp(from_row, to_row, from_tbl->sc.row_data_size); 
 		if (ret) {
 			ERR("tables have different rows: (%s,%d) != (%s, %d)\n",
 			from_tbl->name.c_str(), i, 

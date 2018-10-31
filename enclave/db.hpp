@@ -19,7 +19,6 @@ int tid();
 
 
 typedef enum schema_type {
-	FAKE_TUPLE = 0, 
 	BOOLEAN = 1,
 	BINARY = 2,
 	VARBINARY = 3,
@@ -51,13 +50,24 @@ struct Schema{
 
 #endif
 
+
+typedef struct {
+	bool fake;
+} row_header_t;
+
+typedef struct {
+	row_header_t header; 
+	char data[MAX_ROW_SIZE];
+} row_t;
+
+
 typedef struct {
 	int num_fields;
 	int offsets[MAX_COLS];
 	int sizes[MAX_COLS];
 	schema_type types[MAX_COLS];
 	//std::string names[MAX_COLS];
-	int row_size; 
+	int row_data_size; 
 } schema_t;
 
 typedef struct table {
@@ -97,16 +107,29 @@ struct join_condition {
 	join_condition_t *next;  /* not supported at the moment */
 };
 
+
+static inline unsigned long row_header_size() {
+
+	return sizeof(row_header_t);
+}
+
+static inline unsigned long row_size(table_t *table) {
+
+	return table->sc.row_data_size + row_header_size();
+}
+
+
+
 int create_table(data_base_t *db, std::string &name, schema_t *schema, table_t **new_table);
-int read_row(table_t *table, unsigned int row_num, void *row);
-int write_row_dbg(table_t *table, void *new_data, int row_num);
-int print_row(schema_t *sc, void *row); 
+int read_row(table_t *table, unsigned int row_num, row_t *row);
+int write_row_dbg(table_t *table, row_t *row, int row_num);
+int print_row(schema_t *sc, row_t *row); 
 
 int read_data_block(table *table, unsigned long blk_num, void *buf);
 int write_data_block(table *table, unsigned long blk_num, void *buf); 
 
-int insert_row_dbg(table_t *table, void *row);
-int write_row_dbg(table_t *table, void *new_data, int row_num);
+int insert_row_dbg(table_t *table, row_t *row);
+int write_row_dbg(table_t *table, row_t *row, int row_num);
 
 int promote_table(data_base_t *db, table_t *tbl, int column, table_t **p_tbl);
 
@@ -121,11 +144,13 @@ int column_sort_table(data_base_t *db, table_t *table, int column);
 
 int print_table_dbg(table_t *table, int start, int end);
 
-inline int exchange(table_t *tbl, int i, int j, void *row_i, void *row_j);
+inline int exchange(table_t *tbl, int i, int j, row_t *row_i, row_t *row_j);
 int compare(table_t *tbl, int column, int i, int j, int dir);
 void bitonicMerge(table_t *tbl, int lo, int column, int cnt, int dir);
 void recBitonicSort(table_t *tbl, int lo, int column, int cnt, int dir);
 int bitonic_sort_table(data_base_t *db, table_t *tbl, int column, table_t **p_tbl);
+
+
  
 /* Enclave interface */
 #if NO_SGX
