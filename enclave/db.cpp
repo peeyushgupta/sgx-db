@@ -1683,12 +1683,11 @@ int ecall_insert_row_dbg(int db_id, int table_id, void *row_data) {
 
 	table = db->tables[table_id];
 
-	DBG("row size:%d\n", row_size(table)); 
 	row = (row_t*) malloc(row_size(table)); 
 	if(!row)
 		return -3;
 
-	memcpy(row->data, row_data, sizeof(row->data)); 
+	memcpy(row->data, row_data, row_size(table)); 
 	ret = insert_row_dbg(table, row); 	
 
 	free(row); 
