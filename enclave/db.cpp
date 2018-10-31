@@ -1515,8 +1515,6 @@ int bitonicSplit(table_t *tbl, int start_i, int start_j, int count, int column, 
 		read_row(tbl, i, row_i);
 		read_row(tbl, j, row_j);
 
-		val_j = *((int*)get_column(&tbl->sc, column, row_j));
-
 		if(dir == compare_rows(&tbl->sc, column, row_i, row_j))
 			exchange(tbl, i,j, row_i, row_j);
 
