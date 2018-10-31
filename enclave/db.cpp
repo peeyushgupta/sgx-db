@@ -9,6 +9,7 @@
 #endif
 
 #include "bcache.hpp"
+#include "x86.hpp"
 
 #include <cstdlib>
 #include <cstdio>
@@ -449,19 +450,19 @@ int ecall_flush_table(int db_id, int table_id) {
 };
 
 /* Insert one row */
-int ecall_insert_row(int db_id, int table_id, void *row) {
+int ecall_insert_row(int db_id, int table_id, void *row_data) {
 
    /* An oblivious version of row insert will update all 
       rows in the table to conceal its size */
 	return -1; 
 }
 
-void *get_column(schema_t *sc, int field, void *row) {
+void *get_column(schema_t *sc, int field, row_t *row) {
 	//printf("%s: row:%p, field:%d, offset:%d\n", __func__, row, field, sc->offsets[field]); 
-	return(void*)((char*)row + sc->offsets[field]);
+	return(void*)&row->data[sc->offsets[field]];
 }
 
-bool cmp_row(table_t *tbl_left, void *row_left, int field_left, table_t *tbl_right, void *row_right, int field_right) {
+bool cmp_row(table_t *tbl_left, row_t *row_left, int field_left, table_t *tbl_right, row_t *row_right, int field_right) {
 
 	if(tbl_left->sc.types[field_left] != tbl_right->sc.types[field_right])
 		return false;
@@ -503,18 +504,17 @@ int join_schema(schema_t *sc, schema_t *left, schema_t *right) {
 	}
 
 	for(int i = 0; i < right->num_fields; i++) {
-		sc->offsets[i + left->num_fields] = left->row_size + right->offsets[i];
+		sc->offsets[i + left->num_fields] = left->row_data_size + right->offsets[i];
 		sc->sizes[i + left->num_fields] = right->sizes[i];
 		sc->types[i + left->num_fields] = right->types[i];	
 	}
-	sc->row_size = sc->offsets[sc->num_fields - 1] + sc->sizes[sc->num_fields - 1];
+	sc->row_data_size = sc->offsets[sc->num_fields - 1] + sc->sizes[sc->num_fields - 1];
 
 	return 0;
 }
 
-
 /* Read one row. */
-int read_row(table_t *table, unsigned int row_num, void *row) {
+int read_row(table_t *table, unsigned int row_num, row_t *row) {
 
 	unsigned long dblk_num;
 	unsigned long row_off, rows_per_blk; 
@@ -523,31 +523,31 @@ int read_row(table_t *table, unsigned int row_num, void *row) {
 	/* Make a fake row if it's outside of the table
            assuming it's padding */
 	if(row_num >= table->num_rows) {
-		//table->sc.
-		return -1;
+		row->header.fake = true; 
+		return 0;
 	} 
 
-	rows_per_blk = DATA_BLOCK_SIZE / table->sc.row_size; 
+	rows_per_blk = DATA_BLOCK_SIZE / row_size(table); 
 	dblk_num = row_num / rows_per_blk;
 
 	/* Offset of the row within the data block in bytes */
-	row_off = (row_num - dblk_num * rows_per_blk) * table->sc.row_size; 
+	row_off = (row_num - dblk_num * rows_per_blk) * row_size(table); 
 	
         b = bread(table, dblk_num);
 	 	
 	/* Copy the row into the data block */
-	memcpy(row, (char*)b->data + row_off, table->sc.row_size); 
+	memcpy(row, (char*)b->data + row_off, row_size(table)); 
 
 	brelse(b);
 	return 0; 
 }
 
-int join_rows(void *join_row, unsigned int join_row_size, void * row_left, unsigned int row_left_size, void * row_right, unsigned int row_right_size) {
+int join_rows(row_t *join_row, unsigned int join_row_data_size, row_t * row_left, unsigned int row_left_data_size, row_t * row_right, unsigned int row_right_data_size) {
 
-	if(row_left_size + row_right_size > join_row_size)
+	if(row_left_data_size + row_right_data_size > join_row_data_size)
 		return -1; 
-	memcpy(join_row, row_left, row_left_size); 
-	memcpy((void*)((char*)join_row + row_left_size),row_right, row_right_size);
+	memcpy(join_row, row_left, row_header_size() + row_left_data_size); 
+	memcpy((void*)((char*)join_row + row_header_size() + row_left_data_size), row_right->data, row_right_data_size);
 	return 0; 
 }; 
 
@@ -558,7 +558,7 @@ int ecall_join(int db_id, join_condition_t *c, int *join_table_id) {
 	int ret;
 	data_base_t *db;
 	table_t *tbl_left, *tbl_right, *join_table;
-	void *row_left = NULL, *row_right = NULL, *join_row = NULL;
+	row_t *row_left = NULL, *row_right = NULL, *join_row = NULL;
 	schema_t join_sc;
 	std::string join_table_name;  
 
@@ -592,15 +592,15 @@ int ecall_join(int db_id, join_condition_t *c, int *join_table_id) {
 
 	DBG("Created join table %s, id:%d\n", join_table_name.c_str(), join_table_id); 
 
-	join_row = malloc(MAX_ROW_SIZE*2);
+	join_row = (row_t *) malloc(row_size(tbl_left) + row_size(tbl_right) - row_header_size());
 	if(!join_row)
 		return -4;
 
-	row_left = malloc(MAX_ROW_SIZE);
+	row_left = (row_t *) malloc(row_size(tbl_left));
 	if(!row_left)
 		return -5;
 
-	row_right = malloc(MAX_ROW_SIZE);
+	row_right = (row_t *) malloc(row_size(tbl_right));
 	if(!row_right)
 		return -6;
 
@@ -663,7 +663,7 @@ int ecall_join(int db_id, join_condition_t *c, int *join_table_id) {
 			if (equal) { 
 				DBG_ON(JOIN_VERBOSE, "joining (i:%d, j:%d)\n", i, j); 
 
-				ret = join_rows(join_row, join_sc.row_size, row_left, tbl_left->sc.row_size, row_right, tbl_right->sc.row_size); 
+				ret = join_rows(join_row, join_sc.row_data_size, row_left, tbl_left->sc.row_data_size, row_right, tbl_right->sc.row_data_size); 
 				if(ret) {
 					ERR("failed to produce a joined row %d of table %s with row %d of table %s\n",
 						i, tbl_left->name.c_str(), j, tbl_right->name.c_str());
@@ -725,18 +725,22 @@ int promote_schema(schema_t *old_sc, int column, schema_t *new_sc) {
 	new_sc->types[0] = type; 
 
         new_sc->num_fields = old_sc->num_fields; 
-        new_sc->row_size = old_sc->row_size; 
+        new_sc->row_data_size = old_sc->row_data_size; 
 
 	return 0;
 }
 
-int promote_row(void *old_row, schema_t *sc, int column, void * new_row) {
-       
-	memcpy(new_row, (char*)old_row + sc->offsets[column], sc->sizes[column]); 
-	memcpy((char*)new_row + sc->sizes[column], old_row, sc->offsets[column]); 
-	memcpy((char*)new_row + sc->sizes[column] + sc->offsets[column], 
-		(char*)old_row + sc->offsets[column] + sc->sizes[column], 
-		sc->row_size - (sc->offsets[column] + sc->sizes[column]));
+int promote_row(row_t *old_row, schema_t *sc, int column, row_t * new_row) {
+      
+	/* Copy the header */
+	memcpy(new_row, old_row, row_header_size()); 
+ 
+	/* Copy data */
+	memcpy(new_row->data, (char*)old_row->data + sc->offsets[column], sc->sizes[column]); 
+	memcpy((char*)new_row->data + sc->sizes[column], old_row->data, sc->offsets[column]); 
+	memcpy((char*)new_row->data + sc->sizes[column] + sc->offsets[column], 
+		(char*)old_row->data + sc->offsets[column] + sc->sizes[column], 
+		sc->row_data_size - (sc->offsets[column] + sc->sizes[column]));
 	
         return 0; 
 }; 
@@ -750,7 +754,7 @@ int promote_table(data_base_t *db, table_t *tbl, int column, table_t **p_tbl) {
 	int ret;
 	std::string p_tbl_name;  
         schema_t p_sc;
-	void *row_old, *row_new; 
+	row_t *row_old, *row_new; 
 
 	p_tbl_name = "p:" + tbl->name; 
 
@@ -769,11 +773,11 @@ int promote_table(data_base_t *db, table_t *tbl, int column, table_t **p_tbl) {
 	DBG("Created promoted table %s, id:%d\n", 
             p_tbl_name.c_str(), (*p_tbl)->id); 
 
-	row_old = malloc(MAX_ROW_SIZE);
+	row_old = (row_t*) malloc(row_size(tbl));
 	if(!row_old)
 		return -5;
 
-	row_new = malloc(MAX_ROW_SIZE);
+	row_new = (row_t*)malloc(row_size(tbl));
 	if(!row_new)
 		return -6;
 
@@ -900,12 +904,12 @@ int column_sort_table(data_base_t *db, table_t *table, int column) {
 	int ret;
 	std::string tmp_tbl_name;  
 	table_t **s_tables, **st_tables, *tmp_table;
-	void *row;
+	row_t *row;
 	unsigned long row_num;  
 	unsigned long shift, unshift;
 	unsigned long r, s; 
 
-	ret = column_sort_pick_params(table->num_rows, table->sc.row_size, 
+	ret = column_sort_pick_params(table->num_rows, table->sc.row_data_size, 
 				DATA_BLOCK_SIZE, 
 				(1 << 20) * 80, 
 				&r, &s);
@@ -967,14 +971,14 @@ int column_sort_table(data_base_t *db, table_t *table, int column) {
             		tmp_tbl_name.c_str(), st_tables[i]->id); 
 	}
 
-	row = malloc(MAX_ROW_SIZE);
+	row = (row_t*) malloc(row_size(table));
 	if(!row)
 		goto cleanup;
 
-	if ( r * s > table->num_rows ) {
-		ERR("r (%d) * s (%d) > num_rows (%d)\n", r, s, table->num_rows); 
-		goto cleanup; 
-	}
+	//if ( r * s > table->num_rows ) {
+	//	ERR("r (%d) * s (%d) > num_rows (%d)\n", r, s, table->num_rows); 
+	//	goto cleanup; 
+	//}
 
 	row_num = 0; 
 
@@ -1321,15 +1325,15 @@ cleanup:
 
 /// Bitonic sort functions ////
 /** INLINE procedure exchange() : pair swap **/
-inline int exchange(table_t *tbl, int i, int j, void *row_i, void *row_j) {
-  void *row_tmp;
+inline int exchange(table_t *tbl, int i, int j, row_t *row_i, row_t *row_j) {
+  row_t *row_tmp;
 
-  row_tmp = malloc(MAX_ROW_SIZE);
+  row_tmp = (row_t*) malloc(row_size(tbl));
 
   if(!row_tmp)
     return -4;
 
-  memcpy(row_tmp, row_i, MAX_ROW_SIZE); 
+  memcpy(row_tmp, row_i, row_size(tbl)); 
 
   write_row_dbg(tbl, row_j, i);
   write_row_dbg(tbl, row_tmp, j);
@@ -1341,29 +1345,34 @@ inline int exchange(table_t *tbl, int i, int j, void *row_i, void *row_j) {
 
 /* returns ture if column of row_l is found respectively to be greater then column of row_r */
 
-bool compare_rows(schema_t *sc, int column, void *row_l, void *row_r) {
+bool compare_rows(schema_t *sc, int column, row_t *row_l, row_t *row_r) {
 	bool res; 
+
+	/* make sure fake touples are always greater */
+	if (row_l->header.fake)
+		return true; 
+
 	switch(sc->types[column]) {
 	case BOOLEAN:
-		res = *(bool*)((char*)row_l + sc->offsets[column]) >
-			*(bool*)((char*)row_r + sc->offsets[column]); 
+		res = *(bool*)&row_l->data[sc->offsets[column]] >
+			*(bool*)&row_r->data[sc->offsets[column]]; 
 		break;
 	
 	case CHARACTER: 
-		res = *(char*)((char*)row_l + sc->offsets[column]) >
-			*(char*)((char*)row_r + sc->offsets[column]); 
+		res = *(char*)&row_l->data[sc->offsets[column]] >
+			*(char*)&row_r->data[sc->offsets[column]]; 
 		break;
  
 	case TINYTEXT:
 	case VARCHAR: {
-		int str_ret = strcmp ((char*)((char*)row_l + sc->offsets[column]), 
-			(char*)((char*)row_r + sc->offsets[column])) ;
+		int str_ret = strcmp (&row_l->data[sc->offsets[column]], 
+			&row_r->data[sc->offsets[column]]) ;
 		res = (str_ret > 0);
 		break;
 	}
 	case INTEGER:
-		res = *(int*)((char*)row_l + sc->offsets[column]) > 
-			*(int*)((char*)row_r + sc->offsets[column]); 
+		res = *(int*)&row_l->data[sc->offsets[column]] > 
+			*(int*)&row_r->data[sc->offsets[column]]; 
 
 		break;
 	default: 
@@ -1378,19 +1387,19 @@ bool compare_rows(schema_t *sc, int column, void *row_l, void *row_r) {
    then a[i] and a[j] are interchanged.
 **/
 int compare(table_t *tbl, int column, int i, int j, int dir) {
-	void *row_i, *row_j;
+	row_t *row_i, *row_j;
 	int val_i, val_j;
 
-	row_i = malloc(MAX_ROW_SIZE);
+	row_i = (row_t*) malloc(row_size(tbl));
 	if(!row_i)
 		return -5;
 
-	row_j = malloc(MAX_ROW_SIZE);
+	row_j = (row_t*) malloc(row_size(tbl));
 	if(!row_j)
 		return -6;
 
-	read_row(tbl, i, (void *)row_i);
-	read_row(tbl, j, (void *)row_j);
+	read_row(tbl, i, row_i);
+	read_row(tbl, j, row_j);
 
 	if (dir == compare_rows(&tbl->sc, column, row_i, row_j)) {
 		exchange(tbl, i, j, row_i, row_j);
@@ -1491,25 +1500,24 @@ int print_table_dbg(table_t *table, int start, int end);
 int bitonicSplit(table_t *tbl, int start_i, int start_j, int count, int column, int dir)
 {
 	for (int i = start_i, j = start_j; i < start_i + count; i++, j++) {
-		void *row_i, *row_j;
+		row_t *row_i, *row_j;
 		int val_i, val_j;
 
-		row_i = malloc(MAX_ROW_SIZE);
+		row_i = (row_t*) malloc(row_size(tbl));
 		if(!row_i)
 			return -5;
 
-		row_j = malloc(MAX_ROW_SIZE);
+		row_j = (row_t*) malloc(row_size(tbl));
 
 		if(!row_j)
 			return -6;
 
-		read_row(tbl, i, (void *)row_i);
-		read_row(tbl, j, (void *)row_j);
+		read_row(tbl, i, row_i);
+		read_row(tbl, j, row_j);
 
-		val_i = *((int*)get_column(&tbl->sc, column, row_i));
 		val_j = *((int*)get_column(&tbl->sc, column, row_j));
 
-		if (dir == (val_i > val_j))
+		if(dir == compare_rows(&tbl->sc, column, row_i, row_j))
 			exchange(tbl, i,j, row_i, row_j);
 
 		free(row_i);
@@ -1620,24 +1628,31 @@ int ecall_sort_table_parallel(int db_id, int table_id, int column, int tid, int 
  *
  */
 
-int write_row_dbg(table_t *table, void *new_data, int row_num) {
+int write_row_dbg(table_t *table, row_t *row, unsigned int row_num) {
 	unsigned long dblk_num;
 	unsigned long row_off, rows_per_blk; 
+	unsigned int old_num_rows, tmp_num_rows; 
 	data_block_t *b;
 
-	if(row_num >= table->num_rows)
-		return -1; 
+	do {
+		tmp_num_rows = table->num_rows;
+		old_num_rows = tmp_num_rows;  
+		if(row_num >= tmp_num_rows) {
+			old_num_rows = xchg(&table->num_rows, (row_num - 1)); 
+		
+		}
+	} while (old_num_rows != tmp_num_rows);  
 
-	rows_per_blk = DATA_BLOCK_SIZE / table->sc.row_size; 
+	rows_per_blk = DATA_BLOCK_SIZE / row_size(table); 
 	dblk_num = row_num / rows_per_blk;
 
 	/* Offset of the row within the data block in bytes */
-	row_off = (row_num - dblk_num * rows_per_blk) * table->sc.row_size; 
+	row_off = (row_num - dblk_num * rows_per_blk) * row_size(table); 
 	
         b = bread(table, dblk_num);
 	 	
 	/* Copy the row into the data block */
-	memcpy((char*)b->data + row_off, new_data, table->sc.row_size); 
+	memcpy((char*)b->data + row_off, row, row_size(table)); 
 
 	bwrite(b);
 	brelse(b);
@@ -1645,25 +1660,25 @@ int write_row_dbg(table_t *table, void *new_data, int row_num) {
 }
 
 
-int insert_row_dbg(table_t *table, void *row) {
+int insert_row_dbg(table_t *table, row_t *row) {
 	unsigned long dblk_num;
 	unsigned long row_off, rows_per_blk; 
 	data_block_t *b;
 
 	//DBG("insert row, row size:%lu\n", table->sc.row_size); 
 
-	rows_per_blk = DATA_BLOCK_SIZE / table->sc.row_size; 
+	rows_per_blk = DATA_BLOCK_SIZE / row_size(table); 
 	dblk_num = table->num_rows / rows_per_blk;
 
 	/* Offset of the row within the data block in bytes */
-	row_off = (table->num_rows - dblk_num * rows_per_blk) * table->sc.row_size; 
+	row_off = (table->num_rows - dblk_num * rows_per_blk) * row_size(table); 
 	
         b = bread(table, dblk_num);
-	 	
+	
 	/* Copy the row into the data block */
-	memcpy((char*)b->data + row_off, row, table->sc.row_size); 
+	memcpy((char*)b->data + row_off, row, row_size(table)); 
 
-	table->num_rows ++; 
+	__sync_fetch_and_add(&table->num_rows, 1);
 
 	bwrite(b);
 	brelse(b);
@@ -1676,10 +1691,12 @@ int insert_row_dbg(table_t *table, void *row) {
    a row at the very end of the table which is pointed by 
    table->num_rows 
  */
-int ecall_insert_row_dbg(int db_id, int table_id, void *row) {
+int ecall_insert_row_dbg(int db_id, int table_id, void *row_data) {
 
 	data_base_t *db;
 	table_t *table;
+	row_t *row;
+	int ret; 
 
 	if ((db_id > (MAX_DATABASES - 1)) || !g_dbs[db_id] 
 		|| !row )
@@ -1692,10 +1709,18 @@ int ecall_insert_row_dbg(int db_id, int table_id, void *row) {
 
 	table = db->tables[table_id];
 
-	return insert_row_dbg(table, row); 	
+	row = (row_t*) malloc(row_size(table)); 
+	if(!row)
+		return -3;
+
+	memcpy(row->data, row_data, row_data_size(table)); 
+	ret = insert_row_dbg(table, row); 	
+
+	free(row); 
+	return ret; 
 }
 
-int print_row(schema_t *sc, void *row) {
+int print_row(schema_t *sc, row_t *row) {
 	bool first = true; 	
 	for(int i = 0;  i < sc->num_fields; i++) {
 		if (first) {
@@ -1705,19 +1730,19 @@ int print_row(schema_t *sc, void *row) {
 		}
 		switch(sc->types[i]) {
 		case BOOLEAN:
-			printf("%b", *(bool*)((char*)row + sc->offsets[i]));
+			printf("%b", *(bool*)&row->data[sc->offsets[i]]);
 			break;
 	
 		case CHARACTER: 
-			printf("%c", *(char*)((char*)row + sc->offsets[i]));
+			printf("%c", *(char*)&row->data[sc->offsets[i]]);
 			break;
  
 		case TINYTEXT:
 		case VARCHAR:
-			printf("%s", (char*)((char*)row + sc->offsets[i]));
+			printf("%s", (char*)&row->data[sc->offsets[i]]);
 			break; 
 		case INTEGER:
-			printf("%d", *(int*)((char*)row + sc->offsets[i]));
+			printf("%d", *(int*)&row->data[sc->offsets[i]]);
 			break; 		
 		default: 
 			printf("unknown type");
@@ -1735,12 +1760,12 @@ int print_row(schema_t *sc, void *row) {
 
 int scan_table_dbg(table_t *table) {
 	unsigned long i;
-	char *row;
+	row_t *row;
 
 	printf("scan table:%s with %lu rows\n", 
 		table->name.c_str(), table->num_rows); 
 
-	row = (char *)malloc(table->sc.row_size); 
+	row = (row_t *)malloc(row_size(table)); 
 	if (!row) {
 		ERR("can't allocate memory for the row\n");
 		return -1;
@@ -1752,7 +1777,7 @@ int scan_table_dbg(table_t *table) {
 	for (i = 0; i < table->num_rows; i++) {
 	
 		/* Read one row. */
-		read_row(table, i, (void *)row);
+		read_row(table, i, row);
 
 	}
 	
@@ -1795,12 +1820,12 @@ int ecall_scan_table_dbg(int db_id, int table_id) {
 
 int print_table_dbg(table_t *table, int start, int end) {
 	unsigned long i;
-	char *row;
+	row_t *row;
 
 	printf("printing table:%s with %lu rows\n", 
 		table->name.c_str(), table->num_rows); 
 
-	row = (char *)malloc(table->sc.row_size); 
+	row = (row_t *)malloc(row_size(table)); 
 	if (!row) {
 		ERR("can't allocate memory for the row\n");
 		return -1;
@@ -1813,7 +1838,7 @@ int print_table_dbg(table_t *table, int start, int end) {
 	for (i = start; i < end; i++) {
 	
 		/* Read one row. */
-		read_row(table, i, (void *)row);
+		read_row(table, i, row);
 		print_row(&table->sc, row); 
 
 	}

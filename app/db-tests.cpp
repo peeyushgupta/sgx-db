@@ -149,7 +149,7 @@ int test_rankings(sgx_enclave_id_t eid) {
 	sc.offsets[3] = 260;
 	sc.sizes[3] = 4;
 	sc.types[3] = INTEGER;
-	sc.row_size = sc.offsets[sc.num_fields - 1] + sc.sizes[sc.num_fields - 1];
+	sc.row_data_size = sc.offsets[sc.num_fields - 1] + sc.sizes[sc.num_fields - 1];
 
 	//row = (uint8_t*)malloc(sc.row_size);
 	row = (uint8_t*)malloc(MAX_ROW_SIZE);
@@ -236,7 +236,7 @@ int test_rankings(sgx_enclave_id_t eid) {
 	sc_udata.sizes[9] = 4;
 	sc_udata.types[9] = INTEGER;
 
-	sc_udata.row_size = sc_udata.offsets[sc_udata.num_fields - 1] + sc_udata.sizes[sc_udata.num_fields - 1];
+	sc_udata.row_data_size = sc_udata.offsets[sc_udata.num_fields - 1] + sc_udata.sizes[sc_udata.num_fields - 1];
 
 	sgx_ret = ecall_create_table(eid, &ret, db_id, udata_table_name.c_str(), udata_table_name.length(), &sc_udata, &udata_table_id);
 	if (sgx_ret || ret) {
@@ -397,7 +397,7 @@ int test_bitonic_sort(sgx_enclave_id_t eid)
 	sc.offsets[0] = 0;
 	sc.sizes[0] = 4;
 	sc.types[0] = INTEGER;
-	sc.row_size = sc.offsets[sc.num_fields - 1] + sc.sizes[sc.num_fields - 1];
+	sc.row_data_size = sc.offsets[sc.num_fields - 1] + sc.sizes[sc.num_fields - 1];
 
 	row = (uint8_t*)malloc(MAX_ROW_SIZE);
 
@@ -481,7 +481,7 @@ int test_column_sort(sgx_enclave_id_t eid)
 	sc.offsets[0] = 0;
 	sc.sizes[0] = 4;
 	sc.types[0] = INTEGER;
-	sc.row_size = sc.offsets[sc.num_fields - 1] + sc.sizes[sc.num_fields - 1];
+	sc.row_data_size = sc.offsets[sc.num_fields - 1] + sc.sizes[sc.num_fields - 1];
 
 	row = (uint8_t*)malloc(MAX_ROW_SIZE);
 

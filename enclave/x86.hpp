@@ -1,6 +1,6 @@
 #pragma once
 
-static inline unsigned long xchg(volatile unsigned int *addr, unsigned int newval)
+static inline unsigned int xchg(volatile unsigned int *addr, unsigned int newval)
 {
   unsigned int result;
   
