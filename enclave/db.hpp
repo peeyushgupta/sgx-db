@@ -113,9 +113,15 @@ static inline unsigned long row_header_size() {
 	return sizeof(row_header_t);
 }
 
+static inline unsigned long row_data_size(table_t *table) {
+
+	return table->sc.row_data_size;
+}
+
+
 static inline unsigned long row_size(table_t *table) {
 
-	return table->sc.row_data_size + row_header_size();
+	return row_header_size() + row_data_size(table);
 }
 
 

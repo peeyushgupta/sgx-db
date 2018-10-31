@@ -727,12 +727,16 @@ int promote_schema(schema_t *old_sc, int column, schema_t *new_sc) {
 	return 0;
 }
 
-int promote_row(void *old_row, schema_t *sc, int column, void * new_row) {
-       
-	memcpy(new_row, (char*)old_row + sc->offsets[column], sc->sizes[column]); 
-	memcpy((char*)new_row + sc->sizes[column], old_row, sc->offsets[column]); 
-	memcpy((char*)new_row + sc->sizes[column] + sc->offsets[column], 
-		(char*)old_row + sc->offsets[column] + sc->sizes[column], 
+int promote_row(row_t *old_row, schema_t *sc, int column, row_t * new_row) {
+      
+	/* Copy the header */
+	memcpy(new_row, old_row, row_header_size()); 
+ 
+	/* Copy data */
+	memcpy(new_row->data, (char*)old_row->data + sc->offsets[column], sc->sizes[column]); 
+	memcpy((char*)new_row->data + sc->sizes[column], old_row->data, sc->offsets[column]); 
+	memcpy((char*)new_row->data + sc->sizes[column] + sc->offsets[column], 
+		(char*)old_row->data + sc->offsets[column] + sc->sizes[column], 
 		sc->row_data_size - (sc->offsets[column] + sc->sizes[column]));
 	
         return 0; 
@@ -1687,7 +1691,7 @@ int ecall_insert_row_dbg(int db_id, int table_id, void *row_data) {
 	if(!row)
 		return -3;
 
-	memcpy(row->data, row_data, row_size(table)); 
+	memcpy(row->data, row_data, row_data_size(table)); 
 	ret = insert_row_dbg(table, row); 	
 
 	free(row); 
