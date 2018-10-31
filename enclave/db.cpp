@@ -9,6 +9,7 @@
 #endif
 
 #include "bcache.hpp"
+#include "x86.hpp"
 
 #include <cstdlib>
 #include <cstdio>
@@ -520,8 +521,8 @@ int read_row(table_t *table, unsigned int row_num, row_t *row) {
 	/* Make a fake row if it's outside of the table
            assuming it's padding */
 	if(row_num >= table->num_rows) {
-		//table->sc.
-		return -1;
+		row->header.fake = true; 
+		return 0;
 	} 
 
 	rows_per_blk = DATA_BLOCK_SIZE / row_size(table); 
@@ -972,10 +973,10 @@ int column_sort_table(data_base_t *db, table_t *table, int column) {
 	if(!row)
 		goto cleanup;
 
-	if ( r * s > table->num_rows ) {
-		ERR("r (%d) * s (%d) > num_rows (%d)\n", r, s, table->num_rows); 
-		goto cleanup; 
-	}
+	//if ( r * s > table->num_rows ) {
+	//	ERR("r (%d) * s (%d) > num_rows (%d)\n", r, s, table->num_rows); 
+	//	goto cleanup; 
+	//}
 
 	row_num = 0; 
 
@@ -1613,13 +1614,20 @@ int ecall_sort_table_parallel(int db_id, int table_id, int column, int tid)
  *
  */
 
-int write_row_dbg(table_t *table, row_t *row, int row_num) {
+int write_row_dbg(table_t *table, row_t *row, unsigned int row_num) {
 	unsigned long dblk_num;
 	unsigned long row_off, rows_per_blk; 
+	unsigned int old_num_rows, tmp_num_rows; 
 	data_block_t *b;
 
-	if(row_num >= table->num_rows)
-		return -1; 
+	do {
+		tmp_num_rows = table->num_rows;
+		old_num_rows = tmp_num_rows;  
+		if(row_num >= tmp_num_rows) {
+			old_num_rows = xchg(&table->num_rows, (row_num - 1)); 
+		
+		}
+	} while (old_num_rows != tmp_num_rows);  
 
 	rows_per_blk = DATA_BLOCK_SIZE / row_size(table); 
 	dblk_num = row_num / rows_per_blk;
@@ -1656,7 +1664,7 @@ int insert_row_dbg(table_t *table, row_t *row) {
 	/* Copy the row into the data block */
 	memcpy((char*)b->data + row_off, row, row_size(table)); 
 
-	table->num_rows ++; 
+	__sync_fetch_and_add(&table->num_rows, 1);
 
 	bwrite(b);
 	brelse(b);
