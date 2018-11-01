@@ -1900,7 +1900,7 @@ int pad_schema(schema_t *old_sc, int num_pad_bytes, schema_t *new_sc){
 }
 
 int project_row(void *old_row, schema_t *sc, void* new_row) {
-    int offset = 0;
+    int offset = row_header_size();
     for(int i = 0; i < sc->num_fields; i++) {
         memcpy((char *)new_row + offset, (char*)old_row + sc->offsets[i], sc->sizes[i]);
         offset += sc->sizes[i];
