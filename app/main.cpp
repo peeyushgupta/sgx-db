@@ -32,6 +32,10 @@ int main(){
 	test_spinlock_inc(eid, 10000);
 #endif
 
+        test_project_schema(eid);
+        test_pad_schema(eid);
+        test_project_row(eid);
+
 #if defined(OCALL_ECALL_TESTS)
 	test_null_ocalls(eid);
 #endif
@@ -45,9 +49,6 @@ int main(){
 	test_bitonic_sort(eid);
 
 	test_rankings(eid);
-
-
-	
 
 	/* Destroy the enclave */
 	sgx_destroy_enclave(eid);

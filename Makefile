@@ -51,8 +51,8 @@ SGX_COMMON_CFLAGS +=-DREPORT_JOIN_STATS
 
 ######## SGX SDK Settings (from Intel SGX SDK) ########
 
-SGX_SDK ?= /opt/intel/sgxsdk
-SGX_MODE ?= HW
+SGX_SDK ?= /opt/sgxsdk
+SGX_MODE ?= SIM
 SGX_ARCH ?= x64
 SGX_DEBUG ?= 1
 
