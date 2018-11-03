@@ -1899,7 +1899,7 @@ int project_schema(schema_t *old_sc, int* columns, int num_columns, schema_t *ne
         new_sc->types[i] = old_sc->types[j];
     }
     new_sc->num_fields = num_columns;
-    new_sc->row_size = size;
+    new_sc->row_data_size = size;
     return 0;
 }
 
@@ -1912,22 +1912,26 @@ int pad_schema(schema_t *old_sc, int num_pad_bytes, schema_t *new_sc){
         new_sc->sizes[i] = old_sc->sizes[i];
         new_sc->types[i] = old_sc->types[i];
     }
-    new_sc->offsets[i] = old_sc->row_size;
+    new_sc->offsets[i] = old_sc->row_data_size;
     new_sc->sizes[i] = num_pad_bytes;
     new_sc->types[i] = schema_type::PADDING;
 
     new_sc->num_fields = old_sc->num_fields + 1;
-    new_sc->row_size = old_sc->row_size + num_pad_bytes;
+    new_sc->row_data_size = old_sc->row_data_size + num_pad_bytes;
     return 0; 
 }
 
-int project_row(void *old_row, schema_t *sc, void* new_row) {
-    int offset = row_header_size();
-    for(int i = 0; i < sc->num_fields; i++) {
-        memcpy((char *)new_row + offset, (char*)old_row + sc->offsets[i], sc->sizes[i]);
-        offset += sc->sizes[i];
-    }
-    return 0; 
+int project_row(row_t *old_row, schema_t *sc, row_t *new_row) {
+	int offset = 0; 
+
+	/* Copy the header */
+	memcpy(new_row, old_row, row_header_size()); 
+ 
+	for(int i = 0; i < sc->num_fields; i++) {
+		memcpy((char *)new_row->data + offset, (char*)old_row->data + sc->offsets[i], sc->sizes[i]);
+		offset += sc->sizes[i];
+	}
+	return 0; 
 }
 
 int project_promote_pad_table(
@@ -1943,7 +1947,7 @@ int project_promote_pad_table(
     int ret;
     std::string p3_tbl_name;
     schema_t project_sc, project_promote_sc, project_promote_pad_sc;
-    void *row_old, *row_new;
+    row_t *row_old, *row_new;
     p3_tbl_name = "p3:" + tbl->name;
 
     ret = project_schema(&tbl->sc, 

@@ -352,7 +352,7 @@ void print(char* s)
 }
 
 int test_project_schema() {
-    print("starting test_project_schema");
+    printf("starting test_project_schema");
     schema_t sc_old, sc_new;
     int *columns;
     sc_old.num_fields = 3; 
@@ -369,7 +369,7 @@ int test_project_schema() {
     sc_old.types[2] = TINYTEXT;
     sc_old.sizes[2] = 10;
 
-    sc_old.row_size = sc_old.sizes[0] + sc_old.sizes[1] + sc_old.sizes[2];
+    sc_old.row_data_size = sc_old.sizes[0] + sc_old.sizes[1] + sc_old.sizes[2];
 
     // all columns
     columns = new int[3];
@@ -440,7 +440,7 @@ int test_pad_schema() {
     sc_old.sizes[2] = 1;
 
     sc_old.num_fields = 3;
-    sc_old.row_size = 8 + 10 + 1;
+    sc_old.row_data_size = 8 + 10 + 1;
 
     int num_pad_bytes_values[3] = {0, 4, 7};
     int num_pad_bytes;
@@ -465,7 +465,7 @@ int ecall_test_pad_schema()
 void test_project_row() { 
     schema_t sc_old, sc_new;
     int* columns;
-    char *old_row, *new_row;
+    row_t *old_row, *new_row;
 
     sc_old.offsets[0] = 0;
     sc_old.types[0] = INTEGER;
@@ -480,12 +480,12 @@ void test_project_row() {
     sc_old.sizes[2] = 1;
 
     sc_old.num_fields = 3;
-    sc_old.row_size = 4 + 11 + 1;
+    sc_old.row_data_size = 4 + 11 + 1;
 
-    old_row = new char[sc_old.row_size];
-    new_row = new char[sc_old.row_size];
+    old_row = (row_t*) new char [row_size(&sc_old)];
+    new_row = (row_t*) new char [row_size(&sc_old)];
     int i = 73, i_read;
-    char* s = "Troglodyte", *s_read = new char[10+1];
+    char s[] = "Troglodyte", *s_read = new char[10+1];
     bool b = 1, b_read;
     memcpy(old_row, (char *)&i, 4);
     memcpy(old_row + 4, s, 11);
@@ -505,7 +505,7 @@ void test_project_row() {
 
     // project 2 0
     delete [] new_row;
-    new_row = new char[sc_old.row_size];
+    new_row = (row_t*) new char[row_size(&sc_old)];
     columns[0] = 2; columns[1] = 0;
     project_schema(&sc_old, columns, 2, &sc_new);
     project_row(old_row, &sc_new, new_row);
@@ -516,7 +516,7 @@ void test_project_row() {
 
     // project 1 0
     delete [] new_row;
-    new_row = new char[sc_old.row_size];
+    new_row = (row_t*) new char[row_size(&sc_old)];
     columns[0] = 1; columns[1] = 0;
     project_schema(&sc_old, columns, 2, &sc_new);
     project_row(old_row, &sc_new, new_row);
@@ -527,7 +527,7 @@ void test_project_row() {
 
     // project 2
     delete [] new_row;
-    new_row = new char[sc_old.row_size];
+    new_row = (row_t *) new char[row_size(&sc_old)];
     columns[0] = 2; 
     project_schema(&sc_old, columns, 1, &sc_new);
     project_row(old_row, &sc_new, new_row);

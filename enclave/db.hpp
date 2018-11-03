@@ -27,6 +27,7 @@ typedef enum schema_type {
 	VARCHAR = 6,
 	INTEGER = 7,
 	TINYTEXT = 8,
+	PADDING = 9,
 } schema_type_t;
 
 
@@ -118,10 +119,19 @@ static inline unsigned long row_data_size(table_t *table) {
 	return table->sc.row_data_size;
 }
 
-
 static inline unsigned long row_size(table_t *table) {
 
 	return row_header_size() + row_data_size(table);
+}
+
+static inline unsigned long row_data_size(schema_t *sc) {
+
+	return sc->row_data_size;
+}
+
+static inline unsigned long row_size(schema_t *sc) {
+
+	return row_header_size() + row_data_size(sc);
 }
 
 
@@ -138,7 +148,7 @@ int insert_row_dbg(table_t *table, row_t *row);
 
 int project_schema(schema_t *old_sc, int* columns, int num_columns, schema_t *new_sc);
 int pad_schema(schema_t *old_sc, int num_pad_bytes, schema_t *new_sc);
-int project_row(void *old_row, schema_t *sc, void* new_row);
+int project_row(row_t *old_row, schema_t *sc, row_t* new_row);
 int promote_table(data_base_t *db, table_t *tbl, int column, table_t **p_tbl);
 int project_promote_pad_table(
     data_base_t *db, 
