@@ -17,6 +17,8 @@ enclave {
 		int ocall_write_file(int fd, [user_check] void* buf, unsigned long size); 
 		int ocall_read_file(int fd, [user_check] void* buf, unsigned long size);
 		int ocall_seek(int fd, unsigned long offset);
+		int ocall_close_file(int fd);
+		int ocall_rm_file([in, string] const char *name); 
 
 
 		/* RDTSC is illegal instruction inside SGX for SGX v1 */

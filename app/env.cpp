@@ -63,4 +63,13 @@ int ocall_seek(int fd, unsigned long offset) {
 	return lseek(fd, offset, SEEK_SET);
 };
 
+int ocall_close_file(int fd) {
+	DBG_ON(IO_VERBOSE, "close file fd:%d\n", fd);
+	return close(fd);
+};
+
+int ocall_rm_file(const char *name) {
+	DBG_ON(IO_VERBOSE, "rm file:%s\n", name);
+	return unlink(name);
+};
 

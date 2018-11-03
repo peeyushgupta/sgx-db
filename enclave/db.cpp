@@ -426,6 +426,28 @@ int ecall_create_table(int db_id, const char *cname, int name_len, schema_t *sch
 	return 0; 
 };
 
+int delete_table(data_base_t *db, table_t *table) {
+	int ret, sgx_ret; 
+
+	
+	db->tables[table->id] = NULL;
+	
+	sgx_ret = ocall_close_file(&ret, table->fd);
+	if (sgx_ret) {
+		ret = sgx_ret;
+	} 
+
+	/* Call outside of enclave to open a file for the table */
+	sgx_ret = ocall_rm_file(&ret, table->name.c_str());
+	if (sgx_ret) {
+		ret = sgx_ret;
+	} 
+
+	delete table;
+	return ret; 
+
+}
+
 /* Flush all data to disk */
 int ecall_flush_table(int db_id, int table_id) {
 	data_base_t *db;
@@ -1301,7 +1323,7 @@ cleanup:
 		for (unsigned int i = 0; i < s; i++) {
 			if (s_tables[i]) {
 				bflush(s_tables[i]);
-				free(s_tables[i]);
+				delete_table(db, s_tables[i]); 
 			}
 		}
 		free(s_tables);
@@ -1311,7 +1333,7 @@ cleanup:
 		for (unsigned int i = 0; i < s; i++) {
 			if (st_tables[i]) {
 				bflush(st_tables[i]);
-				free(st_tables[i]);
+				delete_table(db, st_tables[i]);
 			}
 		}
 		free(st_tables);
