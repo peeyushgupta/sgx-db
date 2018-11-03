@@ -136,8 +136,19 @@ int write_data_block(table *table, unsigned long blk_num, void *buf);
 
 int insert_row_dbg(table_t *table, row_t *row);
 
+int project_schema(schema_t *old_sc, int* columns, int num_columns, schema_t *new_sc);
+int pad_schema(schema_t *old_sc, int num_pad_bytes, schema_t *new_sc);
+int project_row(void *old_row, schema_t *sc, void* new_row);
 int promote_table(data_base_t *db, table_t *tbl, int column, table_t **p_tbl);
-
+int project_promote_pad_table(
+    data_base_t *db, 
+    table_t *tbl, 
+    int project_columns [], 
+    int num_project_columns,
+    int promote_columns [],
+    int num_pad_bytes,
+    table_t **p3_tbl    
+);
 int column_sort_pick_params(unsigned long num_records, 
 				unsigned long rec_size, 
 				unsigned long bcache_rec_size, 

@@ -48,12 +48,14 @@ enclave {
 		public int ecall_scan_table_dbg(int db_id, int table_id);
 		public void ecall_test_null_ocall(void);
 		public void ecall_null_ecall(void); 
+                public int ecall_test_project_schema(void);
+                public int ecall_test_pad_schema(void);
+                public int ecall_test_project_row(void);
 
 		/* Buffer cache concurrent read/write test */
 		public int ecall_bcache_test_create_read_write_table(int db_id, int from_table_id, [out]int *to_table_id);
 		public int ecall_bcache_test_read_write(int db_id, int from_table_id, int to_table_id);
 		public int ecall_bcache_test_cmp_read_write(int db_id, int from_table_id, int to_table_id);
-
 
 	};
 

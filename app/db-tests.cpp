@@ -9,6 +9,7 @@
 #include <thread>
 #include <cassert>
 #include <vector>
+#include <assert.h>
 
 using namespace std;
 #define OCALL_TEST_LENGTH 10000
@@ -365,6 +366,21 @@ void bitonic_sorter_fn(sgx_enclave_id_t eid, int db_id, int table_id, int field,
 {
 	int ret;
 	ecall_sort_table_parallel(eid, &ret, db_id, table_id, field, tid, num_threads);
+}
+
+int test_project_schema(sgx_enclave_id_t eid) {
+    int ret;
+    ecall_test_project_schema(eid, &ret);
+}
+
+int test_pad_schema(sgx_enclave_id_t eid) { 
+    int ret;
+    ecall_test_pad_schema(eid, &ret);
+}
+
+int test_project_row(sgx_enclave_id_t eid) {
+    int ret;
+    ecall_test_project_row(eid, &ret);
 }
 
 std::vector<std::thread*> threads;
