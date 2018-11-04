@@ -3,12 +3,14 @@
 #include "spinlock.hpp"
 
 //#define DATA_BLOCK_SIZE (1 << 12) /* 4 KB */
-#define DATA_BLOCK_SIZE (1 << 19) /* 512 KB */
+#define DATA_BLOCK_SIZE (1 << 16) /* 64 KB */
+
+//#define DATA_BLOCK_SIZE (1 << 19) /* 512 KB */
 
 //#define DATA_BLOCK_SIZE (1 << 20) /* 1 MB  */
 //#define DATA_BLOCK_SIZE (1*(1 << 20)) /* X MB  */
 
-#define DATA_BLKS_PER_DB 40 /* data blocks per DB */
+#define DATA_BLKS_PER_DB 256 /* data blocks per DB */
 //#define DATA_BLKS_PER_DB 7 /* data blocks per DB */
 
 
@@ -55,4 +57,5 @@ void bwrite(data_block_t *b);
 void brelse(data_block_t *b);
 void bcache_stats_read_and_reset(bcache_t *bcache, bcache_stats_t *stats);
 void bcache_stats_printf(bcache_stats_t *stats);
+void bcache_info_printf(struct table *table);
 

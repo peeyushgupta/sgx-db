@@ -65,6 +65,13 @@ void bcache_stats_read_and_reset(bcache_t *bcache, bcache_stats_t *stats) {
 	return; 
 }; 
 
+void bcache_info_printf(struct table *table) {
+	DBG("bcache size:%d, num blocks:%d, rows per block: %d\n",
+		DATA_BLKS_PER_DB*DATA_BLOCK_SIZE, DATA_BLKS_PER_DB, 
+		DATA_BLOCK_SIZE / row_size(table));
+	return; 
+};
+
 void bcache_stats_printf(bcache_stats_t *stats) {
 	DBG("hits:%d, read misses:%d, write misses:%d, write backs:%d\n",
 		stats->hits, stats->read_misses, stats->write_misses, stats->write_backs);
@@ -188,6 +195,7 @@ int bflush(struct table *table)
 				return -1;
 			}
 			b->flags &= ~B_DIRTY; 
+			
 		}
 	}
 

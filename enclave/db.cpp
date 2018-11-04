@@ -239,16 +239,21 @@ int read_data_block(table *table, unsigned long blk_num, void *buf) {
 	unsigned long long total_read = 0; 
 	int read, ret; 
 
+#if defined(REPORT_IO_STATS)
 	unsigned long long start, end; 
 	start = RDTSC();
+#endif
 	
 	ocall_seek(&ret, table->fd, blk_num*DATA_BLOCK_SIZE); 
-	
+
+#if defined(REPORT_IO_STATS)	
 	end = RDTSC();
 	DBG_ON(IO_VERBOSE, "ocall_seek: %llu cycles\n", end - start);
+#endif
 
+#if defined(REPORT_IO_STATS)
 	start = RDTSC();
-
+#endif
 	while (total_read < DATA_BLOCK_SIZE) { 
 		ocall_read_file(&read, table->fd, 
 				table->db->io_buf[tid()], 
@@ -270,10 +275,11 @@ int read_data_block(table *table, unsigned long blk_num, void *buf) {
 		total_read += read;  
 	}
 
+#if defined(REPORT_IO_STATS)
 	end = RDTSC();
 	DBG_ON(IO_VERBOSE, 
 		"ocall_read_file: %llu cycles\n", end - start);
-
+#endif
 	return 0; 
 }
 
@@ -977,7 +983,8 @@ int column_sort_table_parallel(data_base_t *db, table_t *table, int column, int 
 		}
 
 #if defined(REPORT_COLUMNSORT_STATS)
-		start = RDTSC(); 
+		start = RDTSC();
+		bcache_info_printf(table);  
 		bcache_stats_read_and_reset(&db->bcache, &bstats);
 #endif
 
@@ -1003,9 +1010,6 @@ int column_sort_table_parallel(data_base_t *db, table_t *table, int column, int 
 
 		printf("Created temp tables in %llu cycles (%llu sec)\n",
 			cycles, secs);
-
-		bcache_stats_read_and_reset(&db->bcache, &bstats);
-		bcache_stats_printf(&bstats); 
 
 		start = RDTSC();
 #endif
@@ -1033,9 +1037,6 @@ int column_sort_table_parallel(data_base_t *db, table_t *table, int column, int 
 
 		printf("Created another set of transposed tables in %llu cycles (%llu sec)\n",
 			cycles, secs);
-
-		bcache_stats_read_and_reset(&db->bcache, &bstats);
-		bcache_stats_printf(&bstats); 
 
 		start = RDTSC();
 #endif
@@ -1072,8 +1073,6 @@ int column_sort_table_parallel(data_base_t *db, table_t *table, int column, int 
 			}
 		}
 	
-		DBG_ON(COLUMNSORT_VERBOSE, "Column tables\n");
-
 #if defined(REPORT_COLUMNSORT_STATS)
 		end = RDTSC();
 		cycles = end - start;
@@ -1136,7 +1135,6 @@ int column_sort_table_parallel(data_base_t *db, table_t *table, int column, int 
 #if defined(REPORT_COLUMNSORT_STATS)
 	start = RDTSC(); 
 #endif
-
 
 		/* Transpose s column tables into s transposed tables  */
 		for (unsigned int i = 0; i < s; i ++) {
