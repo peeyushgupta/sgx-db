@@ -999,7 +999,7 @@ int column_sort_table_parallel(data_base_t *db, table_t *table, int column, int 
 				goto cleanup; 
 			}
 	
-			DBG_ON(COLUMNSORT_VERBOSE, "Created tmp table %s, id:%d\n", 
+			DBG_ON(COLUMNSORT_VERBOSE_L2, "Created tmp table %s, id:%d\n", 
             			tmp_tbl_name.c_str(), s_tables[i]->id); 
 		}
 
@@ -1026,7 +1026,7 @@ int column_sort_table_parallel(data_base_t *db, table_t *table, int column, int 
 				goto cleanup; 
 			}
 
-			DBG_ON(COLUMNSORT_VERBOSE, "Created tmp table %s, id:%d\n", 
+			DBG_ON(COLUMNSORT_VERBOSE_L2, "Created tmp table %s, id:%d\n", 
             			tmp_tbl_name.c_str(), st_tables[i]->id); 
 		}
 	
