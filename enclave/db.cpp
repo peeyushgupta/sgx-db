@@ -936,6 +936,12 @@ int column_sort_table_parallel(data_base_t *db, table_t *table, int column, int 
 	unsigned long shift, unshift;
 	unsigned long r, s; 
 
+#if defined(REPORT_COLUMNSORT_STATS)
+	unsigned long long start, end; 
+	unsigned long long cycles = end - start;
+	unsigned long long secs = (cycles / cycles_per_sec);
+#endif
+
 	if(tid == 0) {
 		ret = column_sort_pick_params(table->num_rows, table->sc.row_data_size, 
 				DATA_BLOCK_SIZE, 
@@ -969,6 +975,10 @@ int column_sort_table_parallel(data_base_t *db, table_t *table, int column, int 
 			goto cleanup; 
 		}
 
+#if defined(REPORT_COLUMNSORT_STATS)
+		start = RDTSC(); 
+#endif
+
 		/* Create s temporary column tables */
 		for (int i = 0; i < s; i++) {
 	
@@ -983,6 +993,17 @@ int column_sort_table_parallel(data_base_t *db, table_t *table, int column, int 
 			DBG_ON(COLUMNSORT_VERBOSE, "Created tmp table %s, id:%d\n", 
             			tmp_tbl_name.c_str(), s_tables[i]->id); 
 		}
+
+#if defined(REPORT_COLUMNSORT_STATS)
+		end = RDTSC();
+		cycles = end - start;
+		secs = (cycles / cycles_per_sec);
+
+		printf("Created temp tables in %llu cycles (%llu sec)\n",
+			cycles, secs);
+		start = RDTSC();
+#endif
+
 
 		/* Create another set of s transposed column tables */
 		for (int i = 0; i < s; i++) {
@@ -999,6 +1020,16 @@ int column_sort_table_parallel(data_base_t *db, table_t *table, int column, int 
             			tmp_tbl_name.c_str(), st_tables[i]->id); 
 		}
 	
+#if defined(REPORT_COLUMNSORT_STATS)
+		end = RDTSC();
+		cycles = end - start;
+		secs = (cycles / cycles_per_sec);
+
+		printf("Created another set of transposed tables in %llu cycles (%llu sec)\n",
+			cycles, secs);
+		start = RDTSC();
+#endif
+
 
 		row = (row_t*) malloc(row_size(table));
 		if(!row)
@@ -1032,7 +1063,17 @@ int column_sort_table_parallel(data_base_t *db, table_t *table, int column, int 
 		}
 	
 		DBG_ON(COLUMNSORT_VERBOSE, "Column tables\n");
-	
+
+#if defined(REPORT_COLUMNSORT_STATS)
+		end = RDTSC();
+		cycles = end - start;
+		secs = (cycles / cycles_per_sec);
+
+		printf("Rewrite the table as s column tables in %llu cycles (%llu sec)\n",
+			cycles, secs);
+#endif
+
+
 #if defined(COLUMNSORT_DBG)
 		printf("Column tables\n");
 		for (unsigned int i = 0; i < s; i++) {
@@ -1040,6 +1081,10 @@ int column_sort_table_parallel(data_base_t *db, table_t *table, int column, int 
 		}
 #endif
 	}
+
+#if defined(REPORT_COLUMNSORT_STATS)
+	start = RDTSC(); 
+#endif
 
 	/* All threads sort table in parallel */
 	for (unsigned int i = 0; i < s; i++) {
@@ -1055,13 +1100,27 @@ int column_sort_table_parallel(data_base_t *db, table_t *table, int column, int 
 	}
 
 	if(tid == 0) {
+#if defined(REPORT_COLUMNSORT_STATS)
+		end = RDTSC();
+		cycles = end - start;
+		secs = (cycles / cycles_per_sec);
+
+		printf("Step 1: Sorted column tables in %llu cycles (%llu sec)\n",
+			cycles, secs);
+#endif
+
 		DBG_ON(COLUMNSORT_VERBOSE, "Step 1: Sorted column tables\n");
 #if defined(COLUMNSORT_DBG)
 		for (unsigned int i = 0; i < s; i++) {
 			print_table_dbg(s_tables[i], 0, s_tables[i]->num_rows);
 		}
 #endif
-	
+
+#if defined(REPORT_COLUMNSORT_STATS)
+	start = RDTSC(); 
+#endif
+
+
 		/* Transpose s column tables into s transposed tables  */
 		for (unsigned int i = 0; i < s; i ++) {
 
@@ -1090,7 +1149,16 @@ int column_sort_table_parallel(data_base_t *db, table_t *table, int column, int 
 				}
 			}
 		}
-	
+#if defined(REPORT_COLUMNSORT_STATS)
+		end = RDTSC();
+		cycles = end - start;
+		secs = (cycles / cycles_per_sec);
+
+		printf("Step 2: Transposed column tables in %llu cycles (%llu sec)\n",
+			cycles, secs);
+#endif
+
+
 		DBG_ON(COLUMNSORT_VERBOSE, "Step 2: Transposed column tables\n");
 #if defined(COLUMNSORT_DBG)
 		for (unsigned int i = 0; i < s; i++) {
@@ -1098,6 +1166,10 @@ int column_sort_table_parallel(data_base_t *db, table_t *table, int column, int 
 		}
 #endif
 	} /* tid == 0 */
+
+#if defined(REPORT_COLUMNSORT_STATS)
+	start = RDTSC(); 
+#endif
 
 	for (unsigned int i = 0; i < s; i++) {
 		//bitonic_sort_table(db, st_tables[i], column, &tmp_table);
@@ -1112,6 +1184,16 @@ int column_sort_table_parallel(data_base_t *db, table_t *table, int column, int 
 	}
 
 	if (tid == 0) {
+
+#if defined(REPORT_COLUMNSORT_STATS)
+		end = RDTSC();
+		cycles = end - start;
+		secs = (cycles / cycles_per_sec);
+
+		printf("Step 3: Sorted transposed column tables in %llu cycles (%llu sec)\n",
+			cycles, secs);
+#endif
+
 		DBG_ON(COLUMNSORT_VERBOSE, 
 			"Step 3: Sorted transposed column tables\n");
 #if defined(COLUMNSORT_DBG)
@@ -1120,6 +1202,10 @@ int column_sort_table_parallel(data_base_t *db, table_t *table, int column, int 
 		}
 #endif
 		row_num = 0; 
+
+#if defined(REPORT_COLUMNSORT_STATS)
+		start = RDTSC(); 
+#endif
 
 		/* Untranspose st transposed column tables into s tables  */
 		for (unsigned int i = 0; i < r; i ++) {
@@ -1145,6 +1231,16 @@ int column_sort_table_parallel(data_base_t *db, table_t *table, int column, int 
 				row_num ++; 
 			}
 		}
+
+#if defined(REPORT_COLUMNSORT_STATS)
+		end = RDTSC();
+		cycles = end - start;
+		secs = (cycles / cycles_per_sec);
+
+		printf("Step 4: Untransposed column tables in %llu cycles (%llu sec)\n",
+			cycles, secs);
+#endif
+
 		DBG_ON(COLUMNSORT_VERBOSE,
 			"Step 4: Untransposed column tables\n");
 #if defined(COLUMNSORT_DBG)
@@ -1153,6 +1249,10 @@ int column_sort_table_parallel(data_base_t *db, table_t *table, int column, int 
 		}
 #endif
 	} /* tid == 0 */
+
+#if defined(REPORT_COLUMNSORT_STATS)
+		start = RDTSC(); 
+#endif
 
 	for (unsigned int i = 0; i < s; i++) {
 	//	bitonic_sort_table(db, s_tables[i], column, &tmp_table);
@@ -1167,6 +1267,16 @@ int column_sort_table_parallel(data_base_t *db, table_t *table, int column, int 
 	}
 
 	if (tid == 0) {
+
+#if defined(REPORT_COLUMNSORT_STATS)
+		end = RDTSC();
+		cycles = end - start;
+		secs = (cycles / cycles_per_sec);
+
+		printf("Step 5: Sorted untransposed column tables in %llu cycles (%llu sec)\n",
+			cycles, secs);
+#endif
+
 		DBG_ON(COLUMNSORT_VERBOSE, 
 			"Step 5: Sorted untransposed column tables\n");
 
@@ -1178,7 +1288,11 @@ int column_sort_table_parallel(data_base_t *db, table_t *table, int column, int 
 
 		shift = r / 2 ;
 		row_num = 0;  
-	
+
+#if defined(REPORT_COLUMNSORT_STATS)
+		start = RDTSC(); 
+#endif
+
 		/* Shift s tables into st tables  */
 		for (unsigned int i = 0; i < s; i ++) {
 
@@ -1211,6 +1325,16 @@ int column_sort_table_parallel(data_base_t *db, table_t *table, int column, int 
 				row_num ++;
 			}
 		}
+
+#if defined(REPORT_COLUMNSORT_STATS)
+		end = RDTSC();
+		cycles = end - start;
+		secs = (cycles / cycles_per_sec);
+
+		printf("Step 6: Shifted column tables in %llu cycles (%llu sec)\n",
+			cycles, secs);
+#endif
+
 		DBG_ON(COLUMNSORT_VERBOSE, 
 			"Step 6: Shifted column tables\n");
 
@@ -1220,6 +1344,10 @@ int column_sort_table_parallel(data_base_t *db, table_t *table, int column, int 
 		}
 #endif
 	} /* tid == 0 */
+
+#if defined(REPORT_COLUMNSORT_STATS)
+		start = RDTSC(); 
+#endif
 
 	for (unsigned int i = 0; i < s; i++) {
 		//bitonic_sort_table(db, st_tables[i], column, &tmp_table);
@@ -1235,6 +1363,15 @@ int column_sort_table_parallel(data_base_t *db, table_t *table, int column, int 
 	}
 
 	if (tid == 0) {
+
+#if defined(REPORT_COLUMNSORT_STATS)
+		end = RDTSC();
+		cycles = end - start;
+		secs = (cycles / cycles_per_sec);
+
+		printf("Step 7: Sorted shifted column tables in %llu cycles (%llu sec)\n",
+			cycles, secs);
+#endif
 		DBG_ON(COLUMNSORT_VERBOSE, 
 			"Step 7: Sorted shifted column tables\n");
 
@@ -1242,6 +1379,10 @@ int column_sort_table_parallel(data_base_t *db, table_t *table, int column, int 
 		for (unsigned int i = 0; i < s; i++) {
 			print_table_dbg(st_tables[i], 0, st_tables[i]->num_rows);
 		}
+#endif
+
+#if defined(REPORT_COLUMNSORT_STATS)
+		start = RDTSC(); 
 #endif
 
 		row_num = 0;  
@@ -1308,7 +1449,7 @@ int column_sort_table_parallel(data_base_t *db, table_t *table, int column, int 
 				}
 
 				/* Add row to the st table */
-				DBG_ON(COLUMNSORT_VERBOSE,
+				DBG_ON(COLUMNSORT_VERBOSE_L2,
 					"insert row %d of unshifted table (%s) at row %d, row_num:%d, shitf:%d\n", 
 					j, s_tables[((row_num + (r * s) - shift) / r) % s]->name.c_str(), 
 					(row_num + (r * s) - shift) % r, row_num, shift); 
@@ -1326,6 +1467,15 @@ int column_sort_table_parallel(data_base_t *db, table_t *table, int column, int 
 				row_num ++;
 			}
 		}
+
+#if defined(REPORT_COLUMNSORT_STATS)
+		end = RDTSC();
+		cycles = end - start;
+		secs = (cycles / cycles_per_sec);
+
+		printf("Step 8: Unshifted column tables in %llu cycles (%llu sec)\n",
+			cycles, secs);
+#endif
 		DBG_ON(COLUMNSORT_VERBOSE, 
 			"Step 8: Unshifted column tables\n");
 
@@ -1333,6 +1483,10 @@ int column_sort_table_parallel(data_base_t *db, table_t *table, int column, int 
 		for (unsigned int i = 0; i < s; i++) {
 			print_table_dbg(s_tables[i], 0, s_tables[i]->num_rows);
 		}
+#endif
+
+#if defined(REPORT_COLUMNSORT_STATS)
+		start = RDTSC(); 
 #endif
 
 		row_num = 0;  
@@ -1360,6 +1514,15 @@ int column_sort_table_parallel(data_base_t *db, table_t *table, int column, int 
 				row_num ++;
 			}
 		}
+
+#if defined(REPORT_COLUMNSORT_STATS)
+		end = RDTSC();
+		cycles = end - start;
+		secs = (cycles / cycles_per_sec);
+
+		printf("Wrote sorted temporary tables back in %llu cycles (%llu sec)\n",
+			cycles, secs);
+#endif
 
 		DBG_ON(COLUMNSORT_VERBOSE, 
 			"Sorted table\n");
