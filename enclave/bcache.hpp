@@ -29,10 +29,18 @@ typedef struct data_block {
 #define B_VALID 0x2  // buffer has been read from disk
 #define B_DIRTY 0x4  // buffer needs to be written to disk
 
+typedef struct bcache_stats {
+	unsigned int hits; 
+	unsigned int read_misses; 
+	unsigned int write_misses; 
+	unsigned int write_backs; 
+} bcache_stats_t; 
+
 typedef struct bcache {
 	struct spinlock lock;
 	data_block_t data_blks[DATA_BLKS_PER_DB];
 	int fd; 
+	bcache_stats_t stats; 
 
 	// Linked list of all buffers, through prev/next.
   	// head.next is most recently used.
@@ -45,4 +53,6 @@ data_block_t* bread(struct table *table, unsigned int blk_num);
 int bflush(struct table *table);
 void bwrite(data_block_t *b);
 void brelse(data_block_t *b);
+void bcache_stats_read_and_reset(bcache_t *bcache, bcache_stats_t *stats);
+void bcache_stats_printf(bcache_stats_t *stats);
 

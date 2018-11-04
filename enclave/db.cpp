@@ -940,6 +940,7 @@ int column_sort_table_parallel(data_base_t *db, table_t *table, int column, int 
 	unsigned long long start, end; 
 	unsigned long long cycles = end - start;
 	unsigned long long secs = (cycles / cycles_per_sec);
+	bcache_stats_t bstats;
 #endif
 
 	if(tid == 0) {
@@ -977,6 +978,7 @@ int column_sort_table_parallel(data_base_t *db, table_t *table, int column, int 
 
 #if defined(REPORT_COLUMNSORT_STATS)
 		start = RDTSC(); 
+		bcache_stats_read_and_reset(&db->bcache, &bstats);
 #endif
 
 		/* Create s temporary column tables */
@@ -1001,6 +1003,10 @@ int column_sort_table_parallel(data_base_t *db, table_t *table, int column, int 
 
 		printf("Created temp tables in %llu cycles (%llu sec)\n",
 			cycles, secs);
+
+		bcache_stats_read_and_reset(&db->bcache, &bstats);
+		bcache_stats_printf(&bstats); 
+
 		start = RDTSC();
 #endif
 
@@ -1027,6 +1033,10 @@ int column_sort_table_parallel(data_base_t *db, table_t *table, int column, int 
 
 		printf("Created another set of transposed tables in %llu cycles (%llu sec)\n",
 			cycles, secs);
+
+		bcache_stats_read_and_reset(&db->bcache, &bstats);
+		bcache_stats_printf(&bstats); 
+
 		start = RDTSC();
 #endif
 
@@ -1071,6 +1081,9 @@ int column_sort_table_parallel(data_base_t *db, table_t *table, int column, int 
 
 		printf("Rewrite the table as s column tables in %llu cycles (%llu sec)\n",
 			cycles, secs);
+
+		bcache_stats_read_and_reset(&db->bcache, &bstats);
+		bcache_stats_printf(&bstats); 
 #endif
 
 
@@ -1107,6 +1120,10 @@ int column_sort_table_parallel(data_base_t *db, table_t *table, int column, int 
 
 		printf("Step 1: Sorted column tables in %llu cycles (%llu sec)\n",
 			cycles, secs);
+
+		bcache_stats_read_and_reset(&db->bcache, &bstats);
+		bcache_stats_printf(&bstats); 
+
 #endif
 
 		DBG_ON(COLUMNSORT_VERBOSE, "Step 1: Sorted column tables\n");
@@ -1156,6 +1173,9 @@ int column_sort_table_parallel(data_base_t *db, table_t *table, int column, int 
 
 		printf("Step 2: Transposed column tables in %llu cycles (%llu sec)\n",
 			cycles, secs);
+		
+		bcache_stats_read_and_reset(&db->bcache, &bstats);
+		bcache_stats_printf(&bstats); 
 #endif
 
 
@@ -1192,6 +1212,9 @@ int column_sort_table_parallel(data_base_t *db, table_t *table, int column, int 
 
 		printf("Step 3: Sorted transposed column tables in %llu cycles (%llu sec)\n",
 			cycles, secs);
+
+		bcache_stats_read_and_reset(&db->bcache, &bstats);
+		bcache_stats_printf(&bstats); 
 #endif
 
 		DBG_ON(COLUMNSORT_VERBOSE, 
@@ -1239,6 +1262,9 @@ int column_sort_table_parallel(data_base_t *db, table_t *table, int column, int 
 
 		printf("Step 4: Untransposed column tables in %llu cycles (%llu sec)\n",
 			cycles, secs);
+
+		bcache_stats_read_and_reset(&db->bcache, &bstats);
+		bcache_stats_printf(&bstats); 
 #endif
 
 		DBG_ON(COLUMNSORT_VERBOSE,
@@ -1275,6 +1301,10 @@ int column_sort_table_parallel(data_base_t *db, table_t *table, int column, int 
 
 		printf("Step 5: Sorted untransposed column tables in %llu cycles (%llu sec)\n",
 			cycles, secs);
+
+		bcache_stats_read_and_reset(&db->bcache, &bstats);
+		bcache_stats_printf(&bstats); 
+
 #endif
 
 		DBG_ON(COLUMNSORT_VERBOSE, 
@@ -1333,6 +1363,10 @@ int column_sort_table_parallel(data_base_t *db, table_t *table, int column, int 
 
 		printf("Step 6: Shifted column tables in %llu cycles (%llu sec)\n",
 			cycles, secs);
+		
+		bcache_stats_read_and_reset(&db->bcache, &bstats);
+		bcache_stats_printf(&bstats); 
+
 #endif
 
 		DBG_ON(COLUMNSORT_VERBOSE, 
@@ -1371,6 +1405,10 @@ int column_sort_table_parallel(data_base_t *db, table_t *table, int column, int 
 
 		printf("Step 7: Sorted shifted column tables in %llu cycles (%llu sec)\n",
 			cycles, secs);
+
+		bcache_stats_read_and_reset(&db->bcache, &bstats);
+		bcache_stats_printf(&bstats); 
+
 #endif
 		DBG_ON(COLUMNSORT_VERBOSE, 
 			"Step 7: Sorted shifted column tables\n");
@@ -1475,6 +1513,10 @@ int column_sort_table_parallel(data_base_t *db, table_t *table, int column, int 
 
 		printf("Step 8: Unshifted column tables in %llu cycles (%llu sec)\n",
 			cycles, secs);
+
+		bcache_stats_read_and_reset(&db->bcache, &bstats);
+		bcache_stats_printf(&bstats); 
+
 #endif
 		DBG_ON(COLUMNSORT_VERBOSE, 
 			"Step 8: Unshifted column tables\n");
@@ -1522,6 +1564,10 @@ int column_sort_table_parallel(data_base_t *db, table_t *table, int column, int 
 
 		printf("Wrote sorted temporary tables back in %llu cycles (%llu sec)\n",
 			cycles, secs);
+
+		bcache_stats_read_and_reset(&db->bcache, &bstats);
+		bcache_stats_printf(&bstats); 
+
 #endif
 
 		DBG_ON(COLUMNSORT_VERBOSE, 

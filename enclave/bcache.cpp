@@ -41,7 +41,56 @@ void binit(bcache_t *bcache)
 		bcache->head.next->prev = b;
 		bcache->head.next = b;
 	}
+
+	bcache->stats.hits = 0; 
+	bcache->stats.read_misses = 0; 
+	bcache->stats.write_misses = 0; 
+	bcache->stats.write_backs = 0; 
 }
+
+void bcache_stats_read_and_reset(bcache_t *bcache, bcache_stats_t *stats) {
+
+	stats->hits = bcache->stats.hits; 
+	bcache->stats.hits = 0; 
+
+	stats->read_misses = bcache->stats.read_misses; 
+	bcache->stats.read_misses = 0; 
+	
+	stats->write_misses = bcache->stats.write_misses; 
+	bcache->stats.write_misses = 0; 
+
+	stats->write_backs = bcache->stats.write_backs; 
+	bcache->stats.write_backs = 0; 
+
+	return; 
+}; 
+
+void bcache_stats_printf(bcache_stats_t *stats) {
+	DBG("hits:%d, read misses:%d, write misses:%d, write backs:%d\n",
+		stats->hits, stats->read_misses, stats->write_misses, stats->write_backs);
+	return; 
+};
+
+static inline void bcache_stats_hit(bcache_t *bcache) {
+	__sync_fetch_and_add(&bcache->stats.hits, 1); 
+	return; 
+};
+
+static inline void bcache_stats_read_miss(bcache_t *bcache) {
+	__sync_fetch_and_add(&bcache->stats.read_misses, 1); 
+	return; 
+};
+
+static inline void bcache_stats_write_miss(bcache_t *bcache) {
+	__sync_fetch_and_add(&bcache->stats.write_misses, 1); 
+	return; 
+};
+
+static inline void bcache_stats_write_back(bcache_t *bcache) {
+	__sync_fetch_and_add(&bcache->stats.write_backs, 1); 
+	return; 
+};
+
 
 // Look through buffer cache for a block with a specific number
 // If not found, allocate a buffer
@@ -61,11 +110,14 @@ data_block_t *bget(struct table *table, unsigned int blk_num)
 		if(b->table == table && b->blk_num == blk_num){
 			// Atomic increment, relies on GCC builtins
 			__sync_fetch_and_add(&b->refcnt, 1);
+			
 			release(&bcache->lock);
 			acquire(&b->lock);
 
 			DBG_ON(VERBOSE_BCACHE, "blk:%p (flags:%x), num:%d, b->table:%s for table:%s\n", 
-				b, b->flags, blk_num, b->table->name.c_str(), table->name.c_str()); 
+				b, b->flags, blk_num, b->table->name.c_str(), table->name.c_str());
+			
+			bcache_stats_hit(bcache); 
 			return b;
 		}
 	}
@@ -84,6 +136,7 @@ data_block_t *bget(struct table *table, unsigned int blk_num)
 					//acquire(&b->lock);
 					return NULL;
 				}
+				bcache_stats_write_back(bcache);
 			}
 
 			DBG_ON(VERBOSE_BCACHE, "re-using blk:%p (flags:%x), num:%d, b->table:%s for table:%s\n", 
@@ -154,6 +207,7 @@ data_block_t* bread(table_t *table, unsigned int blk_num)
 		return NULL; 
 	
 	if((b->flags & B_VALID) == 0) {
+		bcache_stats_read_miss(&table->db->bcache);
 		DBG_ON(VERBOSE_BCACHE, "read block: %p (data:%p), num:%lu, table:%s\n", 
 			b, b->data, b->blk_num, table->name.c_str()); 
 
