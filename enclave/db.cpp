@@ -995,7 +995,7 @@ int column_sort_table_parallel(data_base_t *db, table_t *table, int column, int 
 				goto cleanup; 
 			}
 
-			DBG("Created tmp table %s, id:%d\n", 
+			DBG_ON(COLUMNSORT_VERBOSE, "Created tmp table %s, id:%d\n", 
             			tmp_tbl_name.c_str(), st_tables[i]->id); 
 		}
 	
@@ -1031,6 +1031,7 @@ int column_sort_table_parallel(data_base_t *db, table_t *table, int column, int 
 			}
 		}
 	
+		DBG_ON(COLUMNSORT_VERBOSE, "Column tables\n");
 	
 #if defined(COLUMNSORT_DBG)
 		printf("Column tables\n");
@@ -1054,13 +1055,12 @@ int column_sort_table_parallel(data_base_t *db, table_t *table, int column, int 
 	}
 
 	if(tid == 0) {
+		DBG_ON(COLUMNSORT_VERBOSE, "Step 1: Sorted column tables\n");
 #if defined(COLUMNSORT_DBG)
-		printf("Step 1: Sorted column tables\n");
 		for (unsigned int i = 0; i < s; i++) {
 			print_table_dbg(s_tables[i], 0, s_tables[i]->num_rows);
 		}
 #endif
-
 	
 		/* Transpose s column tables into s transposed tables  */
 		for (unsigned int i = 0; i < s; i ++) {
@@ -1091,9 +1091,8 @@ int column_sort_table_parallel(data_base_t *db, table_t *table, int column, int 
 			}
 		}
 	
-
+		DBG_ON(COLUMNSORT_VERBOSE, "Step 2: Transposed column tables\n");
 #if defined(COLUMNSORT_DBG)
-		printf("Step 2: Transposed column tables\n");
 		for (unsigned int i = 0; i < s; i++) {
 			print_table_dbg(st_tables[i], 0, st_tables[i]->num_rows);
 		}
@@ -1113,9 +1112,9 @@ int column_sort_table_parallel(data_base_t *db, table_t *table, int column, int 
 	}
 
 	if (tid == 0) {
-
+		DBG_ON(COLUMNSORT_VERBOSE, 
+			"Step 3: Sorted transposed column tables\n");
 #if defined(COLUMNSORT_DBG)
-		printf("Step 3: Sorted transposed column tables\n");
 		for (unsigned int i = 0; i < s; i++) {
 			print_table_dbg(st_tables[i], 0, st_tables[i]->num_rows);
 		}
@@ -1146,9 +1145,9 @@ int column_sort_table_parallel(data_base_t *db, table_t *table, int column, int 
 				row_num ++; 
 			}
 		}
-
+		DBG_ON(COLUMNSORT_VERBOSE,
+			"Step 4: Untransposed column tables\n");
 #if defined(COLUMNSORT_DBG)
-		printf("Step 4: Untransposed column tables\n");
 		for (unsigned int i = 0; i < s; i++) {
 			print_table_dbg(s_tables[i], 0, s_tables[i]->num_rows);
 		}
@@ -1168,8 +1167,10 @@ int column_sort_table_parallel(data_base_t *db, table_t *table, int column, int 
 	}
 
 	if (tid == 0) {
+		DBG_ON(COLUMNSORT_VERBOSE, 
+			"Step 5: Sorted untransposed column tables\n");
+
 #if defined(COLUMNSORT_DBG)
-		printf("Step 5: Sorted untransposed column tables\n");
 		for (unsigned int i = 0; i < s; i++) {
 			print_table_dbg(s_tables[i], 0, s_tables[i]->num_rows);
 		}
@@ -1210,9 +1211,10 @@ int column_sort_table_parallel(data_base_t *db, table_t *table, int column, int 
 				row_num ++;
 			}
 		}
+		DBG_ON(COLUMNSORT_VERBOSE, 
+			"Step 6: Shifted column tables\n");
 
 #if defined(COLUMNSORT_DBG)
-		printf("Step 6: Shifted column tables\n");
 		for (unsigned int i = 0; i < s; i++) {
 			print_table_dbg(st_tables[i], 0, st_tables[i]->num_rows);
 		}
@@ -1233,8 +1235,10 @@ int column_sort_table_parallel(data_base_t *db, table_t *table, int column, int 
 	}
 
 	if (tid == 0) {
+		DBG_ON(COLUMNSORT_VERBOSE, 
+			"Step 7: Sorted shifted column tables\n");
+
 #if defined(COLUMNSORT_DBG)
-		printf("Step 7: Sorted shifted column tables\n");
 		for (unsigned int i = 0; i < s; i++) {
 			print_table_dbg(st_tables[i], 0, st_tables[i]->num_rows);
 		}
@@ -1322,9 +1326,10 @@ int column_sort_table_parallel(data_base_t *db, table_t *table, int column, int 
 				row_num ++;
 			}
 		}
+		DBG_ON(COLUMNSORT_VERBOSE, 
+			"Step 8: Unshifted column tables\n");
 
 #if defined(COLUMNSORT_DBG)
-		printf("Step 8: Unshifted column tables\n");
 		for (unsigned int i = 0; i < s; i++) {
 			print_table_dbg(s_tables[i], 0, s_tables[i]->num_rows);
 		}
@@ -1356,8 +1361,10 @@ int column_sort_table_parallel(data_base_t *db, table_t *table, int column, int 
 			}
 		}
 
+		DBG_ON(COLUMNSORT_VERBOSE, 
+			"Sorted table\n");
+
 #if defined(COLUMNSORT_DBG)
-		printf("Sorted table\n");
 		print_table_dbg(table, 0, table->num_rows);
 #endif
 	} /* tid == 0 */
