@@ -10,6 +10,7 @@
 
 #include "bcache.hpp"
 #include "x86.hpp"
+#include "spinlock.hpp"
 
 #include <cstdlib>
 #include <cstdio>
@@ -918,11 +919,15 @@ int column_sort_pick_params(unsigned long num_records,
 	return 0;
 }
 
+
+barrier_t b1 = {.count = 0, .seen = 0}; 
+barrier_t b2 = {.count = 0, .seen = 0}; 
+
 /* r -- number of rows
    s -- number of columns
 */
 
-int column_sort_table(data_base_t *db, table_t *table, int column) {
+int column_sort_table_parallel(data_base_t *db, table_t *table, int column, int tid, int num_threads) {
 	int ret;
 	std::string tmp_tbl_name;  
 	table_t **s_tables, **st_tables, *tmp_table;
@@ -931,415 +936,484 @@ int column_sort_table(data_base_t *db, table_t *table, int column) {
 	unsigned long shift, unshift;
 	unsigned long r, s; 
 
-	ret = column_sort_pick_params(table->num_rows, table->sc.row_data_size, 
+	if(tid == 0) {
+		ret = column_sort_pick_params(table->num_rows, table->sc.row_data_size, 
 				DATA_BLOCK_SIZE, 
 				(1 << 20) * 80, 
 				&r, &s);
-	if (ret) {
-		ERR("Can't pick r and s for %s\n", table->name.c_str());
-		return -1;  
-	}
+		if (ret) {
+			ERR("Can't pick r and s for %s\n", table->name.c_str());
+			return -1;  
+		}
 
-	if( r % s != 0) {
-		ERR("r (%d) is not divisible by s (%d)\n", r, s);
-		return -1;
-	}
+		if( r % s != 0) {
+			ERR("r (%d) is not divisible by s (%d)\n", r, s);
+			return -1;
+		}
 
-	if ( r < 2*(s - 1)*(s - 1)) {
-		ERR("r (%d) is < 2*(s - 1)^2 (%d), where r=%d, s=%d\n", 
-			r, 2*(s - 1)*(s - 1), r, s);  
-		return -1; 
-	}
+		if ( r < 2*(s - 1)*(s - 1)) {
+			ERR("r (%d) is < 2*(s - 1)^2 (%d), where r=%d, s=%d\n", 
+				r, 2*(s - 1)*(s - 1), r, s);  
+			return -1; 
+		}
  
-	s_tables = (table_t **)malloc(s * sizeof(table_t *)); 
-	if(!s_tables) {
-		ERR("failed to allocate s_tables\n");
-		goto cleanup; 
-	}
-
-	st_tables = (table_t **)malloc(s * sizeof(table_t *)); 
-	if(!st_tables) {
-		ERR("failed to allocate s_tables\n");
-		goto cleanup; 
-	}
-
-	/* Create s temporary column tables */
-	for (int i = 0; i < s; i++) {
-
-		tmp_tbl_name = "s" + std::to_string(i) + ":" + table->name ; 
-
-		ret = create_table(db, tmp_tbl_name, &table->sc, &s_tables[i]);
-		if (ret) {
-			ERR("create table:%d\n", ret);
+		s_tables = (table_t **)malloc(s * sizeof(table_t *)); 
+		if(!s_tables) {
+			ERR("failed to allocate s_tables\n");
 			goto cleanup; 
 		}
 
-		DBG_ON(COLUMNSORT_VERBOSE, "Created tmp table %s, id:%d\n", 
-            		tmp_tbl_name.c_str(), s_tables[i]->id); 
-	}
-
-	/* Create another set of s transposed column tables */
-	for (int i = 0; i < s; i++) {
-
-		tmp_tbl_name = "st" + std::to_string(i) + ":" + table->name ; 
-
-		ret = create_table(db, tmp_tbl_name, &table->sc, &st_tables[i]);
-		if (ret) {
-			ERR("create table:%d\n", ret);
+		st_tables = (table_t **)malloc(s * sizeof(table_t *)); 
+		if(!st_tables) {
+			ERR("failed to allocate s_tables\n");
 			goto cleanup; 
 		}
 
-		DBG("Created tmp table %s, id:%d\n", 
-            		tmp_tbl_name.c_str(), st_tables[i]->id); 
-	}
+		/* Create s temporary column tables */
+		for (int i = 0; i < s; i++) {
+	
+			tmp_tbl_name = "s" + std::to_string(i) + ":" + table->name ; 
 
-	row = (row_t*) malloc(row_size(table));
-	if(!row)
-		goto cleanup;
-
-	//if ( r * s > table->num_rows ) {
-	//	ERR("r (%d) * s (%d) > num_rows (%d)\n", r, s, table->num_rows); 
-	//	goto cleanup; 
-	//}
-
-	row_num = 0; 
-
-	/* Rewrite the table as s column tables  */
-	for (unsigned int i = 0; i < s; i ++) {
-
-		for (unsigned int j = 0; j < r; j ++) {
-
-			// Read old row
-			ret = read_row(table, row_num, row);
-			if(ret) {
-				ERR("failed to read row %d of table %s\n",
-					row_num, table->name.c_str());
-				goto cleanup;
+			ret = create_table(db, tmp_tbl_name, &table->sc, &s_tables[i]);
+			if (ret) {
+				ERR("create table:%d\n", ret);
+				goto cleanup; 
 			}
+	
+			DBG_ON(COLUMNSORT_VERBOSE, "Created tmp table %s, id:%d\n", 
+            			tmp_tbl_name.c_str(), s_tables[i]->id); 
+		}
+
+		/* Create another set of s transposed column tables */
+		for (int i = 0; i < s; i++) {
+	
+			tmp_tbl_name = "st" + std::to_string(i) + ":" + table->name ; 
+
+			ret = create_table(db, tmp_tbl_name, &table->sc, &st_tables[i]);
+			if (ret) {
+				ERR("create table:%d\n", ret);
+				goto cleanup; 
+			}
+
+			DBG("Created tmp table %s, id:%d\n", 
+            			tmp_tbl_name.c_str(), st_tables[i]->id); 
+		}
+	
+
+		row = (row_t*) malloc(row_size(table));
+		if(!row)
+			goto cleanup;
+	
+		row_num = 0; 
+
+		/* Rewrite the table as s column tables  */
+		for (unsigned int i = 0; i < s; i ++) {
+
+			for (unsigned int j = 0; j < r; j ++) {
+
+				// Read old row
+				ret = read_row(table, row_num, row);
+				if(ret) {
+					ERR("failed to read row %d of table %s\n",
+						row_num, table->name.c_str());
+					goto cleanup;
+				}
 
 				
-			/* Add row to the s table */
-			ret = insert_row_dbg(s_tables[i], row);
-			if(ret) {
-				ERR("failed to insert row %d of column table %s\n",
-					row_num, s_tables[i]->name.c_str());
-				goto cleanup;
+				/* Add row to the s table */
+				ret = insert_row_dbg(s_tables[i], row);
+				if(ret) {
+					ERR("failed to insert row %d of column table %s\n",
+						row_num, s_tables[i]->name.c_str());
+					goto cleanup;
+				}
+				row_num ++;
 			}
-			row_num ++;
 		}
-	}
-
+	
 	
 #if defined(COLUMNSORT_DBG)
-	printf("Column tables\n");
-	for (unsigned int i = 0; i < s; i++) {
-		print_table_dbg(s_tables[i], 0, s_tables[i]->num_rows);
-	}
+		printf("Column tables\n");
+		for (unsigned int i = 0; i < s; i++) {
+			print_table_dbg(s_tables[i], 0, s_tables[i]->num_rows);
+		}
 #endif
-
-	for (unsigned int i = 0; i < s; i++) {
-		bitonic_sort_table(db, s_tables[i], column, &tmp_table);
 	}
 
+	/* All threads sort table in parallel */
+	for (unsigned int i = 0; i < s; i++) {
+		barrier_wait(&b1, num_threads);
+		if(tid == 0) 
+			barrier_reset(&b1, num_threads); 
+
+		//bitonic_sort_table(db, s_tables[i], column, &tmp_table);
+		ret = sort_table_parallel(s_tables[i], column, tid, num_threads);
+		barrier_wait(&b2, num_threads); 	
+		if(tid == 0) 
+			barrier_reset(&b2, num_threads); 
+	}
+
+	if(tid == 0) {
 #if defined(COLUMNSORT_DBG)
-	printf("Step 1: Sorted column tables\n");
-	for (unsigned int i = 0; i < s; i++) {
-		print_table_dbg(s_tables[i], 0, s_tables[i]->num_rows);
-	}
+		printf("Step 1: Sorted column tables\n");
+		for (unsigned int i = 0; i < s; i++) {
+			print_table_dbg(s_tables[i], 0, s_tables[i]->num_rows);
+		}
 #endif
 
-	/* Transpose s column tables into s transposed tables  */
-	for (unsigned int i = 0; i < s; i ++) {
+	
+		/* Transpose s column tables into s transposed tables  */
+		for (unsigned int i = 0; i < s; i ++) {
 
-		for (unsigned int j = 0; j < r; j ++) {
+			for (unsigned int j = 0; j < r; j ++) {
 
-			// Read old row
-			ret = read_row(s_tables[i], j, row);
-			if(ret) {
-				ERR("failed to read row %d of table %s\n",
-					j, s_tables[i]->name.c_str());
-				goto cleanup;
-			}
+				// Read old row
+				ret = read_row(s_tables[i], j, row);
+				if(ret) {
+					ERR("failed to read row %d of table %s\n",
+						j, s_tables[i]->name.c_str());
+					goto cleanup;
+				}
 
 				
-			/* Add row to the st table */
-			//DBG_ON(COLUMNSORT_VERBOSE,
-			//	"insert row %d of transposed table #%d (%s)\n", 
-			//	st_tables[j % s]->num_rows, j % s, 
-			//	st_tables[j % s]->name.c_str()); 
+				/* Add row to the st table */
+				//DBG_ON(COLUMNSORT_VERBOSE,
+				//	"insert row %d of transposed table #%d (%s)\n", 
+				//	st_tables[j % s]->num_rows, j % s, 
+				//	st_tables[j % s]->name.c_str()); 
 
-			ret = insert_row_dbg(st_tables[j % s], row);
-			if(ret) {
-				ERR("failed to insert row %d of transposed column table %s\n",
-					j, st_tables[j % s]->name.c_str());
-				goto cleanup;
+				ret = insert_row_dbg(st_tables[j % s], row);
+				if(ret) {
+					ERR("failed to insert row %d of transposed column table %s\n",
+						j, st_tables[j % s]->name.c_str());
+					goto cleanup;
+				}
 			}
 		}
-	}
-
-
-#if defined(COLUMNSORT_DBG)
-	printf("Step 2: Transposed column tables\n");
-	for (unsigned int i = 0; i < s; i++) {
-		print_table_dbg(st_tables[i], 0, st_tables[i]->num_rows);
-	}
-#endif
-
-	for (unsigned int i = 0; i < s; i++) {
-		bitonic_sort_table(db, st_tables[i], column, &tmp_table);
-	}
+	
 
 #if defined(COLUMNSORT_DBG)
-	printf("Step 3: Sorted transposed column tables\n");
-	for (unsigned int i = 0; i < s; i++) {
-		print_table_dbg(st_tables[i], 0, st_tables[i]->num_rows);
-	}
+		printf("Step 2: Transposed column tables\n");
+		for (unsigned int i = 0; i < s; i++) {
+			print_table_dbg(st_tables[i], 0, st_tables[i]->num_rows);
+		}
 #endif
-	row_num = 0; 
+	} /* tid == 0 */
 
-	/* Untranspose st transposed column tables into s tables  */
-	for (unsigned int i = 0; i < r; i ++) {
+	for (unsigned int i = 0; i < s; i++) {
+		//bitonic_sort_table(db, st_tables[i], column, &tmp_table);
+		barrier_wait(&b1, num_threads);
+		if(tid == 0) 
+			barrier_reset(&b1, num_threads); 
 
-		for (unsigned int j = 0; j < s; j ++) {
+		ret = sort_table_parallel(st_tables[i], column, tid, num_threads);
+		barrier_wait(&b2, num_threads); 	
+		if(tid == 0) 
+			barrier_reset(&b2, num_threads); 
+	}
+
+	if (tid == 0) {
+
+#if defined(COLUMNSORT_DBG)
+		printf("Step 3: Sorted transposed column tables\n");
+		for (unsigned int i = 0; i < s; i++) {
+			print_table_dbg(st_tables[i], 0, st_tables[i]->num_rows);
+		}
+#endif
+		row_num = 0; 
+
+		/* Untranspose st transposed column tables into s tables  */
+		for (unsigned int i = 0; i < r; i ++) {
+
+			for (unsigned int j = 0; j < s; j ++) {
+
+				/* Read row from st table */
+				ret = read_row(st_tables[j], i, row);
+				if(ret) {
+					ERR("failed to read row %d of table %s\n",
+						i, st_tables[j]->name.c_str());
+					goto cleanup;
+				}
+
+				
+				/* Add row to the s table */
+				ret = write_row_dbg(s_tables[row_num / r], row, row_num % r);
+				if(ret) {
+					ERR("failed to insert row %d of untransposed column table %s\n",
+						row_num / r, s_tables[i]->name.c_str());
+					goto cleanup;
+				}
+				row_num ++; 
+			}
+		}
+
+#if defined(COLUMNSORT_DBG)
+		printf("Step 4: Untransposed column tables\n");
+		for (unsigned int i = 0; i < s; i++) {
+			print_table_dbg(s_tables[i], 0, s_tables[i]->num_rows);
+		}
+#endif
+	} /* tid == 0 */
+
+	for (unsigned int i = 0; i < s; i++) {
+	//	bitonic_sort_table(db, s_tables[i], column, &tmp_table);
+		barrier_wait(&b1, num_threads);
+		if(tid == 0) 
+			barrier_reset(&b1, num_threads); 
+
+		ret = sort_table_parallel(s_tables[i], column, tid, num_threads);
+		barrier_wait(&b2, num_threads); 	
+		if(tid == 0) 
+			barrier_reset(&b2, num_threads); 
+	}
+
+	if (tid == 0) {
+#if defined(COLUMNSORT_DBG)
+		printf("Step 5: Sorted untransposed column tables\n");
+		for (unsigned int i = 0; i < s; i++) {
+			print_table_dbg(s_tables[i], 0, s_tables[i]->num_rows);
+		}
+#endif
+
+		shift = r / 2 ;
+		row_num = 0;  
+	
+		/* Shift s tables into st tables  */
+		for (unsigned int i = 0; i < s; i ++) {
+
+			for (unsigned int j = 0; j < r; j ++) {
+
+				/* Read row from s table */
+				ret = read_row(s_tables[i], j, row);
+				if(ret) {
+					ERR("failed to read row %d of table %s\n",
+						row_num, s_tables[i]->name.c_str());
+					goto cleanup;
+				}
+
+				/* Add row to the st table */
+				//DBG_ON(COLUMNSORT_VERBOSE,
+				//	"insert row %d of shifted table (%s) at row %d, row_num:%d, shitf:%d\n", 
+				//	j, st_tables[((row_num + shift) / r) % s]->name.c_str(), 
+				//	(row_num + shift) % r, row_num, shift); 
+
+
+				
+				/* Add row to the st table */
+				ret = write_row_dbg(st_tables[((row_num + shift) / r) % s], 
+							row, (row_num + shift) % r);
+				if(ret) {
+					ERR("failed to insert row %d of shifted column table %s\n",
+						row, st_tables[i]->name.c_str());
+					goto cleanup;
+				}
+				row_num ++;
+			}
+		}
+
+#if defined(COLUMNSORT_DBG)
+		printf("Step 6: Shifted column tables\n");
+		for (unsigned int i = 0; i < s; i++) {
+			print_table_dbg(st_tables[i], 0, st_tables[i]->num_rows);
+		}
+#endif
+	} /* tid == 0 */
+
+	for (unsigned int i = 0; i < s; i++) {
+		//bitonic_sort_table(db, st_tables[i], column, &tmp_table);
+		barrier_wait(&b1, num_threads);
+		if(tid == 0) 
+			barrier_reset(&b1, num_threads); 
+
+		ret = sort_table_parallel(st_tables[i], column, tid, num_threads);
+		barrier_wait(&b2, num_threads); 	
+		if(tid == 0) 
+			barrier_reset(&b2, num_threads); 
+
+	}
+
+	if (tid == 0) {
+#if defined(COLUMNSORT_DBG)
+		printf("Step 7: Sorted shifted column tables\n");
+		for (unsigned int i = 0; i < s; i++) {
+			print_table_dbg(st_tables[i], 0, st_tables[i]->num_rows);
+		}
+#endif
+
+		row_num = 0;  
+	
+		/* Unshift st tables into s tables  */
+
+		/* In Shantanu's implementation (no +/-infinity) the first column
+	           is special --- it's sorted so instead of shifting we have to 
+		   splice it: first half of the column stays in it's place, the 
+		   second half (the max elements) go to the last column */
+
+		unshift = r - r / 2; 	
+		for (unsigned int j = 0; j < unshift; j ++) {
 
 			/* Read row from st table */
-			ret = read_row(st_tables[j], i, row);
+			ret = read_row(st_tables[0], j, row);
 			if(ret) {
 				ERR("failed to read row %d of table %s\n",
-					i, st_tables[j]->name.c_str());
+					row_num, st_tables[0]->name.c_str());
 				goto cleanup;
 			}
 
-				
 			/* Add row to the s table */
-			ret = write_row_dbg(s_tables[row_num / r], row, row_num % r);
-			if(ret) {
-				ERR("failed to insert row %d of untransposed column table %s\n",
-					row_num / r, s_tables[i]->name.c_str());
-				goto cleanup;
-			}
-			row_num ++; 
-		}
-	}
-
-#if defined(COLUMNSORT_DBG)
-	printf("Step 4: Untransposed column tables\n");
-	for (unsigned int i = 0; i < s; i++) {
-		print_table_dbg(s_tables[i], 0, s_tables[i]->num_rows);
-	}
-#endif
-
-	for (unsigned int i = 0; i < s; i++) {
-		bitonic_sort_table(db, s_tables[i], column, &tmp_table);
-	}
-
-#if defined(COLUMNSORT_DBG)
-	printf("Step 5: Sorted untransposed column tables\n");
-	for (unsigned int i = 0; i < s; i++) {
-		print_table_dbg(s_tables[i], 0, s_tables[i]->num_rows);
-	}
-#endif
-
-	shift = r / 2 ;
-	row_num = 0;  
-	
-	/* Shift s tables into st tables  */
-	for (unsigned int i = 0; i < s; i ++) {
-
-		for (unsigned int j = 0; j < r; j ++) {
-
-			/* Read row from s table */
-			ret = read_row(s_tables[i], j, row);
-			if(ret) {
-				ERR("failed to read row %d of table %s\n",
-					row_num, s_tables[i]->name.c_str());
-				goto cleanup;
-			}
-
-			/* Add row to the st table */
-			//DBG_ON(COLUMNSORT_VERBOSE,
-			//	"insert row %d of shifted table (%s) at row %d, row_num:%d, shitf:%d\n", 
-			//	j, st_tables[((row_num + shift) / r) % s]->name.c_str(), 
-			//	(row_num + shift) % r, row_num, shift); 
-
-
-				
-			/* Add row to the st table */
-			ret = write_row_dbg(st_tables[((row_num + shift) / r) % s], 
-						row, (row_num + shift) % r);
-			if(ret) {
-				ERR("failed to insert row %d of shifted column table %s\n",
-					row, st_tables[i]->name.c_str());
-				goto cleanup;
-			}
-			row_num ++;
-		}
-	}
-
-#if defined(COLUMNSORT_DBG)
-	printf("Step 6: Shifted column tables\n");
-	for (unsigned int i = 0; i < s; i++) {
-		print_table_dbg(st_tables[i], 0, st_tables[i]->num_rows);
-	}
-#endif
-	for (unsigned int i = 0; i < s; i++) {
-		bitonic_sort_table(db, st_tables[i], column, &tmp_table);
-	}
-
-#if defined(COLUMNSORT_DBG)
-	printf("Step 7: Sorted shifted column tables\n");
-	for (unsigned int i = 0; i < s; i++) {
-		print_table_dbg(st_tables[i], 0, st_tables[i]->num_rows);
-	}
-#endif
-
-	row_num = 0;  
-	
-	/* Unshift st tables into s tables  */
-
-	/* In Shantanu's implementation (no +/-infinity) the first column
-           is special --- it's sorted so instead of shifting we have to 
-           splice it: first half of the column stays in it's place, the 
-	   second half (the max elements) go to the last column */
-
-	unshift = r - r / 2; 	
-	for (unsigned int j = 0; j < unshift; j ++) {
-
-		/* Read row from st table */
-		ret = read_row(st_tables[0], j, row);
-		if(ret) {
-			ERR("failed to read row %d of table %s\n",
-				row_num, st_tables[0]->name.c_str());
-			goto cleanup;
-		}
-
-		/* Add row to the s table */
-		ret = write_row_dbg(s_tables[0], row, j);
-		if(ret) {
-			ERR("failed to insert row %d of unshifted column table %s\n",
-				row, s_tables[0]->name.c_str());
-			goto cleanup;
-		}
-		row_num ++;
-	}
-
-	for (unsigned int j = unshift; j < s; j ++) {
-
-		/* Read row from st table */
-		ret = read_row(st_tables[0], j, row);
-		if(ret) {
-			ERR("failed to read row %d of table %s\n",
-				row_num, st_tables[0]->name.c_str());
-			goto cleanup;
-		}
-
-		/* Add row to the s table */
-		ret = write_row_dbg(s_tables[s - 1], row, j);
-		if(ret) {
-			ERR("failed to insert row %d of unshifted column table %s\n",
-				row, s_tables[s - 1]->name.c_str());
-			goto cleanup;
-		}
-		row_num ++;
-	}
-
-	/* Now shift the rest of the table */
-	for (unsigned int i = 1; i < s; i ++) {
-
-		for (unsigned int j = 0; j < r; j ++) {
-
-			/* Read row from st table */
-			ret = read_row(st_tables[i], j, row);
-			if(ret) {
-				ERR("failed to read row %d of table %s\n",
-					row_num, st_tables[i]->name.c_str());
-				goto cleanup;
-			}
-
-			/* Add row to the st table */
-			DBG_ON(COLUMNSORT_VERBOSE,
-				"insert row %d of unshifted table (%s) at row %d, row_num:%d, shitf:%d\n", 
-				j, s_tables[((row_num + (r * s) - shift) / r) % s]->name.c_str(), 
-				(row_num + (r * s) - shift) % r, row_num, shift); 
-
-
-				
-			/* Add row to the s table */
-			ret = write_row_dbg(s_tables[((row_num + (r * s) - shift) / r) % s], 
-						row, (row_num + (r * s) - shift) % r);
+			ret = write_row_dbg(s_tables[0], row, j);
 			if(ret) {
 				ERR("failed to insert row %d of unshifted column table %s\n",
-					row, s_tables[i]->name.c_str());
+					row, s_tables[0]->name.c_str());
 				goto cleanup;
 			}
 			row_num ++;
 		}
-	}
 
-#if defined(COLUMNSORT_DBG)
-	printf("Step 8: Unshifted column tables\n");
-	for (unsigned int i = 0; i < s; i++) {
-		print_table_dbg(s_tables[i], 0, s_tables[i]->num_rows);
-	}
-#endif
+		for (unsigned int j = unshift; j < s; j ++) {
 
-	row_num = 0;  
-	
-	/* Write sorted table back  */
-	for (unsigned int i = 0; i < s; i ++) {
-
-		for (unsigned int j = 0; j < r; j ++) {
-
-			/* Read row from s table */
-			ret = read_row(s_tables[i], j, row);
+			/* Read row from st table */
+			ret = read_row(st_tables[0], j, row);
 			if(ret) {
 				ERR("failed to read row %d of table %s\n",
-					row_num, s_tables[i]->name.c_str());
+					row_num, st_tables[0]->name.c_str());
 				goto cleanup;
 			}
 
-			/* Add row to the st table */
-			ret = write_row_dbg(table, row, row_num);
+			/* Add row to the s table */
+			ret = write_row_dbg(s_tables[s - 1], row, j);
 			if(ret) {
-				ERR("failed to insert row %d of sorted table %s\n",
-					row_num, table->name.c_str());
+				ERR("failed to insert row %d of unshifted column table %s\n",
+					row, s_tables[s - 1]->name.c_str());
 				goto cleanup;
 			}
 			row_num ++;
 		}
-	}
+
+		/* Now shift the rest of the table */
+		for (unsigned int i = 1; i < s; i ++) {
+
+			for (unsigned int j = 0; j < r; j ++) {
+	
+				/* Read row from st table */
+				ret = read_row(st_tables[i], j, row);
+				if(ret) {
+					ERR("failed to read row %d of table %s\n",
+						row_num, st_tables[i]->name.c_str());
+					goto cleanup;
+				}
+
+				/* Add row to the st table */
+				DBG_ON(COLUMNSORT_VERBOSE,
+					"insert row %d of unshifted table (%s) at row %d, row_num:%d, shitf:%d\n", 
+					j, s_tables[((row_num + (r * s) - shift) / r) % s]->name.c_str(), 
+					(row_num + (r * s) - shift) % r, row_num, shift); 
+	
+
+				
+				/* Add row to the s table */
+				ret = write_row_dbg(s_tables[((row_num + (r * s) - shift) / r) % s], 
+							row, (row_num + (r * s) - shift) % r);
+				if(ret) {
+					ERR("failed to insert row %d of unshifted column table %s\n",
+						row, s_tables[i]->name.c_str());
+					goto cleanup;
+				}
+				row_num ++;
+			}
+		}
 
 #if defined(COLUMNSORT_DBG)
-	printf("Sorted table\n");
-	print_table_dbg(table, 0, table->num_rows);
+		printf("Step 8: Unshifted column tables\n");
+		for (unsigned int i = 0; i < s; i++) {
+			print_table_dbg(s_tables[i], 0, s_tables[i]->num_rows);
+		}
 #endif
+
+		row_num = 0;  
+	
+		/* Write sorted table back  */
+		for (unsigned int i = 0; i < s; i ++) {
+
+			for (unsigned int j = 0; j < r; j ++) {
+
+				/* Read row from s table */
+				ret = read_row(s_tables[i], j, row);
+				if(ret) {
+					ERR("failed to read row %d of table %s\n",
+						row_num, s_tables[i]->name.c_str());
+					goto cleanup;
+				}
+
+				/* Add row to the st table */
+				ret = write_row_dbg(table, row, row_num);
+				if(ret) {
+					ERR("failed to insert row %d of sorted table %s\n",
+						row_num, table->name.c_str());
+					goto cleanup;
+				}
+				row_num ++;
+			}
+		}
+
+#if defined(COLUMNSORT_DBG)
+		printf("Sorted table\n");
+		print_table_dbg(table, 0, table->num_rows);
+#endif
+	} /* tid == 0 */
 
 	ret = 0;
 cleanup: 
 	if (row)
 		free(row); 
 
-	if (s_tables) {
-		for (unsigned int i = 0; i < s; i++) {
-			if (s_tables[i]) {
-				bflush(s_tables[i]);
-				delete_table(db, s_tables[i]); 
+	if (tid == 0) {
+		if (s_tables) {
+			for (unsigned int i = 0; i < s; i++) {
+				if (s_tables[i]) {
+					bflush(s_tables[i]);
+					delete_table(db, s_tables[i]); 
+				}
 			}
-		}
-		free(s_tables);
-	};
+			free(s_tables);
+		};
 
-	if (st_tables) {
-		for (unsigned int i = 0; i < s; i++) {
-			if (st_tables[i]) {
-				bflush(st_tables[i]);
-				delete_table(db, st_tables[i]);
+		if (st_tables) {
+			for (unsigned int i = 0; i < s; i++) {
+				if (st_tables[i]) {
+					bflush(st_tables[i]);
+					delete_table(db, st_tables[i]);
+				}
 			}
-		}
-		free(st_tables);
+			free(st_tables);
+		};
 	};
-		
+	
 	return ret; 
+};
+
+int column_sort_table(data_base_t *db, table_t *table, int column) {
+	
+	return column_sort_table_parallel(db, table, column, 0, 1); 
+}
+
+int ecall_column_sort_table_parallel(int db_id, int table_id, int column, int tid, int num_threads)
+{
+	int ret;
+	data_base_t *db;
+	table_t *table;
+
+	if ((db_id > (MAX_DATABASES - 1)) || !g_dbs[db_id])
+		return -1;
+
+	db = g_dbs[db_id];
+
+	if ((table_id > (MAX_TABLES - 1)) || !db->tables[table_id])
+		return -2;
+
+	table = db->tables[table_id];
+	return column_sort_table_parallel(db, table, column, tid, num_threads); 
+
 };
 
 
@@ -1547,23 +1621,15 @@ int bitonicSplit(table_t *tbl, int start_i, int start_j, int count, int column, 
 }
 
 // XXX: Is there a better way to implement reusable barriers?
-std::atomic_uint stage1, stage2[32], stage3[8];
+//std::atomic_uint stage1, stage2[32], stage3[8];
+barrier_t stage1 = {.count = 0, .seen = 0};
+barrier_t stage2a = {.count = 0, .seen = 0};
+barrier_t stage2b = {.count = 0, .seen = 0};
+barrier_t stage3a = {.count = 0, .seen = 0};
+barrier_t stage3b = {.count = 0, .seen = 0};
 
-int ecall_sort_table_parallel(int db_id, int table_id, int column, int tid, int num_threads)
-{
-	int ret;
-	data_base_t *db;
-	table_t *table;
+int sort_table_parallel(table_t *table, int column, int tid, int num_threads) {
 
-	if ((db_id > (MAX_DATABASES - 1)) || !g_dbs[db_id])
-	return -1;
-
-	db = g_dbs[db_id];
-
-	if ((table_id > (MAX_TABLES - 1)) || !db->tables[table_id])
-		return -2;
-
-	table = db->tables[table_id];
 	auto N = table->num_rows;
 	assert (((N & (N - 1)) == 0));
 	// printf("%s, num_rows %d | tid = %d\n", __func__, table->num_rows, tid);
@@ -1576,8 +1642,13 @@ int ecall_sort_table_parallel(int db_id, int table_id, int column, int tid, int 
 	recBitonicSort(table, tid == 0 ? 0 : (tid * N) / num_threads, (N / num_threads),
 			column, (tid % 2 == 0) ? ASCENDING : DESCENDING, tid);
 
-	stage1.fetch_add(1, std::memory_order_seq_cst);
-	while (stage1 != num_threads) ;
+
+	//stage1.fetch_add(1, std::memory_order_seq_cst);
+	//while (stage1 != num_threads) ;
+
+	barrier_wait(&stage1, num_threads);
+	if (tid == 0)
+		barrier_reset(&stage1, num_threads); 
 
 	// num_stages: Number of stages of processing after stage 1 until num_threads
 	// independent bitonic sequences are split. After that the last stage is to
@@ -1610,9 +1681,17 @@ int ecall_sort_table_parallel(int db_id, int table_id, int column, int tid, int 
 
 			// when we do bitonic split, num_parts is doubled
 			num_parts *= 2;
-			stage2[idx]++;
+			//stage2[idx]++;
 			// barrier
-			while (stage2[idx] != num_threads) ;
+			//while (stage2[idx] != num_threads) ;
+			barrier_wait(&stage2a, num_threads);
+			if (tid == 0)
+				barrier_reset(&stage2a, num_threads); 
+
+			barrier_wait(&stage2b, num_threads);
+			if (tid == 0)
+				barrier_reset(&stage2b, num_threads); 
+
 			++j;
 		} while ((num_parts >> 1) != num_threads);
 
@@ -1621,9 +1700,19 @@ int ecall_sort_table_parallel(int db_id, int table_id, int column, int tid, int 
 #ifndef NDEBUG
 		printf("[%d] return after recursive sort num_parts %d\n", tid, num_parts);
 #endif
-		++stage3[i];
+
+		//++stage3[i];
 		// synchronize all threads
-		while (stage3[i] != num_threads) ;
+		//while (stage3[i] != num_threads) ;
+		barrier_wait(&stage3a, num_threads);
+		if (tid == 0)
+			barrier_reset(&stage3a, num_threads); 
+
+		barrier_wait(&stage3b, num_threads);
+		if (tid == 0)
+			barrier_reset(&stage3b, num_threads); 
+
+
 		// after every round of recursive sort, num_parts will reduce by this factor
 		num_parts >>= (i + 2);
 	}
@@ -1639,9 +1728,27 @@ int ecall_sort_table_parallel(int db_id, int table_id, int column, int tid, int 
 #ifdef CREATE_SORTED_TABLE
 	*sorted_id = s_table->id;
 #endif
-	return ret;
+	return 0;
 }
 
+int ecall_sort_table_parallel(int db_id, int table_id, int column, int tid, int num_threads)
+{
+	int ret;
+	data_base_t *db;
+	table_t *table;
+
+	if ((db_id > (MAX_DATABASES - 1)) || !g_dbs[db_id])
+		return -1;
+
+	db = g_dbs[db_id];
+
+	if ((table_id > (MAX_TABLES - 1)) || !db->tables[table_id])
+		return -2;
+
+	table = db->tables[table_id];
+	return sort_table_parallel(table, column, tid, num_threads); 
+
+};
 /* 
  * 
  * Insecure interfaces... debug only 

@@ -362,12 +362,6 @@ int test_rankings(sgx_enclave_id_t eid) {
 
 }
 
-void bitonic_sorter_fn(sgx_enclave_id_t eid, int db_id, int table_id, int field, int tid, int num_threads)
-{
-	int ret;
-	ecall_sort_table_parallel(eid, &ret, db_id, table_id, field, tid, num_threads);
-}
-
 int test_project_schema(sgx_enclave_id_t eid) {
     int ret;
     ecall_test_project_schema(eid, &ret);
@@ -382,6 +376,13 @@ int test_project_row(sgx_enclave_id_t eid) {
     int ret;
     ecall_test_project_row(eid, &ret);
 }
+
+void bitonic_sorter_fn(sgx_enclave_id_t eid, int db_id, int table_id, int field, int tid, int num_threads)
+{
+	int ret;
+	ecall_sort_table_parallel(eid, &ret, db_id, table_id, field, tid, num_threads);
+}
+
 
 std::vector<std::thread*> threads;
 int num_threads = 8;
@@ -479,6 +480,30 @@ int test_bitonic_sort(sgx_enclave_id_t eid)
 	return 0;
 }
 
+
+void column_sort_fn(sgx_enclave_id_t eid, int db_id, int table_id, int field, int tid, int num_threads)
+{
+	int ret;
+	ecall_column_sort_table_parallel(eid, &ret, db_id, table_id, field, tid, num_threads);
+}
+
+
+void column_sort_table_parallel(sgx_enclave_id_t eid, int db_id, int table_id, int field, int num_threads)
+{
+
+	std::vector<std::thread*> threads;
+	assert ((num_threads & (num_threads - 1)) == 0);
+
+	for (auto i = 0u; i < num_threads; i++)
+		threads.push_back(new thread(column_sort_fn, eid, db_id, table_id, field, i, num_threads));
+
+	for (auto &t : threads)
+		t->join();
+
+	return;
+}
+
+
 int test_column_sort(sgx_enclave_id_t eid)
 {
 	schema_t sc;
@@ -562,3 +587,5 @@ int test_column_sort(sgx_enclave_id_t eid)
 
 	return 0;
 }
+
+

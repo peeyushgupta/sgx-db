@@ -87,6 +87,27 @@ int holding(struct spinlock *lock)
 	return lock->locked && lock->cpu == mycpu();
 }
 
-#endif
+#endif /* DEBUG_SPINLOCKS */
+void barrier_init(volatile barrier_t *b) {
+	b->count = 0; 
+	b->seen = 0; 
+	return;
+}
+
+void barrier_wait(volatile barrier_t *b, unsigned int num_threads) {
+	__sync_fetch_and_add(&b->count, 1);
+	while (b->count != num_threads)
+		;
+	__sync_fetch_and_add(&b->seen, 1); 
+	return;
+}
+
+void barrier_reset(volatile barrier_t *b, unsigned int num_threads) {
+	while (b->seen != num_threads)
+		;
+	b->count = 0; 
+	b->seen = 0; 
+	return;
+}
 
 
