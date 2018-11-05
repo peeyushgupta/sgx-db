@@ -1634,22 +1634,35 @@ int ecall_column_sort_table_parallel(int db_id, int table_id, int column, int ti
 
 
 /// Bitonic sort functions ////
+//
+row_t **g_row_i, **g_row_j, **g_row_tmp;
+//#define LOCAL_ALLOC
+#define STACK_ALLOC
+
 /** INLINE procedure exchange() : pair swap **/
-inline int exchange(table_t *tbl, int i, int j, row_t *row_i, row_t *row_j) {
+inline int exchange(table_t *tbl, int i, int j, row_t *row_i, row_t *row_j, int tid) {
   row_t *row_tmp;
+#ifdef LOCAL_ALLOC
 
   row_tmp = (row_t*) malloc(row_size(tbl));
 
   if(!row_tmp)
     return -4;
+#elif defined(STACK_ALLOC)
+  row_t row_tmp_stack;
+  row_tmp = &row_tmp_stack;
+#else
+  row_tmp = g_row_tmp[tid];
+#endif
 
   memcpy(row_tmp, row_i, row_size(tbl)); 
 
   write_row_dbg(tbl, row_j, i);
   write_row_dbg(tbl, row_tmp, j);
 
+#ifdef LOCAL_ALLOC
   free(row_tmp);
-
+#endif
   return 0;
 }
 
@@ -1696,10 +1709,11 @@ bool compare_rows(schema_t *sc, int column, row_t *row_l, row_t *row_r) {
    or DESCENDING; if (a[i] > a[j]) agrees with the direction, 
    then a[i] and a[j] are interchanged.
 **/
-int compare(table_t *tbl, int column, int i, int j, int dir) {
-	row_t *row_i, *row_j;
+int compare(table_t *tbl, int column, int i, int j, int dir, int tid) {
 	int val_i, val_j;
+	row_t *row_i, *row_j;
 
+#ifdef LOCAL_ALLOC
 	row_i = (row_t*) malloc(row_size(tbl));
 	if(!row_i)
 		return -5;
@@ -1707,16 +1721,26 @@ int compare(table_t *tbl, int column, int i, int j, int dir) {
 	row_j = (row_t*) malloc(row_size(tbl));
 	if(!row_j)
 		return -6;
+#elif defined(STACK_ALLOC)
+	row_t row_i_stack, row_j_stack;
+	row_i = &row_i_stack;
+	row_j = &row_j_stack;
+#else
+	row_i = g_row_i[tid];
+	row_j = g_row_j[tid];
+#endif
 
 	read_row(tbl, i, row_i);
 	read_row(tbl, j, row_j);
 
 	if (dir == compare_rows(&tbl->sc, column, row_i, row_j)) {
-		exchange(tbl, i, j, row_i, row_j);
+		exchange(tbl, i, j, row_i, row_j, tid);
 	}
 
+#ifdef LOCAL_ALLOC
 	free(row_i);
 	free(row_j);
+#endif
 	return 0;
 }
 
@@ -1728,14 +1752,14 @@ int compare(table_t *tbl, int column, int i, int j, int dir) {
    The sequence to be sorted starts at index position lo,
    the parameter cbt is the number of elements to be sorted. 
  **/
-void bitonicMerge(table_t *tbl, int lo, int cnt, int column, int dir) {
+void bitonicMerge(table_t *tbl, int lo, int cnt, int column, int dir, int tid) {
   if (cnt>1) {
     int k=cnt/2;
     int i;
     for (i=lo; i<lo+k; i++)
-      compare(tbl, column, i, i+k, dir);
-    bitonicMerge(tbl, lo, k, column, dir);
-    bitonicMerge(tbl, lo+k, k, column, dir);
+      compare(tbl, column, i, i+k, dir, tid);
+    bitonicMerge(tbl, lo, k, column, dir, tid);
+    bitonicMerge(tbl, lo+k, k, column, dir, tid);
   }
 }
 
@@ -1751,7 +1775,7 @@ void recBitonicSort(table_t *tbl, int lo, int cnt, int column, int dir, int tid)
     int k=cnt/2;
     recBitonicSort(tbl, lo, k, column, ASCENDING, tid);
     recBitonicSort(tbl, lo+k, k, column, DESCENDING, tid);
-    bitonicMerge(tbl, lo, cnt, column, dir);
+    bitonicMerge(tbl, lo, cnt, column, dir, tid);
   }
 }
 
@@ -1807,12 +1831,12 @@ int ecall_sort_table(int db_id, int table_id, int field, int *sorted_id) {
 
 int print_table_dbg(table_t *table, int start, int end);
 
-int bitonicSplit(table_t *tbl, int start_i, int start_j, int count, int column, int dir)
+int bitonicSplit(table_t *tbl, int start_i, int start_j, int count, int column, int dir, int tid)
 {
 	for (int i = start_i, j = start_j; i < start_i + count; i++, j++) {
 		row_t *row_i, *row_j;
 		int val_i, val_j;
-
+#ifdef LOCAL_ALLOC
 		row_i = (row_t*) malloc(row_size(tbl));
 		if(!row_i)
 			return -5;
@@ -1821,15 +1845,23 @@ int bitonicSplit(table_t *tbl, int start_i, int start_j, int count, int column, 
 
 		if(!row_j)
 			return -6;
-
+#elif defined(STACK_ALLOC)
+		row_t row_i_stack, row_j_stack;
+		row_i = &row_i_stack;
+		row_j = &row_j_stack;
+#else
+		row_i = g_row_i[tid];
+		row_j = g_row_j[tid];
+#endif
 		read_row(tbl, i, row_i);
 		read_row(tbl, j, row_j);
 
 		if(dir == compare_rows(&tbl->sc, column, row_i, row_j))
-			exchange(tbl, i,j, row_i, row_j);
-
+			exchange(tbl, i,j, row_i, row_j, tid);
+#ifdef LOCAL_ALLOC
 		free(row_i);
 		free(row_j);
+#endif
 	}
 	return 0;
 }
@@ -1891,7 +1923,7 @@ int sort_table_parallel(table_t *table, int column, int tid, int num_threads) {
 				"[%d] i = %d performing split si %d | sj %d | count %d | num_parts %d | dir %d\n",
 				tid, i, si, sj, segment_length, num_parts, dir);
 #endif
-			bitonicSplit(table, si, sj, segment_length, column, dir);
+			bitonicSplit(table, si, sj, segment_length, column, dir, tid);
 
 			// when we do bitonic split, num_parts is doubled
 			num_parts *= 2;
@@ -1960,8 +1992,20 @@ int ecall_sort_table_parallel(int db_id, int table_id, int column, int tid, int 
 		return -2;
 
 	table = db->tables[table_id];
-	return sort_table_parallel(table, column, tid, num_threads); 
 
+	g_row_i = (row_t**) malloc(sizeof(row_t*) * num_threads);
+	g_row_j = (row_t**) malloc(sizeof(row_t*) * num_threads);
+	g_row_tmp = (row_t**) malloc(sizeof(row_t*) * num_threads);
+
+	for (auto i = 0u; i < num_threads; i++) {
+		g_row_i[i] = (row_t*) malloc(row_size(table));
+		g_row_j[i] = (row_t*) malloc(row_size(table));
+		g_row_tmp[i] = (row_t*) malloc(row_size(table));
+		if(!g_row_i[i] || !g_row_j[i] || !g_row_tmp[i])
+			printf("%s, alloc failed\n");
+	}
+
+	return sort_table_parallel(table, column, tid, num_threads);
 };
 /* 
  * 
