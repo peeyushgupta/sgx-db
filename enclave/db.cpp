@@ -542,6 +542,72 @@ int join_schema(schema_t *sc, schema_t *left, schema_t *right) {
 	return 0;
 }
 
+/* Pin a row in memory  */
+int get_row(table_t *table, unsigned int row_num, data_block_t **block, row_t **row) {
+
+	unsigned long dblk_num;
+	unsigned long row_off, rows_per_blk; 
+	data_block_t *b;
+
+	/* Make a fake row if it's outside of the table
+           assuming it's padding */
+	if(row_num >= table->num_rows) {
+		row_t fake_row; 
+		fake_row.header.fake = true; 
+		write_row_dbg(table, &fake_row, row_num); 
+	} 
+
+	rows_per_blk = DATA_BLOCK_SIZE / row_size(table); 
+	dblk_num = row_num / rows_per_blk;
+
+	/* Offset of the row within the data block in bytes */
+	row_off = (row_num - dblk_num * rows_per_blk) * row_size(table); 
+	
+        b = bread(table, dblk_num);
+	 	
+	*row = (row_t*) ((char*)b->data + row_off); 
+	*block = b; 
+	return 0; 
+}
+
+int put_row(table_t *table, data_block_t *b, unsigned int row_num) {
+	unsigned long dblk_num;
+	unsigned long row_off, rows_per_blk; 
+	unsigned int old_num_rows, tmp_num_rows; 
+
+	do {
+		tmp_num_rows = table->num_rows;
+		old_num_rows = tmp_num_rows;  
+		if(row_num >= tmp_num_rows) {
+			old_num_rows = xchg(&table->num_rows, (row_num - 1)); 
+		
+		}
+	} while (old_num_rows != tmp_num_rows);  
+
+	brelse(b);
+	return 0; 
+}
+
+int put_row_dirty(table_t *table, data_block_t *b, unsigned int row_num) {
+	unsigned long dblk_num;
+	unsigned long row_off, rows_per_blk; 
+	unsigned int old_num_rows, tmp_num_rows; 
+
+	do {
+		tmp_num_rows = table->num_rows;
+		old_num_rows = tmp_num_rows;  
+		if(row_num >= tmp_num_rows) {
+			old_num_rows = xchg(&table->num_rows, (row_num - 1)); 
+		
+		}
+	} while (old_num_rows != tmp_num_rows);  
+
+	bwrite(b);
+	brelse(b);
+	return 0; 
+}
+
+
 /* Read one row. */
 int read_row(table_t *table, unsigned int row_num, row_t *row) {
 
@@ -1657,8 +1723,11 @@ inline int exchange(table_t *tbl, int i, int j, row_t *row_i, row_t *row_j, int 
 
   memcpy(row_tmp, row_i, row_size(tbl)); 
 
+#if defined(PIN_ROW)
+#else
   write_row_dbg(tbl, row_j, i);
   write_row_dbg(tbl, row_tmp, j);
+#endif
 
 #ifdef LOCAL_ALLOC
   free(row_tmp);
@@ -1730,12 +1799,22 @@ int compare(table_t *tbl, int column, int i, int j, int dir, int tid) {
 	row_j = g_row_j[tid];
 #endif
 
+#if defined(PIN_ROWS)
+	data_block_t *b_i, *b_j; 
+	get_row(tbl, i, &b_i, &row_i);
+	get_row(tbl, j, &b_j, &row_j);
+#else
 	read_row(tbl, i, row_i);
 	read_row(tbl, j, row_j);
-
+#endif
 	if (dir == compare_rows(&tbl->sc, column, row_i, row_j)) {
 		exchange(tbl, i, j, row_i, row_j, tid);
 	}
+
+#if defined(PIN_ROWS)
+	put_row_dirty(tbl, b_i, i); 
+	put_row_dirty(tbl, b_j, j); 
+#endif
 
 #ifdef LOCAL_ALLOC
 	free(row_i);
@@ -1853,11 +1932,25 @@ int bitonicSplit(table_t *tbl, int start_i, int start_j, int count, int column, 
 		row_i = g_row_i[tid];
 		row_j = g_row_j[tid];
 #endif
+
+#if defined(PIN_ROWS)
+		data_block_t *b_i, *b_j; 
+		get_row(tbl, i, &b_i, &row_i);
+		get_row(tbl, j, &b_j, &row_j);
+#else
 		read_row(tbl, i, row_i);
 		read_row(tbl, j, row_j);
+#endif
 
 		if(dir == compare_rows(&tbl->sc, column, row_i, row_j))
 			exchange(tbl, i,j, row_i, row_j, tid);
+
+#if defined(PIN_ROWS)
+		put_row_dirty(tbl, b_i, i); 
+		put_row_dirty(tbl, b_j, j); 
+#endif
+
+
 #ifdef LOCAL_ALLOC
 		free(row_i);
 		free(row_j);
@@ -2012,6 +2105,7 @@ int ecall_sort_table_parallel(int db_id, int table_id, int column, int tid, int 
  * Insecure interfaces... debug only 
  *
  */
+
 
 int write_row_dbg(table_t *table, row_t *row, unsigned int row_num) {
 	unsigned long dblk_num;
