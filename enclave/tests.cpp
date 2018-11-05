@@ -540,4 +540,26 @@ int ecall_test_project_row()
     test_project_row();
 }
 
+template <typename T>
+void obli_cswap_t(T *src, T *dst, bool cond);
 
+void ecall_obli_swap_tests() {
+	uint64_t a64 = 0xabcdabcdefefefef, b64 = 0x1111222233334444;
+	uint32_t a32 = 0xdeadbeef, b32 = 0x1234abcd;
+	uint16_t a16 = 0x8888, b16 = 0xbade;
+	uint8_t a8 = 0xab, b8 = 0xed;
+
+	obli_cswap_t(&a64, &b64, true);
+	assert(a64 == 0x1111222233334444);
+
+	obli_cswap_t(&a32, &b32, true);
+	assert(a32 == 0x1234abcd);
+
+	obli_cswap_t(&a16, &b16, true);
+	assert(a16 == 0xbade);
+
+	obli_cswap_t(&a8, &b8, true);
+	assert(a8 == 0xed);
+
+	return;
+}
