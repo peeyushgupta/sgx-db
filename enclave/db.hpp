@@ -79,6 +79,7 @@ typedef struct table {
 					 for bulk insertion) */
 	unsigned long num_blks;  /* Number of blocks allocated */
 	int fd;                       /* File descriptor backing up the table data */
+	data_block_t **pinned_blocks; 
 	struct data_base *db; 
 } table_t;
 

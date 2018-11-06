@@ -387,7 +387,8 @@ int create_table(data_base_t *db, std::string &name, schema_t *schema, table_t *
 	table->num_rows = 0; 
 	table->num_blks = 0; 
 	table->sc = *schema;
-	table->db = db; 	
+	table->db = db; 
+	table->pinned_blocks = NULL; 	
 
 	/* Call outside of enclave to open a file for the table */
 	sgx_ret = ocall_open_file(&fd, name.c_str());
@@ -636,6 +637,78 @@ int read_row(table_t *table, unsigned int row_num, row_t *row) {
 	brelse(b);
 	return 0; 
 }
+
+/* Pin table in buffer cache  */
+int pin_table(table_t *table) {
+
+	unsigned long blk_num;
+	unsigned long rows_per_blk, number_of_blks; 
+	data_block_t *b;
+
+	rows_per_blk = DATA_BLOCK_SIZE / row_size(table); 
+	number_of_blks = table->num_rows / rows_per_blk; 
+
+	table->pinned_blocks = (data_block_t **) malloc(number_of_blks*sizeof(data_block_t*)); 
+
+	for(int row_num = 0, blk_num = 0; 
+		row_num < table->num_rows; 
+		row_num += rows_per_blk, blk_num++) 
+	{ 
+        	b = bread(table, blk_num);
+		table->pinned_blocks[blk_num] = b; 
+	} 	
+	return 0; 
+}
+
+/* Unpin table in buffer cache  */
+int unpin_table_dirty(table_t *table) {
+
+	unsigned long blk_num;
+	unsigned long rows_per_blk; 
+	data_block_t *b;
+
+	rows_per_blk = DATA_BLOCK_SIZE / row_size(table); 
+
+	for(int row_num = 0, blk_num = 0; 
+		row_num < table->num_rows; 
+		row_num += rows_per_blk, blk_num++) 
+	{ 
+		bwrite(table->pinned_blocks[blk_num]); 
+		brelse(table->pinned_blocks[blk_num]); 
+	} 
+	
+	if (table->pinned_blocks) {
+		free(table->pinned_blocks);
+		table->pinned_blocks = NULL;  
+	}
+	return 0; 
+}
+
+int get_pinned_row(table_t *table, unsigned int row_num, data_block_t **block,  row_t **row) {
+
+	unsigned long dblk_num;
+	unsigned long row_off, rows_per_blk; 
+	data_block_t *b;
+
+	/* Make a fake row if it's outside of the table
+           assuming it's padding */
+	if(row_num >= table->num_rows) {
+		return -1; 
+	} 
+
+	rows_per_blk = DATA_BLOCK_SIZE / row_size(table); 
+	dblk_num = row_num / rows_per_blk;
+
+	
+	/* Offset of the row within the data block in bytes */
+	row_off = (row_num - dblk_num * rows_per_blk) * row_size(table); 
+	
+        b = table->pinned_blocks[dblk_num]; 
+	*block = b;  	
+	*row = (row_t*) ((char*)b->data + row_off); 
+	return 0; 
+}
+
 
 int join_rows(row_t *join_row, unsigned int join_row_data_size, row_t * row_left, unsigned int row_left_data_size, row_t * row_right, unsigned int row_right_data_size) {
 
@@ -1166,6 +1239,11 @@ int column_sort_table_parallel(data_base_t *db, table_t *table, int column, int 
 
 	/* All threads sort table in parallel */
 	for (unsigned int i = 0; i < s; i++) {
+#if defined(PIN_TABLE)
+		if(tid == 0) {
+			pin_table(s_tables[i]); 
+		}
+#endif
 		barrier_wait(&b1, num_threads);
 		if(tid == 0) 
 			barrier_reset(&b1, num_threads); 
@@ -1173,8 +1251,12 @@ int column_sort_table_parallel(data_base_t *db, table_t *table, int column, int 
 		//bitonic_sort_table(db, s_tables[i], column, &tmp_table);
 		ret = sort_table_parallel(s_tables[i], column, tid, num_threads);
 		barrier_wait(&b2, num_threads); 	
-		if(tid == 0) 
+		if(tid == 0) {
 			barrier_reset(&b2, num_threads); 
+#if defined(PIN_TABLE)
+			unpin_table_dirty(s_tables[i]); 
+#endif
+		}
 	}
 
 	if(tid == 0) {
@@ -1257,14 +1339,23 @@ int column_sort_table_parallel(data_base_t *db, table_t *table, int column, int 
 
 	for (unsigned int i = 0; i < s; i++) {
 		//bitonic_sort_table(db, st_tables[i], column, &tmp_table);
+#if defined(PIN_TABLE)
+		if(tid == 0) {
+			pin_table(st_tables[i]); 
+		}
+#endif
 		barrier_wait(&b1, num_threads);
 		if(tid == 0) 
 			barrier_reset(&b1, num_threads); 
 
 		ret = sort_table_parallel(st_tables[i], column, tid, num_threads);
 		barrier_wait(&b2, num_threads); 	
-		if(tid == 0) 
+		if(tid == 0) { 
 			barrier_reset(&b2, num_threads); 
+#if defined(PIN_TABLE)
+			unpin_table_dirty(st_tables[i]);
+#endif
+		}
 	}
 
 	if (tid == 0) {
@@ -1346,14 +1437,23 @@ int column_sort_table_parallel(data_base_t *db, table_t *table, int column, int 
 
 	for (unsigned int i = 0; i < s; i++) {
 	//	bitonic_sort_table(db, s_tables[i], column, &tmp_table);
+#if defined(PIN_TABLE)
+		if(tid == 0) {
+			pin_table(s_tables[i]); 
+		}
+#endif
 		barrier_wait(&b1, num_threads);
 		if(tid == 0) 
 			barrier_reset(&b1, num_threads); 
 
 		ret = sort_table_parallel(s_tables[i], column, tid, num_threads);
 		barrier_wait(&b2, num_threads); 	
-		if(tid == 0) 
+		if(tid == 0) {
 			barrier_reset(&b2, num_threads); 
+#if defined(PIN_TABLE)
+			unpin_table_dirty(s_tables[i]); 
+#endif
+		}
 	}
 
 	if (tid == 0) {
@@ -1449,14 +1549,23 @@ int column_sort_table_parallel(data_base_t *db, table_t *table, int column, int 
 
 	for (unsigned int i = 0; i < s; i++) {
 		//bitonic_sort_table(db, st_tables[i], column, &tmp_table);
+#if defined(PIN_TABLE)
+		if(tid == 0) {
+			pin_table(st_tables[i]); 
+		}
+#endif
 		barrier_wait(&b1, num_threads);
 		if(tid == 0) 
 			barrier_reset(&b1, num_threads); 
 
 		ret = sort_table_parallel(st_tables[i], column, tid, num_threads);
 		barrier_wait(&b2, num_threads); 	
-		if(tid == 0) 
+		if(tid == 0) {
 			barrier_reset(&b2, num_threads); 
+#if defined(PIN_TABLE)
+			unpin_table_dirty(st_tables[i]);
+#endif
+		}
 
 	}
 
@@ -1725,8 +1834,10 @@ inline int exchange(table_t *tbl, int i, int j, row_t *row_i, row_t *row_j, int 
 
 #if defined(PIN_ROW)
 #else
-  write_row_dbg(tbl, row_j, i);
-  write_row_dbg(tbl, row_tmp, j);
+  if(!tbl->pinned_blocks) {
+    write_row_dbg(tbl, row_j, i);
+    write_row_dbg(tbl, row_tmp, j);
+  }
 #endif
 
 #ifdef LOCAL_ALLOC
@@ -1778,7 +1889,7 @@ bool compare_rows(schema_t *sc, int column, row_t *row_l, row_t *row_r) {
    or DESCENDING; if (a[i] > a[j]) agrees with the direction, 
    then a[i] and a[j] are interchanged.
 **/
-int compare(table_t *tbl, int column, int i, int j, int dir, int tid) {
+int compare_and_exchange(table_t *tbl, int column, int i, int j, int dir, int tid) {
 	int val_i, val_j;
 	row_t *row_i, *row_j;
 
@@ -1803,9 +1914,15 @@ int compare(table_t *tbl, int column, int i, int j, int dir, int tid) {
 	data_block_t *b_i, *b_j; 
 	get_row(tbl, i, &b_i, &row_i);
 	get_row(tbl, j, &b_j, &row_j);
-#else
-	read_row(tbl, i, row_i);
-	read_row(tbl, j, row_j);
+#else 
+	if(tbl->pinned_blocks) {
+		data_block_t *b_i, *b_j; 
+		get_pinned_row(tbl, i, &b_i, &row_i); 
+		get_pinned_row(tbl, j, &b_j, &row_j);
+	} else {
+		read_row(tbl, i, row_i);
+		read_row(tbl, j, row_j);
+	}
 #endif
 	if (dir == compare_rows(&tbl->sc, column, row_i, row_j)) {
 		exchange(tbl, i, j, row_i, row_j, tid);
@@ -1836,7 +1953,7 @@ void bitonicMerge(table_t *tbl, int lo, int cnt, int column, int dir, int tid) {
     int k=cnt/2;
     int i;
     for (i=lo; i<lo+k; i++)
-      compare(tbl, column, i, i+k, dir, tid);
+      compare_and_exchange(tbl, column, i, i+k, dir, tid);
     bitonicMerge(tbl, lo, k, column, dir, tid);
     bitonicMerge(tbl, lo+k, k, column, dir, tid);
   }
@@ -1938,8 +2055,14 @@ int bitonicSplit(table_t *tbl, int start_i, int start_j, int count, int column, 
 		get_row(tbl, i, &b_i, &row_i);
 		get_row(tbl, j, &b_j, &row_j);
 #else
-		read_row(tbl, i, row_i);
-		read_row(tbl, j, row_j);
+		if(tbl->pinned_blocks) {
+			data_block_t *b_i, *b_j; 
+			get_pinned_row(tbl, i, &b_i, &row_i); 
+			get_pinned_row(tbl, j, &b_j, &row_j);
+		} else {
+			read_row(tbl, i, row_i);
+			read_row(tbl, j, row_j);
+		}
 #endif
 
 		if(dir == compare_rows(&tbl->sc, column, row_i, row_j))
