@@ -646,13 +646,11 @@ int pin_table(table_t *table) {
 	data_block_t *b;
 
 	rows_per_blk = DATA_BLOCK_SIZE / row_size(table); 
-	number_of_blks = table->num_rows / rows_per_blk; 
+	number_of_blks = table->num_rows / rows_per_blk + 1; 
 
 	table->pinned_blocks = (data_block_t **) malloc(number_of_blks*sizeof(data_block_t*)); 
 
-	for(int row_num = 0, blk_num = 0; 
-		row_num < table->num_rows; 
-		row_num += rows_per_blk, blk_num++) 
+	for(blk_num = 0; blk_num*rows_per_blk < table->num_rows; blk_num++) 
 	{ 
         	b = bread(table, blk_num);
 		table->pinned_blocks[blk_num] = b; 
@@ -669,9 +667,7 @@ int unpin_table_dirty(table_t *table) {
 
 	rows_per_blk = DATA_BLOCK_SIZE / row_size(table); 
 
-	for(int row_num = 0, blk_num = 0; 
-		row_num < table->num_rows; 
-		row_num += rows_per_blk, blk_num++) 
+	for(blk_num = 0; blk_num*rows_per_blk < table->num_rows; blk_num++) 
 	{ 
 		bwrite(table->pinned_blocks[blk_num]); 
 		brelse(table->pinned_blocks[blk_num]); 
