@@ -1830,7 +1830,10 @@ inline int exchange(table_t *tbl, int i, int j, row_t *row_i, row_t *row_j, int 
 
 #if defined(PIN_ROW)
 #else
-  if(!tbl->pinned_blocks) {
+  if(tbl->pinned_blocks) {
+    memcpy(row_i, row_j, row_size(tbl)); 
+    memcpy(row_j, row_tmp, row_size(tbl)); 
+  } else {
     write_row_dbg(tbl, row_j, i);
     write_row_dbg(tbl, row_tmp, j);
   }
