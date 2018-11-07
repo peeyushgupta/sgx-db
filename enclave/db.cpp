@@ -677,7 +677,7 @@ int unpin_table_dirty(table_t *table) {
 	return 0; 
 }
 
-int get_pinned_row(table_t *table, unsigned int row_num, data_block_t **block,  row_t **row) {
+static inline int get_pinned_row(table_t *table, unsigned int row_num, data_block_t **block,  row_t **row) {
 
 	unsigned long dblk_num;
 	unsigned long row_off; 
@@ -685,16 +685,17 @@ int get_pinned_row(table_t *table, unsigned int row_num, data_block_t **block,  
 
 	/* Make a fake row if it's outside of the table
            assuming it's padding */
-	if(row_num >= table->num_rows) {
-		return -1; 
-	} 
+	//if(row_num >= table->num_rows) {
+	//	return -1; 
+	//} 
 
 	dblk_num = row_num / table->rows_per_blk;
 
 	
 	/* Offset of the row within the data block in bytes */
 	row_off = (row_num - dblk_num * table->rows_per_blk) * row_size(table); 
-	
+	//row_off = (row_num % table->rows_per_blk) * row_size(table); 
+
         b = table->pinned_blocks[dblk_num]; 
 	*block = b;  	
 	*row = (row_t*) ((char*)b->data + row_off); 
@@ -1020,7 +1021,9 @@ int column_sort_pick_params(unsigned long num_records,
 		
  			DBG_ON(COLUMNSORT_VERBOSE_L2, 
 				"trying r=%d and s=%d\n", r, s);
-
+			if (s == 0)
+				continue; 
+	
 			if( r % s != 0) {
 				DBG_ON(COLUMNSORT_VERBOSE_L2, 
 				"r (%d) is not divisible by s (%d)\n", r, s);
@@ -2294,7 +2297,7 @@ int ecall_insert_row_dbg(int db_id, int table_id, void *row_data) {
 	int ret; 
 
 	if ((db_id > (MAX_DATABASES - 1)) || !g_dbs[db_id] 
-		|| !row )
+		|| !row_data )
 		return -1; 
 
 	db = g_dbs[db_id]; 

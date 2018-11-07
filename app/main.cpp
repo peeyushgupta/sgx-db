@@ -27,7 +27,6 @@ int main(){
     	}
 
 	DBG("Created enclave... starting DB tests\n");
-
 #if defined(COLUMNSORT_TESTS)
 	test_spinlock_inc(eid, 10000);
 #endif
@@ -47,9 +46,9 @@ int main(){
 	test_column_sort(eid);
 
 	test_bitonic_sort(eid);
-
+#if 1
 	test_rankings(eid);
-
+#endif	
 	/* Destroy the enclave */
 	sgx_destroy_enclave(eid);
  

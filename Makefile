@@ -5,6 +5,7 @@ OBJCOPY = $(TOOLPREFIX)objcopy
 OBJDUMP = $(TOOLPREFIX)objdump
 
 CFLAGS :=-std=c++11 -Wall -g -D_GNU_SOURCE -pthread -lm -fno-pic -O2 
+CFLAGS +=-lprofiler
 CFLAGS +=-fsanitize=address
 SGX_COMMON_CFLAGS +=-DVERBOSE
 SGX_COMMON_CFLAGS +=-DNDEBUG
@@ -17,6 +18,7 @@ SGX_COMMON_CFLAGS +=-DREPORT_COLUMNSORT_STATS
 #SGX_COMMON_CFLAGS +=-DREPORT_IO_STATS
 #SGX_COMMON_CFLAGS +=-DPIN_ROWS
 SGX_COMMON_CFLAGS +=-DPIN_TABLE
+#SGX_COMMON_CFLAGS +=-lprofiler
 
 
 
@@ -83,7 +85,7 @@ endif
 endif
 
 ifeq ($(SGX_DEBUG), 1)
-        SGX_COMMON_CFLAGS += -O0 -g
+        SGX_COMMON_CFLAGS += -O2 -g
 else
         SGX_COMMON_CFLAGS += -O2
 endif
