@@ -80,6 +80,7 @@ typedef struct table {
 	unsigned long num_blks;  /* Number of blocks allocated */
 	int fd;                       /* File descriptor backing up the table data */
 	data_block_t **pinned_blocks; 
+	unsigned long rows_per_blk; 
 	struct data_base *db; 
 } table_t;
 

@@ -388,7 +388,9 @@ int create_table(data_base_t *db, std::string &name, schema_t *schema, table_t *
 	table->num_blks = 0; 
 	table->sc = *schema;
 	table->db = db; 
-	table->pinned_blocks = NULL; 	
+	table->pinned_blocks = NULL; 
+	table->rows_per_blk = DATA_BLOCK_SIZE / row_size(table); 
+	
 
 	/* Call outside of enclave to open a file for the table */
 	sgx_ret = ocall_open_file(&fd, name.c_str());
@@ -547,7 +549,7 @@ int join_schema(schema_t *sc, schema_t *left, schema_t *right) {
 int get_row(table_t *table, unsigned int row_num, data_block_t **block, row_t **row) {
 
 	unsigned long dblk_num;
-	unsigned long row_off, rows_per_blk; 
+	unsigned long row_off; 
 	data_block_t *b;
 
 	/* Make a fake row if it's outside of the table
@@ -558,11 +560,10 @@ int get_row(table_t *table, unsigned int row_num, data_block_t **block, row_t **
 		write_row_dbg(table, &fake_row, row_num); 
 	} 
 
-	rows_per_blk = DATA_BLOCK_SIZE / row_size(table); 
-	dblk_num = row_num / rows_per_blk;
+	dblk_num = row_num / table->rows_per_blk;
 
 	/* Offset of the row within the data block in bytes */
-	row_off = (row_num - dblk_num * rows_per_blk) * row_size(table); 
+	row_off = (row_num - dblk_num * table->rows_per_blk) * row_size(table); 
 	
         b = bread(table, dblk_num);
 	 	
@@ -573,7 +574,7 @@ int get_row(table_t *table, unsigned int row_num, data_block_t **block, row_t **
 
 int put_row(table_t *table, data_block_t *b, unsigned int row_num) {
 	unsigned long dblk_num;
-	unsigned long row_off, rows_per_blk; 
+	unsigned long row_off; 
 	unsigned int old_num_rows, tmp_num_rows; 
 
 	do {
@@ -591,7 +592,7 @@ int put_row(table_t *table, data_block_t *b, unsigned int row_num) {
 
 int put_row_dirty(table_t *table, data_block_t *b, unsigned int row_num) {
 	unsigned long dblk_num;
-	unsigned long row_off, rows_per_blk; 
+	unsigned long row_off; 
 	unsigned int old_num_rows, tmp_num_rows; 
 
 	do {
@@ -613,7 +614,7 @@ int put_row_dirty(table_t *table, data_block_t *b, unsigned int row_num) {
 int read_row(table_t *table, unsigned int row_num, row_t *row) {
 
 	unsigned long dblk_num;
-	unsigned long row_off, rows_per_blk; 
+	unsigned long row_off; 
 	data_block_t *b;
 
 	/* Make a fake row if it's outside of the table
@@ -623,11 +624,10 @@ int read_row(table_t *table, unsigned int row_num, row_t *row) {
 		return 0;
 	} 
 
-	rows_per_blk = DATA_BLOCK_SIZE / row_size(table); 
-	dblk_num = row_num / rows_per_blk;
+	dblk_num = row_num / table->rows_per_blk;
 
 	/* Offset of the row within the data block in bytes */
-	row_off = (row_num - dblk_num * rows_per_blk) * row_size(table); 
+	row_off = (row_num - dblk_num * table->rows_per_blk) * row_size(table); 
 	
         b = bread(table, dblk_num);
 	 	
@@ -642,15 +642,14 @@ int read_row(table_t *table, unsigned int row_num, row_t *row) {
 int pin_table(table_t *table) {
 
 	unsigned long blk_num;
-	unsigned long rows_per_blk, number_of_blks; 
+	unsigned long number_of_blks; 
 	data_block_t *b;
 
-	rows_per_blk = DATA_BLOCK_SIZE / row_size(table); 
-	number_of_blks = table->num_rows / rows_per_blk + 1; 
+	number_of_blks = table->num_rows / table->rows_per_blk + 1; 
 
 	table->pinned_blocks = (data_block_t **) malloc(number_of_blks*sizeof(data_block_t*)); 
 
-	for(blk_num = 0; blk_num*rows_per_blk < table->num_rows; blk_num++) 
+	for(blk_num = 0; blk_num*table->rows_per_blk < table->num_rows; blk_num++) 
 	{ 
         	b = bread(table, blk_num);
 		table->pinned_blocks[blk_num] = b; 
@@ -662,12 +661,10 @@ int pin_table(table_t *table) {
 int unpin_table_dirty(table_t *table) {
 
 	unsigned long blk_num;
-	unsigned long rows_per_blk; 
 	data_block_t *b;
 
-	rows_per_blk = DATA_BLOCK_SIZE / row_size(table); 
 
-	for(blk_num = 0; blk_num*rows_per_blk < table->num_rows; blk_num++) 
+	for(blk_num = 0; blk_num*table->rows_per_blk < table->num_rows; blk_num++) 
 	{ 
 		bwrite(table->pinned_blocks[blk_num]); 
 		brelse(table->pinned_blocks[blk_num]); 
@@ -683,7 +680,7 @@ int unpin_table_dirty(table_t *table) {
 int get_pinned_row(table_t *table, unsigned int row_num, data_block_t **block,  row_t **row) {
 
 	unsigned long dblk_num;
-	unsigned long row_off, rows_per_blk; 
+	unsigned long row_off; 
 	data_block_t *b;
 
 	/* Make a fake row if it's outside of the table
@@ -692,12 +689,11 @@ int get_pinned_row(table_t *table, unsigned int row_num, data_block_t **block,  
 		return -1; 
 	} 
 
-	rows_per_blk = DATA_BLOCK_SIZE / row_size(table); 
-	dblk_num = row_num / rows_per_blk;
+	dblk_num = row_num / table->rows_per_blk;
 
 	
 	/* Offset of the row within the data block in bytes */
-	row_off = (row_num - dblk_num * rows_per_blk) * row_size(table); 
+	row_off = (row_num - dblk_num * table->rows_per_blk) * row_size(table); 
 	
         b = table->pinned_blocks[dblk_num]; 
 	*block = b;  	
@@ -2231,7 +2227,7 @@ int ecall_sort_table_parallel(int db_id, int table_id, int column, int tid, int 
 
 int write_row_dbg(table_t *table, row_t *row, unsigned int row_num) {
 	unsigned long dblk_num;
-	unsigned long row_off, rows_per_blk; 
+	unsigned long row_off; 
 	unsigned int old_num_rows, tmp_num_rows; 
 	data_block_t *b;
 
@@ -2244,11 +2240,10 @@ int write_row_dbg(table_t *table, row_t *row, unsigned int row_num) {
 		}
 	} while (old_num_rows != tmp_num_rows);  
 
-	rows_per_blk = DATA_BLOCK_SIZE / row_size(table); 
-	dblk_num = row_num / rows_per_blk;
+	dblk_num = row_num / table->rows_per_blk;
 
 	/* Offset of the row within the data block in bytes */
-	row_off = (row_num - dblk_num * rows_per_blk) * row_size(table); 
+	row_off = (row_num - dblk_num * table->rows_per_blk) * row_size(table); 
 	
         b = bread(table, dblk_num);
 	 	
@@ -2263,16 +2258,15 @@ int write_row_dbg(table_t *table, row_t *row, unsigned int row_num) {
 
 int insert_row_dbg(table_t *table, row_t *row) {
 	unsigned long dblk_num;
-	unsigned long row_off, rows_per_blk; 
+	unsigned long row_off; 
 	data_block_t *b;
 
 	//DBG("insert row, row size:%lu\n", table->sc.row_size); 
 
-	rows_per_blk = DATA_BLOCK_SIZE / row_size(table); 
-	dblk_num = table->num_rows / rows_per_blk;
+	dblk_num = table->num_rows / table->rows_per_blk;
 
 	/* Offset of the row within the data block in bytes */
-	row_off = (table->num_rows - dblk_num * rows_per_blk) * row_size(table); 
+	row_off = (table->num_rows - dblk_num * table->rows_per_blk) * row_size(table); 
 	
         b = bread(table, dblk_num);
 	
