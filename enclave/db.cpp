@@ -2028,54 +2028,7 @@ int print_table_dbg(table_t *table, int start, int end);
 int bitonicSplit(table_t *tbl, int start_i, int start_j, int count, int column, int dir, int tid)
 {
 	for (int i = start_i, j = start_j; i < start_i + count; i++, j++) {
-		row_t *row_i, *row_j;
-		int val_i, val_j;
-#ifdef LOCAL_ALLOC
-		row_i = (row_t*) malloc(row_size(tbl));
-		if(!row_i)
-			return -5;
-
-		row_j = (row_t*) malloc(row_size(tbl));
-
-		if(!row_j)
-			return -6;
-#elif defined(STACK_ALLOC)
-		row_t row_i_stack, row_j_stack;
-		row_i = &row_i_stack;
-		row_j = &row_j_stack;
-#else
-		row_i = g_row_i[tid];
-		row_j = g_row_j[tid];
-#endif
-
-#if defined(PIN_ROWS)
-		data_block_t *b_i, *b_j; 
-		get_row(tbl, i, &b_i, &row_i);
-		get_row(tbl, j, &b_j, &row_j);
-#else
-		if(tbl->pinned_blocks) {
-			data_block_t *b_i, *b_j; 
-			get_pinned_row(tbl, i, &b_i, &row_i); 
-			get_pinned_row(tbl, j, &b_j, &row_j);
-		} else {
-			read_row(tbl, i, row_i);
-			read_row(tbl, j, row_j);
-		}
-#endif
-
-		if(dir == compare_rows(&tbl->sc, column, row_i, row_j))
-			exchange(tbl, i,j, row_i, row_j, tid);
-
-#if defined(PIN_ROWS)
-		put_row_dirty(tbl, b_i, i); 
-		put_row_dirty(tbl, b_j, j); 
-#endif
-
-
-#ifdef LOCAL_ALLOC
-		free(row_i);
-		free(row_j);
-#endif
+		compare_and_exchange(tbl, column, i, j, dir, tid);
 	}
 	return 0;
 }
