@@ -71,7 +71,7 @@ void obli_cswap_t(T *src, T *dst, bool cond) {
     return;
 }
 
-void obli_cswap(u8 * src, u8 * dst, u64 len, s64 cond){
+void obli_cswap(u8 * src, u8 * dst, u64 len, bool cond){
     u64 i =0;
     for( ; i < len - 7; i+=8) {
         obli_cswap_t(((u64*)(&src[i])), ((u64*)(&dst[i])), cond);
