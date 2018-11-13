@@ -180,6 +180,9 @@ int bitonic_sort_table(data_base_t *db, table_t *tbl, int column, table_t **p_tb
 int sort_table_parallel(table_t *tbl, int column, int tid, int num_threads);
 
 
+void *aligned_malloc(size_t size, size_t alignment);
+void aligned_free(void *aligned_ptr);
+
  
 /* Enclave interface */
 #if NO_SGX

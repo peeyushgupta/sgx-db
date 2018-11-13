@@ -18,6 +18,7 @@ SGX_COMMON_CFLAGS +=-DREPORT_COLUMNSORT_STATS
 #SGX_COMMON_CFLAGS +=-DREPORT_IO_STATS
 #SGX_COMMON_CFLAGS +=-DPIN_ROWS
 SGX_COMMON_CFLAGS +=-DPIN_TABLE
+SGX_COMMON_CFLAGS +=-DALIGNED_ALLOC
 #SGX_COMMON_CFLAGS +=-lprofiler
 
 
@@ -143,6 +144,7 @@ Enclave_Cpp_Files := enclave/bcache.cpp \
 			enclave/db.cpp \
 			enclave/spinlock.cpp \
 			enclave/tests.cpp \
+			enclave/aligned_alloc.cpp \
 			enclave/util.cpp
 Enclave_Include_Paths := -Iinclude -Ienclave -I$(SGX_SDK)/include -I$(SGX_SDK)/include/tlibc -I$(SGX_SDK)/include/libcxx
 
