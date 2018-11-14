@@ -1887,7 +1887,6 @@ bool compare_rows(schema_t *sc, int column, row_t *row_l, row_t *row_r) {
    or DESCENDING; if (a[i] > a[j]) agrees with the direction, 
    then a[i] and a[j] are interchanged.
 **/
-#define OBLI_XCHG
 int compare_and_exchange(table_t *tbl, int column, int i, int j, int dir, int tid) {
 	int val_i, val_j;
 	row_t *row_i, *row_j;
@@ -1909,20 +1908,22 @@ int compare_and_exchange(table_t *tbl, int column, int i, int j, int dir, int ti
 	row_j = g_row_j[tid];
 #endif
 
-#if defined(PIN_ROWS)
-	data_block_t *b_i, *b_j; 
-	get_row(tbl, i, &b_i, &row_i);
-	get_row(tbl, j, &b_j, &row_j);
-#else 
 	if(tbl->pinned_blocks) {
 		data_block_t *b_i, *b_j; 
 		get_pinned_row(tbl, i, &b_i, &row_i); 
 		get_pinned_row(tbl, j, &b_j, &row_j);
 	} else {
+#if defined(PIN_ROWS)
+		data_block_t *b_i, *b_j; 
+		get_row(tbl, i, &b_i, &row_i);
+		get_row(tbl, j, &b_j, &row_j);
+#else 
+
 		read_row(tbl, i, row_i);
 		read_row(tbl, j, row_j);
-	}
 #endif
+
+	}
 
 #ifdef OBLI_XCHG
 	obli_cswap((u8*) row_i, (u8*) row_j, row_size(tbl), (dir == compare_rows(&tbl->sc, column, row_i, row_j)));
