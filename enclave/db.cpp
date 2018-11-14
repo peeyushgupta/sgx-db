@@ -2088,10 +2088,11 @@ int sort_table_parallel(table_t *table, int column, int tid, int num_threads) {
 	const int num_stages = log2(num_threads);
 	const int segment_length = (N / num_threads) >> 1;
 
+#if defined(PIN_TABLE_BITONIC)
 	// pin table
 	if (tid == 0)
 		pin_table(table);
-
+#endif
 	barrier_wait(&b1, num_threads);
 
 	if(tid == 0)
@@ -2192,11 +2193,11 @@ int sort_table_parallel(table_t *table, int column, int tid, int num_threads) {
 	if (tid == 0)
 		barrier_reset(&stage4b, num_threads); 
 
-
+#if defined(PIN_TABLE_BITONIC)
 	// pin table
 	if (tid == 0)
 		unpin_table_dirty(table);
-
+#endif
 
 #ifdef CREATE_SORTED_TABLE
 	*sorted_id = s_table->id;
