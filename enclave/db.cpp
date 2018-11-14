@@ -2074,6 +2074,9 @@ barrier_t stage2a = {.count = 0, .seen = 0};
 barrier_t stage2b = {.count = 0, .seen = 0};
 barrier_t stage3a = {.count = 0, .seen = 0};
 barrier_t stage3b = {.count = 0, .seen = 0};
+barrier_t stage4a = {.count = 0, .seen = 0};
+barrier_t stage4b = {.count = 0, .seen = 0};
+
 
 int sort_table_parallel(table_t *table, int column, int tid, int num_threads) {
 
@@ -2180,6 +2183,20 @@ int sort_table_parallel(table_t *table, int column, int tid, int num_threads) {
 	// do a final round of sort where all threads will arrange it in ascending order
 	recBitonicSort(table, tid == 0 ? 0 : (tid * N) / num_threads, (N / num_threads),
 		column, ASCENDING, tid);
+
+	barrier_wait(&stage4a, num_threads);
+	if (tid == 0)
+		barrier_reset(&stage4a, num_threads); 
+
+	barrier_wait(&stage4b, num_threads);
+	if (tid == 0)
+		barrier_reset(&stage4b, num_threads); 
+
+
+	// pin table
+	if (tid == 0)
+		unpin_table_dirty(table);
+
 
 #ifdef CREATE_SORTED_TABLE
 	*sorted_id = s_table->id;
