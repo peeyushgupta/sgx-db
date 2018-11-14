@@ -177,7 +177,11 @@ void db_tbl_join(void * blkIn, void * blkOut, u64 t1, u64 c1, u64 t2, u64 c2, T 
 int alloc_data_blocks(data_base_t *db) {
 	int i; 
 	for (i = 0; i < DATA_BLKS_PER_DB; i++) {
+#ifdef ALIGNED_ALLOC
+		db->bcache.data_blks[i].data = aligned_malloc(DATA_BLOCK_SIZE, ALIGNMENT);
+#else
 		db->bcache.data_blks[i].data = malloc(DATA_BLOCK_SIZE);
+#endif
 		if (!db->bcache.data_blks[i].data) {
 			ERR("alloc failed\n"); 
 			goto cleanup;
@@ -207,7 +211,11 @@ cleanup_io_bufs:
 cleanup: 
 
 	for (int j = 0; j < i; j++ ) {
+#ifdef ALIGNED_ALLOC
+		aligned_free(db->bcache.data_blks[j].data);
+#else
 		free(db->bcache.data_blks[j].data);
+#endif
 		db->bcache.data_blks[j].data = NULL; 
 	};
 	return -1; 
@@ -217,7 +225,11 @@ cleanup:
 void free_data_blocks(data_base_t *db) {
 	for (int i = 0; i < DATA_BLKS_PER_DB; i++ ) {
 		if(db->bcache.data_blks[i].data) {
+#ifdef ALIGNED_ALLOC
+			aligned_free(db->bcache.data_blks[i].data);
+#else
 			free(db->bcache.data_blks[i].data);
+#endif
 			db->bcache.data_blks[i].data = NULL; 
 		}
 	};
@@ -382,11 +394,23 @@ int create_table(data_base_t *db, std::string &name, schema_t *schema, table_t *
 
 	db->tables[i] = table;
 	table->id = i; 
+#ifdef PAD_SCHEMA
+	schema_t new_sc;
+	int pad_bytes = ((row_size(schema) + ALIGNMENT) & ~(ALIGNMENT - 1)) - row_size(schema);
+	//printf("%s, padding schema with %d bytes | old_size %zu\n", __func__, pad_bytes, row_size(schema));
+	pad_schema(schema, pad_bytes, &new_sc);
+#endif
 
 	table->name = name;
 	table->num_rows = 0; 
 	table->num_blks = 0; 
+#ifdef PAD_SCHEMA
+	table->sc = new_sc;
+	//printf("%s, row_header_size %zu | row_data_size %zu | row_size %zu\n", __func__,
+	//			row_header_size(), row_data_size(table), row_size(table));
+#else
 	table->sc = *schema;
+#endif
 	table->db = db; 
 	table->pinned_blocks = NULL; 
 	table->rows_per_blk = DATA_BLOCK_SIZE / row_size(table); 
@@ -1827,8 +1851,6 @@ inline int exchange(table_t *tbl, int i, int j, row_t *row_i, row_t *row_j, int 
 
   memcpy(row_tmp, row_i, row_size(tbl)); 
 
-#if defined(PIN_ROW)
-#else
   if(tbl->pinned_blocks) {
     memcpy(row_i, row_j, row_size(tbl)); 
     memcpy(row_j, row_tmp, row_size(tbl)); 
@@ -1836,8 +1858,6 @@ inline int exchange(table_t *tbl, int i, int j, row_t *row_i, row_t *row_j, int 
     write_row_dbg(tbl, row_j, i);
     write_row_dbg(tbl, row_tmp, j);
   }
-#endif
-
 #ifdef LOCAL_ALLOC
   free(row_tmp);
 #endif
@@ -1890,6 +1910,7 @@ bool compare_rows(schema_t *sc, int column, row_t *row_l, row_t *row_r) {
 int compare_and_exchange(table_t *tbl, int column, int i, int j, int dir, int tid) {
 	int val_i, val_j;
 	row_t *row_i, *row_j;
+	data_block_t *b_i, *b_j;
 
 #ifdef LOCAL_ALLOC
 	row_i = (row_t*) malloc(row_size(tbl));
@@ -1900,7 +1921,9 @@ int compare_and_exchange(table_t *tbl, int column, int i, int j, int dir, int ti
 	if(!row_j)
 		return -6;
 #elif defined(STACK_ALLOC)
-	row_t row_i_stack, row_j_stack;
+	// FIXME: if tables are pinned, this stack allocation is not needed
+	__attribute__((aligned(ALIGNMENT))) row_t row_i_stack;
+	__attribute__((aligned(ALIGNMENT))) row_t row_j_stack;
 	row_i = &row_i_stack;
 	row_j = &row_j_stack;
 #else
@@ -1914,19 +1937,23 @@ int compare_and_exchange(table_t *tbl, int column, int i, int j, int dir, int ti
 		get_pinned_row(tbl, j, &b_j, &row_j);
 	} else {
 #if defined(PIN_ROWS)
-		data_block_t *b_i, *b_j; 
 		get_row(tbl, i, &b_i, &row_i);
 		get_row(tbl, j, &b_j, &row_j);
-#else 
-
+#else
 		read_row(tbl, i, row_i);
 		read_row(tbl, j, row_j);
 #endif
-
 	}
 
 #ifdef OBLI_XCHG
-	obli_cswap((u8*) row_i, (u8*) row_j, row_size(tbl), (dir == compare_rows(&tbl->sc, column, row_i, row_j)));
+	bool cond = (dir == compare_rows(&tbl->sc, column, row_i, row_j));
+	obli_cswap((u8*) row_i, (u8*) row_j, row_size(tbl), cond);
+
+	// XXX: Is this required?
+	if (!tbl->pinned_blocks) {
+		write_row_dbg(tbl, row_i, i);
+		write_row_dbg(tbl, row_j, j);
+	}
 #else
 	if (dir == compare_rows(&tbl->sc, column, row_i, row_j)) {
 		exchange(tbl, i, j, row_i, row_j, tid);
@@ -2057,6 +2084,15 @@ int sort_table_parallel(table_t *table, int column, int tid, int num_threads) {
 	int num_parts = num_threads;
 	const int num_stages = log2(num_threads);
 	const int segment_length = (N / num_threads) >> 1;
+
+	// pin table
+	if (tid == 0)
+		pin_table(table);
+
+	barrier_wait(&b1, num_threads);
+
+	if(tid == 0)
+		barrier_reset(&b1, num_threads);
 
 	// stage 1: the whole data is split into shards for num_threads threads
 	recBitonicSort(table, tid == 0 ? 0 : (tid * N) / num_threads, (N / num_threads),
@@ -2268,6 +2304,7 @@ int ecall_insert_row_dbg(int db_id, int table_id, void *row_data) {
 	table = db->tables[table_id];
 
 	row = (row_t*) malloc(row_size(table)); 
+
 	if(!row)
 		return -3;
 
@@ -2303,8 +2340,11 @@ int print_row(schema_t *sc, row_t *row) {
 		case INTEGER:
 			printf("%d", *(int*)&row->data[sc->offsets[i]]);
 			break; 		
+		case PADDING:
+			//skip padding fields
+			continue;
 		default: 
-			printf("unknown type");
+			printf("unknown type %d", sc->types[i]);
 		}
 
 	}

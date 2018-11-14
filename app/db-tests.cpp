@@ -123,6 +123,35 @@ int bcache_test(sgx_enclave_id_t eid, int db_id, int from_table_id)
 	return 0;
 }
 
+void run_rankings_fn(sgx_enclave_id_t eid, int db_id, int rankings_table_id)
+{
+	/* Column sort tests */
+	unsigned int column;
+	int ret;
+	// Rankings is 360000
+	//r = 16384;
+	//s = 16;
+	column = 1;
+
+	printf(TXT_FG_YELLOW "Column sort test" TXT_NORMAL ": sorting rankings table \n");
+
+	unsigned long long start, end;
+	start = RDTSC_START();
+
+	ecall_column_sort_table_dbg(eid, &ret, db_id, rankings_table_id, column);
+	ecall_flush_table(eid, &ret, db_id, rankings_table_id);
+	end = RDTSCP();
+
+	printf("Sorting + flushing took %llu cycles\n", end - start);
+	ecall_print_table_dbg(eid, &ret, db_id, rankings_table_id, 0, 23);
+}
+
+int run_rankings_test(sgx_enclave_id_t eid, int db_id, int rankings_table_id)
+{
+	thread t1(run_rankings_fn, eid, db_id, rankings_table_id);
+	t1.join();
+	return 0;
+}
 
 int test_rankings(sgx_enclave_id_t eid) {
  	
@@ -203,7 +232,8 @@ int test_rankings(sgx_enclave_id_t eid) {
 	}
 
 	ecall_flush_table(eid, &ret, db_id, rankings_table_id);
-	printf("created rankings table\n");
+	printf("created rankings table with db ID:%d | table_id:%d\n",
+			db_id, rankings_table_id);
 
 	sc_udata.num_fields = 10;
 	sc_udata.offsets[0] = 0;
@@ -280,7 +310,8 @@ int test_rankings(sgx_enclave_id_t eid) {
 	}
 
 	ecall_flush_table(eid, &ret, db_id, udata_table_id);
-	printf("created uservisits table\n");
+	printf("created uservisits table with ID:%d | table_id:%d\n",
+			db_id, udata_table_id);
 
 #if defined(TABLE_SCAN_TESTS)
 	for (i = 0; i < 10; i++) {
@@ -293,10 +324,12 @@ int test_rankings(sgx_enclave_id_t eid) {
 #endif
 
 	/* Buffer cache testst */
+	if (1)
 	{	
 		bcache_test(eid, db_id, rankings_table_id);
 	}
 
+	if (1)
 	/* Promote column tests */
 	{
 		int p_rankings_table_id;
@@ -310,6 +343,10 @@ int test_rankings(sgx_enclave_id_t eid) {
 		ecall_print_table_dbg(eid, &ret, db_id, p_rankings_table_id, 359990, 360020);
 	}
 
+	// Run it in a separate thread to get fine-grained profiling data
+	run_rankings_test(eid, db_id, rankings_table_id);
+
+	if(0)
 	{
 		/* Column sort tests */
 		
@@ -318,7 +355,7 @@ int test_rankings(sgx_enclave_id_t eid) {
 		// Rankings is 360000 
 		//r = 16384;
 		//s = 16; 
-		column = 2; 
+		column = 1;
 		
 		printf(TXT_FG_YELLOW "Column sort test" TXT_NORMAL ": sorting rankings table \n"); 
 			
@@ -334,6 +371,7 @@ int test_rankings(sgx_enclave_id_t eid) {
 
 	}
 
+	if (1)
 	{
 
 		// Join tests

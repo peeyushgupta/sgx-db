@@ -18,6 +18,10 @@ SGX_COMMON_CFLAGS +=-DREPORT_COLUMNSORT_STATS
 #SGX_COMMON_CFLAGS +=-DREPORT_IO_STATS
 #SGX_COMMON_CFLAGS +=-DPIN_ROWS
 SGX_COMMON_CFLAGS +=-DPIN_TABLE
+SGX_COMMON_CFLAGS +=-DALIGNED_ALLOC
+SGX_COMMON_CFLAGS +=-DPAD_SCHEMA
+SGX_COMMON_CFLAGS +=-DALIGNMENT=64
+SGX_COMMON_CFLAGS +=-DOBLI_XCHG
 #SGX_COMMON_CFLAGS +=-lprofiler
 #SGX_COMMON_CFLAGS +=-DOBLI_XCHG
 
@@ -144,6 +148,7 @@ Enclave_Cpp_Files := enclave/bcache.cpp \
 			enclave/db.cpp \
 			enclave/spinlock.cpp \
 			enclave/tests.cpp \
+			enclave/aligned_alloc.cpp \
 			enclave/util.cpp
 Enclave_Include_Paths := -Iinclude -Ienclave -I$(SGX_SDK)/include -I$(SGX_SDK)/include/tlibc -I$(SGX_SDK)/include/libcxx
 
@@ -155,7 +160,7 @@ else
 endif
 
 Enclave_C_Flags += $(Enclave_Include_Paths)
-Enclave_Cpp_Flags := -DNDEBUG $(Enclave_C_Flags) -std=c++14 -nostdinc++
+Enclave_Cpp_Flags := -DNDEBUG $(Enclave_C_Flags) -std=c++14 -nostdinc++ -mavx2
 
 # To generate a proper enclave, it is recommended to follow below guideline to link the trusted libraries:
 #    1. Link sgx_trts with the `--whole-archive' and `--no-whole-archive' options,

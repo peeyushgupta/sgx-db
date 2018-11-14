@@ -67,21 +67,86 @@ void obli_cswap_t(T *src, T *dst, bool cond) {
     asm volatile("test %[cond], %[cond]\n\t"
                  "cmovnz %[src], %[temp]\n\t"
                  "cmovnz %[dst], %[src]\n\t"
-                 "cmovnz %[temp], %[dst]"  : [src]"+r"(src[0]), [dst]"+r"(dst[0]), [temp]"=r"(temp) : [cond]"r"(cond) : "cc");
+                 "cmovnz %[temp], %[dst]"  : [src]"+r"(src[0]), [dst]"+r"(dst[0]), [temp]"=r"(temp) : [cond]"r"(cond) : "cc", "memory");
     return;
 }
 
-void obli_cswap(u8 * src, u8 * dst, u64 len, bool cond){
-    u64 i =0;
+void obli_cswap_128(double *src, double *dst, bool cond)
+{
+	// set high bit and broadcast - to be used as mask
+	// refer wiki on how double is represented in 64-bits
+	__m128d _mask = _mm_set1_pd((double)(-(int)cond));
+	// load src
+	__m128d s = _mm_load_pd(src);
+	// load dst
+	__m128d d = _mm_load_pd(dst);
+	__m128d temp;
+
+	// blend registers
+	// t = cond ? src : dst;
+	// src = cond ? dst : src;
+	// dst = cond ? temp : dst;
+	temp = _mm_blendv_pd(d, s, _mask);
+	s = _mm_blendv_pd(s, d, _mask);
+	d = _mm_blendv_pd(d, temp, _mask);
+	// write back both src and dst
+	_mm_store_pd(src, s);
+	_mm_store_pd(dst, d);
+}
+
+void obli_cswap_256(double *src, double *dst, bool cond)
+{
+	// set high bit and broadcast - to be used as mask
+	// refer wiki on how double is represented in 64-bits
+	__m256d _mask = _mm256_set1_pd((double)(-(int)cond));
+	// load src
+	__m256d s = _mm256_load_pd(src);
+	// load dst
+	__m256d d = _mm256_load_pd(dst);
+	__m256d temp;
+	// blend registers
+	// t = cond ? src : dst;
+	// src = cond ? dst : src;
+	// dst = cond ? temp : dst;
+	temp = _mm256_blendv_pd(d, s, _mask);
+	s = _mm256_blendv_pd(s, d, _mask);
+	d = _mm256_blendv_pd(d, temp, _mask);
+	// write back both src and dst
+	_mm256_store_pd(src, s);
+	_mm256_store_pd(dst, d);
+}
+
+//
+//   8    u8
+//  16   u16
+//  32   u32
+//  64   u64
+// 128  u128 mmx
+// 256  u256 avx2
+// 512  u512 avx512
+void obli_cswap(u8 * src, u8 * dst, u64 len, bool cond) {
+    u64 i = 0;
+
+    for( ; i < len - 31; i+=32) {
+        obli_cswap_256(((double*)(&src[i])), ((double*)(&dst[i])), cond);
+    }
+
+    for( ; i < len - 15; i+=16) {
+        obli_cswap_128(((double*)(&src[i])), ((double*)(&dst[i])), cond);
+    }
+
     for( ; i < len - 7; i+=8) {
         obli_cswap_t(((u64*)(&src[i])), ((u64*)(&dst[i])), cond);
     }
+
     for( ; i < len - 3; i+=4) {
         obli_cswap_t(((u32*)(&src[i])), ((u32*)(&dst[i])), cond);
     }
+
     for( ; i < len - 1; i+=2) {
         obli_cswap_t(((u16*)(&src[i])), ((u16*)(&dst[i])), cond);
     }
+
     for( ; i < len; i++) {
        obli_cswap_t(((u8*)(&src[i])), ((u8*)(&dst[i])), cond);
     }
