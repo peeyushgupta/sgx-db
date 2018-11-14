@@ -79,6 +79,20 @@
             }                                                   \
     } while (0)
 
+    #define WARN_ONCE( _f, _a...)                               \
+            ({                                                  \
+            static int __warn_once = 1;                         \
+            int __ret = 0;                                      \
+                                                                \
+            if (__warn_once) {                                  \
+                __warn_once = 0;                                \
+                WARN(_f, ## _a);                                \
+                __ret = 1;                                      \
+            }                                                   \
+            __ret;                                              \
+    })
+
+
     #define WARN_ON_ONCE(_g, _f, _a...)                         \
             ({                                                  \
             static int __warn_once = 1;                         \

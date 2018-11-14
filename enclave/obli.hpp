@@ -94,8 +94,12 @@ void obli_cswap_128(double *src, double *dst, bool cond)
 	_mm_store_pd(dst, d);
 }
 
+//unsigned long counter_cswap = 0; 
 void obli_cswap_256(double *src, double *dst, bool cond)
 {
+	
+//	WARN_ON((counter_cswap ++ % 4096 == 0), "cswap_256 is called\n");
+
 	// set high bit and broadcast - to be used as mask
 	// refer wiki on how double is represented in 64-bits
 	__m256d _mask = _mm256_set1_pd((double)(-(int)cond));
