@@ -22,7 +22,7 @@
 #include "util.hpp"
 
 #define VERBOSE_BCACHE 0
-
+#define BCACHE_STATS_VERBOSE	0
 void binit(bcache_t *bcache)
 {
 	data_block_t *b;
@@ -73,7 +73,7 @@ void bcache_info_printf(struct table *table) {
 };
 
 void bcache_stats_printf(bcache_stats_t *stats) {
-	DBG("hits:%d, read misses:%d, write misses:%d, write backs:%d\n",
+	DBG_ON(BCACHE_STATS_VERBOSE, "hits:%d, read misses:%d, write misses:%d, write backs:%d\n",
 		stats->hits, stats->read_misses, stats->write_misses, stats->write_backs);
 	return; 
 };
