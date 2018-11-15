@@ -93,7 +93,8 @@ void obli_cswap_128(double *src, double *dst, bool cond)
 	_mm_store_pd(src, s);
 	_mm_store_pd(dst, d);
 }
-
+#ifdef AVX2
+#warning "Compiling with AVX2"
 void obli_cswap_256(double *src, double *dst, bool cond)
 {
 	// set high bit and broadcast - to be used as mask
@@ -115,7 +116,32 @@ void obli_cswap_256(double *src, double *dst, bool cond)
 	_mm256_store_pd(src, s);
 	_mm256_store_pd(dst, d);
 }
+#endif
 
+#ifdef AVX512F
+#warning "Compiling with AVX512F"
+void obli_cswap_512(double *src, double *dst, bool cond)
+{
+	// set high bit and broadcast - to be used as mask
+	// refer wiki on how double is represented in 64-bits
+	__mmask8 _mask = -(static_cast<int>(cond));
+	// load src
+	__m512d s = _mm512_load_pd(src);
+	// load dst
+	__m512d d = _mm512_load_pd(dst);
+	__m512d temp;
+	// blend registers
+	// t = cond ? src : dst;
+	// src = cond ? dst : src;
+	// dst = cond ? temp : dst;
+	temp = _mm512_mask_blend_pd(_mask, d, s);
+	s = _mm512_mask_blend_pd(_mask, s, d);
+	d = _mm512_mask_blend_pd(_mask, d, temp);
+	// write back both src and dst
+	_mm512_store_pd(src, s);
+	_mm512_store_pd(dst, d);
+}
+#endif
 //
 //   8    u8
 //  16   u16
@@ -127,9 +153,17 @@ void obli_cswap_256(double *src, double *dst, bool cond)
 void obli_cswap(u8 * src, u8 * dst, u64 len, bool cond) {
     u64 i = 0;
 
+#ifdef AVX512F
+    for( ; i < len - 63; i+=64) {
+        obli_cswap_512(((double*)(&src[i])), ((double*)(&dst[i])), cond);
+    }
+#endif
+
+#ifdef AVX2
     for( ; i < len - 31; i+=32) {
         obli_cswap_256(((double*)(&src[i])), ((double*)(&dst[i])), cond);
     }
+#endif
 
     for( ; i < len - 15; i+=16) {
         obli_cswap_128(((double*)(&src[i])), ((double*)(&dst[i])), cond);

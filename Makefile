@@ -22,10 +22,8 @@ SGX_COMMON_CFLAGS +=-DALIGNED_ALLOC
 SGX_COMMON_CFLAGS +=-DPAD_SCHEMA
 SGX_COMMON_CFLAGS +=-DALIGNMENT=64
 SGX_COMMON_CFLAGS +=-DOBLI_XCHG
+AVX_CFLAGS=
 #SGX_COMMON_CFLAGS +=-lprofiler
-#SGX_COMMON_CFLAGS +=-DOBLI_XCHG
-
-
 
 #INCLUDES := -I. 
 #
@@ -64,6 +62,17 @@ SGX_SDK ?= /opt/sgxsdk
 SGX_MODE ?= SIM
 SGX_ARCH ?= x64
 SGX_DEBUG ?= 1
+
+ifeq ($(shell grep -o avx2 /proc/cpuinfo | sort | uniq), avx2)
+AVX_CFLAGS += -mavx2
+SGX_COMMON_CFLAGS +=-DAVX2
+endif
+
+ifeq ($(shell grep -o avx512f /proc/cpuinfo | sort | uniq), avx512f)
+AVX_CFLAGS += -mavx512f
+SGX_COMMON_CFLAGS +=-DAVX512F
+endif
+
 
 ifeq ($(shell getconf LONG_BIT), 32)
 	SGX_ARCH := x86
@@ -160,7 +169,7 @@ else
 endif
 
 Enclave_C_Flags += $(Enclave_Include_Paths)
-Enclave_Cpp_Flags := -DNDEBUG $(Enclave_C_Flags) -std=c++14 -nostdinc++ -mavx2
+Enclave_Cpp_Flags := -DNDEBUG $(Enclave_C_Flags) -std=c++14 -nostdinc++ $(AVX_CFLAGS)
 
 # To generate a proper enclave, it is recommended to follow below guideline to link the trusted libraries:
 #    1. Link sgx_trts with the `--whole-archive' and `--no-whole-archive' options,
