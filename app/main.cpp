@@ -30,7 +30,7 @@ int main(){
 #if defined(COLUMNSORT_TESTS)
 	test_spinlock_inc(eid, 10000);
 #endif
-
+#if 0
         test_project_schema(eid);
         test_pad_schema(eid);
         test_project_row(eid);
@@ -46,6 +46,7 @@ int main(){
 	test_column_sort(eid);
 
 	test_bitonic_sort(eid);
+#endif
 #if 1
 	test_rankings(eid);
 #endif	

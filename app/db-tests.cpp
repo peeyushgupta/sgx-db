@@ -14,6 +14,8 @@
 using namespace std;
 #define OCALL_TEST_LENGTH 10000
 
+void column_sort_table_parallel(sgx_enclave_id_t eid, int db_id, int table_id, int field, int num_threads);
+
 /* Test timings for ocalls */
 int test_null_ocalls(sgx_enclave_id_t eid) {
 
@@ -138,7 +140,8 @@ void run_rankings_fn(sgx_enclave_id_t eid, int db_id, int rankings_table_id)
 	unsigned long long start, end;
 	start = RDTSC_START();
 
-	ecall_column_sort_table_dbg(eid, &ret, db_id, rankings_table_id, column);
+	//ecall_column_sort_table_dbg(eid, &ret, db_id, rankings_table_id, column);
+	column_sort_table_parallel(eid, db_id, rankings_table_id, column, 2);
 	ecall_flush_table(eid, &ret, db_id, rankings_table_id);
 	end = RDTSCP();
 
@@ -148,8 +151,9 @@ void run_rankings_fn(sgx_enclave_id_t eid, int db_id, int rankings_table_id)
 
 int run_rankings_test(sgx_enclave_id_t eid, int db_id, int rankings_table_id)
 {
-	thread t1(run_rankings_fn, eid, db_id, rankings_table_id);
-	t1.join();
+	//thread t1(run_rankings_fn, eid, db_id, rankings_table_id);
+	//t1.join();
+	run_rankings_fn(eid, db_id, rankings_table_id);
 	return 0;
 }
 
@@ -324,12 +328,12 @@ int test_rankings(sgx_enclave_id_t eid) {
 #endif
 
 	/* Buffer cache testst */
-	if (1)
+	if (0)
 	{	
 		bcache_test(eid, db_id, rankings_table_id);
 	}
 
-	if (1)
+	if (0)
 	/* Promote column tests */
 	{
 		int p_rankings_table_id;
@@ -371,7 +375,7 @@ int test_rankings(sgx_enclave_id_t eid) {
 
 	}
 
-	if (1)
+	if (0)
 	{
 
 		// Join tests
@@ -532,11 +536,14 @@ void column_sort_table_parallel(sgx_enclave_id_t eid, int db_id, int table_id, i
 	std::vector<std::thread*> threads;
 	assert ((num_threads & (num_threads - 1)) == 0);
 
-	for (auto i = 0u; i < num_threads; i++)
+	for (auto i = 0u; i < num_threads; i++) {
+		printf("%s, Spawning thread %d\n", __func__, i);
 		threads.push_back(new thread(column_sort_fn, eid, db_id, table_id, field, i, num_threads));
-
-	for (auto &t : threads)
+	}
+	for (auto &t : threads) {
+		printf("%s, waiting for join\n", __func__);
 		t->join();
+	}
 
 	return;
 }
