@@ -23,6 +23,39 @@ void printf(const char *fmt, ...);
 }
 #endif
 
+#ifdef AVX512F
+// AVX-512 instructions from avx512fintrin.h
+typedef double __m512d __attribute__ ((__vector_size__ (64), __may_alias__));
+
+typedef double __v8df __attribute__ ((__vector_size__ (64)));
+
+typedef unsigned char  __mmask8;
+
+extern __inline __m512d
+__attribute__ ((__gnu_inline__, __always_inline__, __artificial__))
+_mm512_mask_blend_pd (__mmask8 __U, __m512d __A, __m512d __W)
+{
+  return (__m512d) __builtin_ia32_blendmpd_512_mask ((__v8df) __A,
+						     (__v8df) __W,
+						     (__mmask8) __U);
+}
+
+extern __inline __m512d
+__attribute__ ((__gnu_inline__, __always_inline__, __artificial__))
+_mm512_load_pd (void const *__P)
+{
+  return *(__m512d *) __P;
+}
+
+extern __inline void
+__attribute__ ((__gnu_inline__, __always_inline__, __artificial__))
+_mm512_store_pd (void *__P, __m512d __A)
+{
+  *(__m512d *) __P = __A;
+}
+#endif // AVX512F
+
+#ifdef AVX2
 // AVX instructions from avxintrin.h
 typedef double __m256d __attribute__ ((__vector_size__ (32),
 				       __may_alias__));
@@ -54,6 +87,7 @@ _mm256_store_pd (double *__P, __m256d __A)
 {
   *(__m256d *)__P = __A;
 }
+#endif // AVX2
 
 // SSE128 instructions from emmintrin.h
 typedef double __m128d __attribute__ ((__vector_size__ (16), __may_alias__));
