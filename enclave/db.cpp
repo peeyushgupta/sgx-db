@@ -18,6 +18,7 @@
 #include <string.h>
 #include <atomic>
 #include <cmath>
+#include "mbusafecrt.h"
 
 //#define FILE_READ_SIZE (1 << 12)
 
@@ -25,7 +26,7 @@
 
 #define OCALL_VERBOSE 0
 #define JOIN_VERBOSE 0
-#define COLUMNSORT_VERBOSE 1
+#define COLUMNSORT_VERBOSE 0
 #define COLUMNSORT_VERBOSE_L2 0
 #define IO_VERBOSE 0
 
@@ -48,11 +49,41 @@ void reset_tids() {
 
 int tid() { return thread_id; }
 
+struct dbg_buffer {
+	char **buffers;
+	unsigned int num_buffers;
+	unsigned int current;
+
+	explicit dbg_buffer(unsigned int bufs) :
+		num_buffers(bufs), current(0) {
+
+		buffers = new char*[bufs];
+		for (auto i = 0u; i < num_buffers; i++)
+			buffers[i] = new char[BUFSIZ];
+	}
+
+	~dbg_buffer() {
+		for (auto i = 0u; i < num_buffers; i++)
+			delete[] buffers[i];
+
+		delete[] buffers;
+	}
+
+	void insert(const char *fmt, ...) {
+		va_list args;
+		va_start(args, fmt);
+		_vsprintf_s(buffers[current++], BUFSIZ, fmt, args);
+		va_end(args);
+	}
+
+	void flush(void) {
+		for (auto i = 0u; i < num_buffers; i++)
+			ocall_print_string(buffers[i]);
+	}
+};
+
 
 #if 0
-
-
-
 s64 varchar_cmp(u8 *va, u8 *vb, u64 max)
 {
   u64 la = *((u64 *)va), lb = *((u64 *)vb);
@@ -1105,9 +1136,11 @@ int column_sort_table_parallel(data_base_t *db, table_t *table, int column, int 
 	unsigned long long cycles = end - start;
 	unsigned long long secs = (cycles / cycles_per_sec);
 	bcache_stats_t bstats;
+	dbg_buffer *dbuf;
 #endif
 
 	if(tid == 0) {
+		dbuf = new dbg_buffer(20);
 		ret = column_sort_pick_params(table->num_rows, table->sc.row_data_size, 
 				DATA_BLOCK_SIZE, 
 				(1 << 20) * 80, 
@@ -1166,7 +1199,7 @@ int column_sort_table_parallel(data_base_t *db, table_t *table, int column, int 
 		cycles = end - start;
 		secs = (cycles / cycles_per_sec);
 
-		printf("Created temp tables in %llu cycles (%llu sec)\n",
+		dbuf->insert("Created temp tables in %llu cycles (%llu sec)\n",
 			cycles, secs);
 
 		start = RDTSC();
@@ -1193,7 +1226,7 @@ int column_sort_table_parallel(data_base_t *db, table_t *table, int column, int 
 		cycles = end - start;
 		secs = (cycles / cycles_per_sec);
 
-		printf("Created another set of transposed tables in %llu cycles (%llu sec)\n",
+		dbuf->insert("Created another set of transposed tables in %llu cycles (%llu sec)\n",
 			cycles, secs);
 
 		start = RDTSC();
@@ -1236,7 +1269,7 @@ int column_sort_table_parallel(data_base_t *db, table_t *table, int column, int 
 		cycles = end - start;
 		secs = (cycles / cycles_per_sec);
 
-		printf("Rewrite the table as s column tables in %llu cycles (%llu sec)\n",
+		dbuf->insert("Rewrite the table as s column tables in %llu cycles (%llu sec)\n",
 			cycles, secs);
 
 		bcache_stats_read_and_reset(&db->bcache, &bstats);
@@ -1284,7 +1317,7 @@ int column_sort_table_parallel(data_base_t *db, table_t *table, int column, int 
 		cycles = end - start;
 		secs = (cycles / cycles_per_sec);
 
-		printf("Step 1: Sorted column tables in %llu cycles (%llu sec)\n",
+		dbuf->insert("Step 1: Sorted column tables in %llu cycles (%llu sec)\n",
 			cycles, secs);
 
 		bcache_stats_read_and_reset(&db->bcache, &bstats);
@@ -1336,7 +1369,7 @@ int column_sort_table_parallel(data_base_t *db, table_t *table, int column, int 
 		cycles = end - start;
 		secs = (cycles / cycles_per_sec);
 
-		printf("Step 2: Transposed column tables in %llu cycles (%llu sec)\n",
+		dbuf->insert("Step 2: Transposed column tables in %llu cycles (%llu sec)\n",
 			cycles, secs);
 		
 		bcache_stats_read_and_reset(&db->bcache, &bstats);
@@ -1384,7 +1417,7 @@ int column_sort_table_parallel(data_base_t *db, table_t *table, int column, int 
 		cycles = end - start;
 		secs = (cycles / cycles_per_sec);
 
-		printf("Step 3: Sorted transposed column tables in %llu cycles (%llu sec)\n",
+		dbuf->insert("Step 3: Sorted transposed column tables in %llu cycles (%llu sec)\n",
 			cycles, secs);
 
 		bcache_stats_read_and_reset(&db->bcache, &bstats);
@@ -1434,7 +1467,7 @@ int column_sort_table_parallel(data_base_t *db, table_t *table, int column, int 
 		cycles = end - start;
 		secs = (cycles / cycles_per_sec);
 
-		printf("Step 4: Untransposed column tables in %llu cycles (%llu sec)\n",
+		dbuf->insert("Step 4: Untransposed column tables in %llu cycles (%llu sec)\n",
 			cycles, secs);
 
 		bcache_stats_read_and_reset(&db->bcache, &bstats);
@@ -1482,7 +1515,7 @@ int column_sort_table_parallel(data_base_t *db, table_t *table, int column, int 
 		cycles = end - start;
 		secs = (cycles / cycles_per_sec);
 
-		printf("Step 5: Sorted untransposed column tables in %llu cycles (%llu sec)\n",
+		dbuf->insert("Step 5: Sorted untransposed column tables in %llu cycles (%llu sec)\n",
 			cycles, secs);
 
 		bcache_stats_read_and_reset(&db->bcache, &bstats);
@@ -1544,7 +1577,7 @@ int column_sort_table_parallel(data_base_t *db, table_t *table, int column, int 
 		cycles = end - start;
 		secs = (cycles / cycles_per_sec);
 
-		printf("Step 6: Shifted column tables in %llu cycles (%llu sec)\n",
+		dbuf->insert("Step 6: Shifted column tables in %llu cycles (%llu sec)\n",
 			cycles, secs);
 		
 		bcache_stats_read_and_reset(&db->bcache, &bstats);
@@ -1595,7 +1628,7 @@ int column_sort_table_parallel(data_base_t *db, table_t *table, int column, int 
 		cycles = end - start;
 		secs = (cycles / cycles_per_sec);
 
-		printf("Step 7: Sorted shifted column tables in %llu cycles (%llu sec)\n",
+		dbuf->insert("Step 7: Sorted shifted column tables in %llu cycles (%llu sec)\n",
 			cycles, secs);
 
 		bcache_stats_read_and_reset(&db->bcache, &bstats);
@@ -1703,7 +1736,7 @@ int column_sort_table_parallel(data_base_t *db, table_t *table, int column, int 
 		cycles = end - start;
 		secs = (cycles / cycles_per_sec);
 
-		printf("Step 8: Unshifted column tables in %llu cycles (%llu sec)\n",
+		dbuf->insert("Step 8: Unshifted column tables in %llu cycles (%llu sec)\n",
 			cycles, secs);
 
 		bcache_stats_read_and_reset(&db->bcache, &bstats);
@@ -1754,7 +1787,7 @@ int column_sort_table_parallel(data_base_t *db, table_t *table, int column, int 
 		cycles = end - start;
 		secs = (cycles / cycles_per_sec);
 
-		printf("Wrote sorted temporary tables back in %llu cycles (%llu sec)\n",
+		dbuf->insert("Wrote sorted temporary tables back in %llu cycles (%llu sec)\n",
 			cycles, secs);
 
 		bcache_stats_read_and_reset(&db->bcache, &bstats);
@@ -1796,7 +1829,8 @@ cleanup:
 			free(st_tables);
 		};
 	};
-	
+	dbuf->flush();
+	delete dbuf;
 	return ret; 
 };
 
