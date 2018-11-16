@@ -2,6 +2,8 @@
 
 #include "spinlock.hpp"
 #include "x86.hpp"
+#include "util.hpp"
+#include "dbg.hpp"
 
 void initlock(struct spinlock *lk, std::string name)
 {
@@ -110,4 +112,6 @@ void barrier_reset(volatile barrier_t *b, unsigned int num_threads) {
 	return;
 }
 
-
+void barrier_dump(volatile barrier_t *b, int tid) {
+	ERR("from tid=%d: b:%p | b->count %d | b->seen %d\n", tid, b, b->count, b->seen);
+}

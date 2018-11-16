@@ -1122,14 +1122,19 @@ barrier_t b2 = {.count = 0, .seen = 0};
    s -- number of columns
 */
 
+// Globals
+table_t **s_tables, **st_tables, *tmp_table;
+unsigned long r, s;
+unsigned long chunk;
+
+
 int column_sort_table_parallel(data_base_t *db, table_t *table, int column, int tid, int num_threads) {
 	int ret;
 	std::string tmp_tbl_name;  
-	table_t **s_tables, **st_tables, *tmp_table;
 	row_t *row;
 	unsigned long row_num;  
 	unsigned long shift, unshift;
-	unsigned long r, s; 
+
 
 #if defined(REPORT_COLUMNSORT_STATS)
 	unsigned long long start, end; 
@@ -1160,7 +1165,7 @@ int column_sort_table_parallel(data_base_t *db, table_t *table, int column, int 
 				r, 2*(s - 1)*(s - 1), r, s);  
 			return -1; 
 		}
- 
+		chunk  = s / num_threads;
 		s_tables = (table_t **)malloc(s * sizeof(table_t *)); 
 		if(!s_tables) {
 			ERR("failed to allocate s_tables\n");
@@ -1175,7 +1180,7 @@ int column_sort_table_parallel(data_base_t *db, table_t *table, int column, int 
 
 #if defined(REPORT_COLUMNSORT_STATS)
 		start = RDTSC();
-		bcache_info_printf(table);  
+		//bcache_info_printf(table);  
 		bcache_stats_read_and_reset(&db->bcache, &bstats);
 #endif
 
@@ -1285,6 +1290,15 @@ int column_sort_table_parallel(data_base_t *db, table_t *table, int column, int 
 #endif
 	}
 
+	// wait here until tid=0 sets up 's' value
+	barrier_wait(&b1, num_threads);
+	if(tid == 0)
+		barrier_reset(&b1, num_threads);
+
+	barrier_wait(&b2, num_threads);
+	if(tid == 0)
+		barrier_reset(&b2, num_threads);
+
 #if defined(REPORT_COLUMNSORT_STATS)
 	start = RDTSC(); 
 #endif
@@ -1300,8 +1314,8 @@ int column_sort_table_parallel(data_base_t *db, table_t *table, int column, int 
 		if(tid == 0) 
 			barrier_reset(&b1, num_threads); 
 
-		//bitonic_sort_table(db, s_tables[i], column, &tmp_table);
 		ret = sort_table_parallel(s_tables[i], column, tid, num_threads);
+
 		barrier_wait(&b2, num_threads); 	
 		if(tid == 0) {
 			barrier_reset(&b2, num_threads); 
@@ -1419,7 +1433,6 @@ int column_sort_table_parallel(data_base_t *db, table_t *table, int column, int 
 
 		dbuf->insert("Step 3: Sorted transposed column tables in %llu cycles (%llu sec)\n",
 			cycles, secs);
-
 		bcache_stats_read_and_reset(&db->bcache, &bstats);
 		bcache_stats_printf(&bstats); 
 #endif
@@ -1805,8 +1818,9 @@ int column_sort_table_parallel(data_base_t *db, table_t *table, int column, int 
 
 	ret = 0;
 cleanup: 
-	if (row)
+	if (row && tid == 0) {
 		free(row); 
+	}
 
 	if (tid == 0) {
 		if (s_tables) {
@@ -1829,8 +1843,10 @@ cleanup:
 			free(st_tables);
 		};
 	};
-	dbuf->flush();
-	delete dbuf;
+	if (tid == 0) {
+		dbuf->flush();
+		delete dbuf;
+	}
 	return ret; 
 };
 
@@ -2103,6 +2119,7 @@ int bitonicSplit(table_t *tbl, int start_i, int start_j, int count, int column, 
 
 // XXX: Is there a better way to implement reusable barriers?
 //std::atomic_uint stage1, stage2[32], stage3[8];
+barrier_t stage0 = {.count = 0, .seen = 0};
 barrier_t stage1 = {.count = 0, .seen = 0};
 barrier_t stage2a = {.count = 0, .seen = 0};
 barrier_t stage2b = {.count = 0, .seen = 0};
@@ -2127,10 +2144,10 @@ int sort_table_parallel(table_t *table, int column, int tid, int num_threads) {
 	if (tid == 0)
 		pin_table(table);
 #endif
-	barrier_wait(&b1, num_threads);
+	barrier_wait(&stage0, num_threads);
 
 	if(tid == 0)
-		barrier_reset(&b1, num_threads);
+		barrier_reset(&stage0, num_threads);
 
 	// stage 1: the whole data is split into shards for num_threads threads
 	recBitonicSort(table, tid == 0 ? 0 : (tid * N) / num_threads, (N / num_threads),

@@ -34,7 +34,8 @@ int main(){
         test_project_schema(eid);
         test_pad_schema(eid);
         test_project_row(eid);
-
+	// 8 threads, 50 iterations
+	test_barriers(eid, 8, 50);
 #if defined(OCALL_ECALL_TESTS)
 	test_null_ocalls(eid);
 #endif
