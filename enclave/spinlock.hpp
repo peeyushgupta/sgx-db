@@ -28,3 +28,4 @@ typedef struct barrier {
 void barrier_init(volatile barrier_t *b);
 void barrier_wait(volatile barrier_t *b, unsigned int num_threads);
 void barrier_reset(volatile barrier_t *b, unsigned int num_threads); 
+void barrier_dump(volatile barrier_t *b, int tid);
