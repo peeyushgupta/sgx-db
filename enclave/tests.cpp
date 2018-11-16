@@ -60,6 +60,23 @@ int ecall_spinlock_inc(unsigned long count) {
 	return passed; 
 }
 
+barrier_t _b1 = {0};
+barrier_t _b2 = {0};
+
+int ecall_barrier_test(unsigned long count, int num_threads, int tid) {
+
+	for (auto i = 0u; i < count; i++) {
+		barrier_wait(&_b1, num_threads);
+		if(tid == 0)
+			barrier_reset(&_b1, num_threads);
+
+		barrier_wait(&_b2, num_threads);
+		if(tid == 0)
+			barrier_reset(&_b2, num_threads);
+	}
+
+}
+
 /* Test overheads of a NULL ecall */
 
 void ecall_null_ecall() {

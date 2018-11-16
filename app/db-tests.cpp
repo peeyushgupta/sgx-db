@@ -130,6 +130,7 @@ void run_rankings_fn(sgx_enclave_id_t eid, int db_id, int rankings_table_id)
 	/* Column sort tests */
 	unsigned int column;
 	int ret;
+	int num_threads = 4;
 	// Rankings is 360000
 	//r = 16384;
 	//s = 16;
@@ -141,7 +142,7 @@ void run_rankings_fn(sgx_enclave_id_t eid, int db_id, int rankings_table_id)
 	start = RDTSC_START();
 
 	//ecall_column_sort_table_dbg(eid, &ret, db_id, rankings_table_id, column);
-	column_sort_table_parallel(eid, db_id, rankings_table_id, column, 2);
+	column_sort_table_parallel(eid, db_id, rankings_table_id, column, num_threads);
 	ecall_flush_table(eid, &ret, db_id, rankings_table_id);
 	end = RDTSCP();
 
@@ -419,17 +420,34 @@ int test_project_row(sgx_enclave_id_t eid) {
     ecall_test_project_row(eid, &ret);
 }
 
+void test_barrier_fn(sgx_enclave_id_t eid, unsigned long count, int num_threads, int tid)
+{
+	int ret;
+	ecall_barrier_test(eid, &ret, count, num_threads, tid);
+}
+
+
+void test_barriers(sgx_enclave_id_t eid, int num_threads, unsigned long count)
+{
+	std::vector<std::thread*> threads;
+	assert ((num_threads & (num_threads - 1)) == 0);
+
+	for (auto i = 0u; i < num_threads; i++)
+		threads.push_back(new thread(test_barrier_fn, eid, count, num_threads, i));
+
+	for (auto &t : threads)
+		t->join();
+}
+
 void bitonic_sorter_fn(sgx_enclave_id_t eid, int db_id, int table_id, int field, int tid, int num_threads)
 {
 	int ret;
 	ecall_sort_table_parallel(eid, &ret, db_id, table_id, field, tid, num_threads);
 }
 
-
-std::vector<std::thread*> threads;
-int num_threads = 8;
 void bitonic_sort_parallel(sgx_enclave_id_t eid, int db_id, int table_id, int field, int num_threads)
 {
+	std::vector<std::thread*> threads;
 	assert ((num_threads & (num_threads - 1)) == 0);
 
 	for (auto i = 0u; i < num_threads; i++)
@@ -505,6 +523,7 @@ int test_bitonic_sort(sgx_enclave_id_t eid)
 		int sorted_id;
 		unsigned long long start, end;
 		start = RDTSC_START();
+		auto num_threads = 2u;
 		//ecall_sort_table(eid, &ret, db_id, table_id, 0, &sorted_id);
 
 		bitonic_sort_parallel(eid, db_id, table_id, 0, num_threads);
@@ -543,6 +562,7 @@ void column_sort_table_parallel(sgx_enclave_id_t eid, int db_id, int table_id, i
 	for (auto &t : threads) {
 		printf("%s, waiting for join\n", __func__);
 		t->join();
+		printf("%s, joined thread %p\n", __func__, t);
 	}
 
 	return;
@@ -622,8 +642,10 @@ int test_column_sort(sgx_enclave_id_t eid)
 		
 	unsigned long long start, end;
 	start = RDTSC_START();
+	auto num_threads = 4;
+	//ecall_column_sort_table_dbg(eid, &ret, db_id, table_id, column);
 
-	ecall_column_sort_table_dbg(eid, &ret, db_id, table_id, column);
+	column_sort_table_parallel(eid, db_id, table_id, column, num_threads);
 	ecall_flush_table(eid, &ret, db_id, table_id);
 	end = RDTSCP();
 	

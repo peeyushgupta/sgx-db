@@ -30,11 +30,12 @@ int main(){
 #if defined(COLUMNSORT_TESTS)
 	test_spinlock_inc(eid, 10000);
 #endif
-#if 0
+
         test_project_schema(eid);
         test_pad_schema(eid);
         test_project_row(eid);
-
+	// 8 threads, 50 iterations
+	test_barriers(eid, 8, 50);
 #if defined(OCALL_ECALL_TESTS)
 	test_null_ocalls(eid);
 #endif
@@ -46,7 +47,6 @@ int main(){
 	test_column_sort(eid);
 
 	test_bitonic_sort(eid);
-#endif
 #if 1
 	test_rankings(eid);
 #endif	
