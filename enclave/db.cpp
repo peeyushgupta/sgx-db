@@ -26,7 +26,7 @@
 
 #define OCALL_VERBOSE 0
 #define JOIN_VERBOSE 0
-#define COLUMNSORT_VERBOSE 1
+#define COLUMNSORT_VERBOSE 0
 #define COLUMNSORT_VERBOSE_L2 0
 #define IO_VERBOSE 0
 
@@ -1122,6 +1122,7 @@ barrier_t b2 = {.count = 0, .seen = 0};
    s -- number of columns
 */
 
+// Globals
 table_t **s_tables, **st_tables, *tmp_table;
 unsigned long r, s;
 unsigned long chunk;
@@ -1143,7 +1144,6 @@ int column_sort_table_parallel(data_base_t *db, table_t *table, int column, int 
 	dbg_buffer *dbuf;
 #endif
 
-	printf("%s:%d called tid = %d\n", __func__, __LINE__, tid);
 	if(tid == 0) {
 		dbuf = new dbg_buffer(20);
 		ret = column_sort_pick_params(table->num_rows, table->sc.row_data_size, 
@@ -1290,20 +1290,21 @@ int column_sort_table_parallel(data_base_t *db, table_t *table, int column, int 
 #endif
 	}
 
+	// wait here until tid=0 sets up 's' value
+	barrier_wait(&b1, num_threads);
+	if(tid == 0)
+		barrier_reset(&b1, num_threads);
+
+	barrier_wait(&b2, num_threads);
+	if(tid == 0)
+		barrier_reset(&b2, num_threads);
+
 #if defined(REPORT_COLUMNSORT_STATS)
 	start = RDTSC(); 
 #endif
 
 	/* All threads sort table in parallel */
-	// s = 64
-	// 0 0, 31
-	// 1 32, 63
-	// 0 0, 15
-	// 1 16, 31
-	// 2 32, 47
-	// 3 48, 63
-	//for (unsigned int i = 0; i < s; i++) {
-	for (unsigned int i = tid * chunk; i < ((tid + 1) * chunk); i++) {
+	for (unsigned int i = 0; i < s; i++) {
 #if defined(PIN_TABLE)
 		if(tid == 0) {
 			pin_table(s_tables[i]); 
@@ -1313,12 +1314,7 @@ int column_sort_table_parallel(data_base_t *db, table_t *table, int column, int 
 		if(tid == 0) 
 			barrier_reset(&b1, num_threads); 
 
-		printf("%s[%d] s = %d s_table %p\n", __func__, tid, s, s_tables);
-		//abort();
-		//bitonic_sort_table(db, s_tables[i], column, &tmp_table);
 		ret = sort_table_parallel(s_tables[i], column, tid, num_threads);
-
-		printf("%s[%d] done bitonic round 1\n", __func__, tid);
 
 		barrier_wait(&b2, num_threads); 	
 		if(tid == 0) {
@@ -1390,7 +1386,6 @@ int column_sort_table_parallel(data_base_t *db, table_t *table, int column, int 
 		dbuf->insert("Step 2: Transposed column tables in %llu cycles (%llu sec)\n",
 			cycles, secs);
 		
-		dbuf->flush();
 		bcache_stats_read_and_reset(&db->bcache, &bstats);
 		bcache_stats_printf(&bstats); 
 #endif
@@ -1408,8 +1403,7 @@ int column_sort_table_parallel(data_base_t *db, table_t *table, int column, int 
 	start = RDTSC(); 
 #endif
 
-	//for (unsigned int i = 0; i < s; i++) {
-	for (unsigned int i = tid * chunk; i < ((tid + 1) * chunk); i++) {
+	for (unsigned int i = 0; i < s; i++) {
 		//bitonic_sort_table(db, st_tables[i], column, &tmp_table);
 #if defined(PIN_TABLE)
 		if(tid == 0) {
@@ -1439,7 +1433,6 @@ int column_sort_table_parallel(data_base_t *db, table_t *table, int column, int 
 
 		dbuf->insert("Step 3: Sorted transposed column tables in %llu cycles (%llu sec)\n",
 			cycles, secs);
-		dbuf->flush();
 		bcache_stats_read_and_reset(&db->bcache, &bstats);
 		bcache_stats_printf(&bstats); 
 #endif
@@ -1507,8 +1500,7 @@ int column_sort_table_parallel(data_base_t *db, table_t *table, int column, int 
 		start = RDTSC(); 
 #endif
 
-	//for (unsigned int i = 0; i < s; i++) {
-	for (unsigned int i = tid * chunk; i < ((tid + 1) * chunk); i++) {
+	for (unsigned int i = 0; i < s; i++) {
 	//	bitonic_sort_table(db, s_tables[i], column, &tmp_table);
 #if defined(PIN_TABLE)
 		if(tid == 0) {
@@ -1620,8 +1612,7 @@ int column_sort_table_parallel(data_base_t *db, table_t *table, int column, int 
 		start = RDTSC(); 
 #endif
 
-	//for (unsigned int i = 0; i < s; i++) {
-	for (unsigned int i = tid * chunk; i < ((tid + 1) * chunk); i++) {
+	for (unsigned int i = 0; i < s; i++) {
 		//bitonic_sort_table(db, st_tables[i], column, &tmp_table);
 #if defined(PIN_TABLE)
 		if(tid == 0) {
@@ -1828,7 +1819,6 @@ int column_sort_table_parallel(data_base_t *db, table_t *table, int column, int 
 	ret = 0;
 cleanup: 
 	if (row && tid == 0) {
-		printf("%s, freeing %p\n", __func__, row);
 		free(row); 
 	}
 
@@ -2129,6 +2119,7 @@ int bitonicSplit(table_t *tbl, int start_i, int start_j, int count, int column, 
 
 // XXX: Is there a better way to implement reusable barriers?
 //std::atomic_uint stage1, stage2[32], stage3[8];
+barrier_t stage0 = {.count = 0, .seen = 0};
 barrier_t stage1 = {.count = 0, .seen = 0};
 barrier_t stage2a = {.count = 0, .seen = 0};
 barrier_t stage2b = {.count = 0, .seen = 0};
@@ -2153,10 +2144,10 @@ int sort_table_parallel(table_t *table, int column, int tid, int num_threads) {
 	if (tid == 0)
 		pin_table(table);
 #endif
-	barrier_wait(&b1, num_threads);
+	barrier_wait(&stage0, num_threads);
 
 	if(tid == 0)
-		barrier_reset(&b1, num_threads);
+		barrier_reset(&stage0, num_threads);
 
 	// stage 1: the whole data is split into shards for num_threads threads
 	recBitonicSort(table, tid == 0 ? 0 : (tid * N) / num_threads, (N / num_threads),
@@ -2192,11 +2183,11 @@ int sort_table_parallel(table_t *table, int column, int tid, int num_threads) {
 					(threads_per_set * num_sets_passed * segment_length)
 					+ (tid * segment_length);
 			auto sj = si + (threads_per_set * segment_length);
-//#ifndef NDEBUG
+#ifndef NDEBUG
 			printf(
 				"[%d] i = %d performing split si %d | sj %d | count %d | num_parts %d | dir %d\n",
 				tid, i, si, sj, segment_length, num_parts, dir);
-//#endif
+#endif
 			bitonicSplit(table, si, sj, segment_length, column, dir, tid);
 
 			// when we do bitonic split, num_parts is doubled
@@ -2237,10 +2228,10 @@ int sort_table_parallel(table_t *table, int column, int tid, int num_threads) {
 		num_parts >>= (i + 2);
 	}
 
-//#ifndef NDEBUG
+#ifndef NDEBUG
 	printf("[%d] stage3 sort start %d, count %d\n", tid,
 		(tid * N) / num_threads, N / num_threads);
-//#endif
+#endif
 	// do a final round of sort where all threads will arrange it in ascending order
 	recBitonicSort(table, tid == 0 ? 0 : (tid * N) / num_threads, (N / num_threads),
 		column, ASCENDING, tid);
