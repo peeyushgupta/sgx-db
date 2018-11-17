@@ -435,21 +435,23 @@ int create_table(data_base_t *db, std::string &name, schema_t *schema, table_t *
 	table->id = i; 
 #ifdef PAD_SCHEMA
 	schema_t new_sc;
-	int pad_bytes = ((row_size(schema) + ALIGNMENT) & ~(ALIGNMENT - 1)) - row_size(schema);
-	//printf("%s, padding schema with %d bytes | old_size %zu\n", __func__, pad_bytes, row_size(schema));
-	pad_schema(schema, pad_bytes, &new_sc);
+ 	int pad_bytes; 
+	if(row_size(schema) % ALIGNMENT != 0) {
+		pad_bytes = ((row_size(schema) + ALIGNMENT) & ~(ALIGNMENT - 1)) - row_size(schema);
+		DBG("pad new table:%s, pad_bytes:%d, row_size(schema):%d\n", 
+			name.c_str(), pad_bytes, row_size(schema)); 
+		pad_schema(schema, pad_bytes, &new_sc);
+		table->sc = new_sc;
+	} else {
+		table->sc = *schema;
+	}
+#else
+	table->sc = *schema;
 #endif
 
 	table->name = name;
 	table->num_rows = 0; 
 	table->num_blks = 0; 
-#ifdef PAD_SCHEMA
-	table->sc = new_sc;
-	//printf("%s, row_header_size %zu | row_data_size %zu | row_size %zu\n", __func__,
-	//			row_header_size(), row_data_size(table), row_size(table));
-#else
-	table->sc = *schema;
-#endif
 	table->db = db; 
 	table->pinned_blocks = NULL; 
 	table->rows_per_blk = DATA_BLOCK_SIZE / row_size(table); 
@@ -674,35 +676,6 @@ int put_row_dirty(table_t *table, data_block_t *b, unsigned int row_num) {
 	return 0; 
 }
 
-
-/* Read one row. */
-int read_row(table_t *table, unsigned int row_num, row_t *row) {
-
-	unsigned long dblk_num;
-	unsigned long row_off; 
-	data_block_t *b;
-
-	/* Make a fake row if it's outside of the table
-           assuming it's padding */
-	if(row_num >= table->num_rows) {
-		row->header.fake = true; 
-		return 0;
-	} 
-
-	dblk_num = row_num / table->rows_per_blk;
-
-	/* Offset of the row within the data block in bytes */
-	row_off = (row_num - dblk_num * table->rows_per_blk) * row_size(table); 
-	
-        b = bread(table, dblk_num);
-	ERR_ON(!b, "got NULL block"); 
-
-	/* Copy the row into the data block */
-	memcpy(row, (char*)b->data + row_off, row_size(table)); 
-
-	brelse(b);
-	return 0; 
-}
 
 /* Pin table in buffer cache  */
 int pin_table(table_t *table) {
@@ -1162,6 +1135,7 @@ int column_sort_table_parallel(data_base_t *db, table_t *table, int column, int 
 		goto cleanup;
 	}
 
+	DBG("allocated row, for row_size:%d table:%s\n", row_size(table), table->name.c_str()); 
 	if(tid == 0) {
 		dbuf = new dbg_buffer(20);
 		ret = column_sort_pick_params(table->num_rows, table->sc.row_data_size, 
@@ -1373,7 +1347,7 @@ int column_sort_table_parallel(data_base_t *db, table_t *table, int column, int 
 	barrier_wait(&b1, num_threads);
 	if(tid == 0) 
 		barrier_reset(&b1, num_threads); 
-
+	
 	/* Transpose s column tables into s transposed tables  */
 	for (unsigned int i = 0 + tid; i < s; i += num_threads) {
 
@@ -1391,9 +1365,9 @@ int column_sort_table_parallel(data_base_t *db, table_t *table, int column, int 
 			/* Add row to the st table */
 			DBG_ON(COLUMNSORT_VERBOSE,
 				"tid (%d): insert row %d of s_tables[%d] into row:%d of st_tables[%d]"
-				"r:%d, s:%d, j%d, r/s:%d, j/s:%d\n", 
+				"r:%d, s:%d, j%d, r/s:%d, j/s:%d, row_size:%d\n", 
 				tid, j, i, tid * (r/s) + j / s, j % s, 
-				r, s, j, r/s, j/s); 
+				r, s, j, r/s, j/s, row_size(s_tables[i])); 
 
 			
 			ret = write_row_dbg(st_tables[j % s], row, tid * (r/s) + j / s);
@@ -1408,7 +1382,6 @@ int column_sort_table_parallel(data_base_t *db, table_t *table, int column, int 
 	barrier_wait(&b2, num_threads); 	
 	if(tid == 0) 
 		barrier_reset(&b2, num_threads); 
-
 	if (tid == 0) {
 #if defined(REPORT_COLUMNSORT_STATS)
 		end = RDTSC();
@@ -2327,6 +2300,35 @@ int ecall_sort_table_parallel(int db_id, int table_id, int column, int tid, int 
  *
  */
 
+
+/* Read one row. */
+int read_row(table_t *table, unsigned int row_num, row_t *row) {
+
+	unsigned long dblk_num;
+	unsigned long row_off; 
+	data_block_t *b;
+
+	/* Make a fake row if it's outside of the table
+           assuming it's padding */
+	if(row_num >= table->num_rows) {
+		row->header.fake = true; 
+		return 0;
+	} 
+
+	dblk_num = row_num / table->rows_per_blk;
+
+	/* Offset of the row within the data block in bytes */
+	row_off = (row_num - dblk_num * table->rows_per_blk) * row_size(table); 
+	
+        b = bread(table, dblk_num);
+	ERR_ON(!b, "got NULL block"); 
+
+	/* Copy the row into the data block */
+	 memcpy(row, (char*)b->data + row_off, row_size(table)); 
+
+	brelse(b);
+	return 0; 
+}
 
 int write_row_dbg(table_t *table, row_t *row, unsigned int row_num) {
 	unsigned long dblk_num;
