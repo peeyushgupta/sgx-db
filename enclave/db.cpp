@@ -26,8 +26,8 @@
 
 #define OCALL_VERBOSE 0
 #define JOIN_VERBOSE 0
-#define COLUMNSORT_VERBOSE 0
-#define COLUMNSORT_VERBOSE_L2 0
+#define COLUMNSORT_VERBOSE 1
+#define COLUMNSORT_VERBOSE_L2 1
 #define IO_VERBOSE 0
 
 data_base_t* g_dbs[MAX_DATABASES];
@@ -71,8 +71,16 @@ struct dbg_buffer {
 
 	void insert(const char *fmt, ...) {
 		va_list args;
+
+		current ++;
+ 
+		if (current >= num_buffers) {
+			ERR("buffer is full\n");
+			return; 
+		} 
+		
 		va_start(args, fmt);
-		_vsprintf_s(buffers[current++], BUFSIZ, fmt, args);
+		_vsprintf_s(buffers[current], BUFSIZ, fmt, args);
 		va_end(args);
 	}
 
@@ -494,6 +502,7 @@ int ecall_create_table(int db_id, const char *cname, int name_len, schema_t *sch
 int delete_table(data_base_t *db, table_t *table) {
 	int ret, sgx_ret; 
 
+	//DBG("deleting table %p\n", table); 
 	
 	db->tables[table->id] = NULL;
 	
@@ -621,7 +630,8 @@ int get_row(table_t *table, unsigned int row_num, data_block_t **block, row_t **
 	row_off = (row_num - dblk_num * table->rows_per_blk) * row_size(table); 
 	
         b = bread(table, dblk_num);
-	 	
+	ERR_ON(!b, "got NULL block"); 
+
 	*row = (row_t*) ((char*)b->data + row_off); 
 	*block = b; 
 	return 0; 
@@ -685,7 +695,8 @@ int read_row(table_t *table, unsigned int row_num, row_t *row) {
 	row_off = (row_num - dblk_num * table->rows_per_blk) * row_size(table); 
 	
         b = bread(table, dblk_num);
-	 	
+	ERR_ON(!b, "got NULL block"); 
+
 	/* Copy the row into the data block */
 	memcpy(row, (char*)b->data + row_off, row_size(table)); 
 
@@ -700,6 +711,9 @@ int pin_table(table_t *table) {
 	unsigned long number_of_blks; 
 	data_block_t *b;
 
+	ERR_ON(table->num_rows == 0, 
+		"Nothing to pin, table:%s empty\n", table->name.c_str()); 
+
 	number_of_blks = table->num_rows / table->rows_per_blk + 1; 
 
 	table->pinned_blocks = (data_block_t **) malloc(number_of_blks*sizeof(data_block_t*)); 
@@ -707,6 +721,7 @@ int pin_table(table_t *table) {
 	for(blk_num = 0; blk_num*table->rows_per_blk < table->num_rows; blk_num++) 
 	{ 
         	b = bread(table, blk_num);
+		ERR_ON(!b, "got NULL block"); 
 		table->pinned_blocks[blk_num] = b; 
 	} 	
 	return 0; 
@@ -1125,8 +1140,6 @@ barrier_t b2 = {.count = 0, .seen = 0};
 // Globals
 table_t **s_tables, **st_tables, *tmp_table;
 unsigned long r, s;
-unsigned long chunk;
-
 
 int column_sort_table_parallel(data_base_t *db, table_t *table, int column, int tid, int num_threads) {
 	int ret;
@@ -1143,6 +1156,11 @@ int column_sort_table_parallel(data_base_t *db, table_t *table, int column, int 
 	bcache_stats_t bstats;
 	dbg_buffer *dbuf;
 #endif
+	row = (row_t*) malloc(row_size(table));
+	if(!row) {
+		ERR("failed to alloc row\n"); 
+		goto cleanup;
+	}
 
 	if(tid == 0) {
 		dbuf = new dbg_buffer(20);
@@ -1165,7 +1183,7 @@ int column_sort_table_parallel(data_base_t *db, table_t *table, int column, int 
 				r, 2*(s - 1)*(s - 1), r, s);  
 			return -1; 
 		}
-		chunk  = s / num_threads;
+
 		s_tables = (table_t **)malloc(s * sizeof(table_t *)); 
 		if(!s_tables) {
 			ERR("failed to allocate s_tables\n");
@@ -1238,9 +1256,6 @@ int column_sort_table_parallel(data_base_t *db, table_t *table, int column, int 
 #endif
 
 
-		row = (row_t*) malloc(row_size(table));
-		if(!row)
-			goto cleanup;
 	
 		row_num = 0; 
 
@@ -1347,37 +1362,54 @@ int column_sort_table_parallel(data_base_t *db, table_t *table, int column, int 
 #endif
 
 #if defined(REPORT_COLUMNSORT_STATS)
-	start = RDTSC(); 
+		start = RDTSC(); 
+	}
 #endif
 
-		/* Transpose s column tables into s transposed tables  */
-		for (unsigned int i = 0; i < s; i ++) {
+	/* All threas transpose tables in parallel */
+	/* Each thread takes an s table and writes it into an st table */
+	
+	/* Just in case tid==0 is still unpining table s_tables, wait for it */
+	barrier_wait(&b1, num_threads);
+	if(tid == 0) 
+		barrier_reset(&b1, num_threads); 
 
-			for (unsigned int j = 0; j < r; j ++) {
+	/* Transpose s column tables into s transposed tables  */
+	for (unsigned int i = 0 + tid; i < s; i += num_threads) {
 
-				// Read old row
-				ret = read_row(s_tables[i], j, row);
-				if(ret) {
-					ERR("failed to read row %d of table %s\n",
-						j, s_tables[i]->name.c_str());
-					goto cleanup;
-				}
+		for (unsigned int j = 0; j < r; j ++) {
+
+			// Read old row
+			ret = read_row(s_tables[i], j, row);
+			if(ret) {
+				ERR("failed to read row %d of table %s\n",
+					j, s_tables[i]->name.c_str());
+				goto cleanup;
+			}
 
 				
-				/* Add row to the st table */
-				//DBG_ON(COLUMNSORT_VERBOSE,
-				//	"insert row %d of transposed table #%d (%s)\n", 
-				//	st_tables[j % s]->num_rows, j % s, 
-				//	st_tables[j % s]->name.c_str()); 
+			/* Add row to the st table */
+			DBG_ON(COLUMNSORT_VERBOSE,
+				"tid (%d): insert row %d of s_tables[%d] into row:%d of st_tables[%d]"
+				"r:%d, s:%d, j%d, r/s:%d, j/s:%d\n", 
+				tid, j, i, tid * (r/s) + j / s, j % s, 
+				r, s, j, r/s, j/s); 
 
-				ret = insert_row_dbg(st_tables[j % s], row);
-				if(ret) {
-					ERR("failed to insert row %d of transposed column table %s\n",
-						j, st_tables[j % s]->name.c_str());
-					goto cleanup;
-				}
+			
+			ret = write_row_dbg(st_tables[j % s], row, tid * (r/s) + j / s);
+			if(ret) {
+				ERR("failed to insert row %d of transposed column table %s\n",
+					j, st_tables[j % s]->name.c_str());
+				goto cleanup;
 			}
 		}
+	}
+
+	barrier_wait(&b2, num_threads); 	
+	if(tid == 0) 
+		barrier_reset(&b2, num_threads); 
+
+	if (tid == 0) {
 #if defined(REPORT_COLUMNSORT_STATS)
 		end = RDTSC();
 		cycles = end - start;
@@ -1818,7 +1850,7 @@ int column_sort_table_parallel(data_base_t *db, table_t *table, int column, int 
 
 	ret = 0;
 cleanup: 
-	if (row && tid == 0) {
+	if (row) {
 		free(row); 
 	}
 
@@ -1827,10 +1859,11 @@ cleanup:
 			for (unsigned int i = 0; i < s; i++) {
 				if (s_tables[i]) {
 					bflush(s_tables[i]);
-					delete_table(db, s_tables[i]); 
+					delete_table(db, s_tables[i]);
 				}
 			}
 			free(s_tables);
+			s_tables = NULL; 
 		};
 
 		if (st_tables) {
@@ -1838,9 +1871,11 @@ cleanup:
 				if (st_tables[i]) {
 					bflush(st_tables[i]);
 					delete_table(db, st_tables[i]);
+					
 				}
 			}
 			free(st_tables);
+			st_tables = NULL; 
 		};
 	};
 	if (tid == 0) {
@@ -2303,8 +2338,7 @@ int write_row_dbg(table_t *table, row_t *row, unsigned int row_num) {
 		tmp_num_rows = table->num_rows;
 		old_num_rows = tmp_num_rows;  
 		if(row_num >= tmp_num_rows) {
-			old_num_rows = xchg(&table->num_rows, (row_num - 1)); 
-		
+			old_num_rows = xchg(&table->num_rows, (row_num + 1)); 
 		}
 	} while (old_num_rows != tmp_num_rows);  
 
@@ -2314,7 +2348,8 @@ int write_row_dbg(table_t *table, row_t *row, unsigned int row_num) {
 	row_off = (row_num - dblk_num * table->rows_per_blk) * row_size(table); 
 	
         b = bread(table, dblk_num);
-	 	
+	ERR_ON(!b, "got NULL block"); 
+
 	/* Copy the row into the data block */
 	memcpy((char*)b->data + row_off, row, row_size(table)); 
 
@@ -2337,7 +2372,8 @@ int insert_row_dbg(table_t *table, row_t *row) {
 	row_off = (table->num_rows - dblk_num * table->rows_per_blk) * row_size(table); 
 	
         b = bread(table, dblk_num);
-	
+	ERR_ON(!b, "got NULL block"); 
+
 	/* Copy the row into the data block */
 	memcpy((char*)b->data + row_off, row, row_size(table)); 
 
@@ -2490,8 +2526,8 @@ int print_table_dbg(table_t *table, int start, int end) {
 	unsigned long i;
 	row_t *row;
 
-	printf("printing table:%s with %lu rows\n", 
-		table->name.c_str(), table->num_rows); 
+	printf("printing table:%s with %lu rows (row size:%d) from %d to %d\n", 
+		table->name.c_str(), table->num_rows, row_size(table), start, end); 
 
 	row = (row_t *)malloc(row_size(table)); 
 	if (!row) {
