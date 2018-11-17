@@ -26,8 +26,8 @@
 
 #define OCALL_VERBOSE 0
 #define JOIN_VERBOSE 0
-#define COLUMNSORT_VERBOSE 1
-#define COLUMNSORT_VERBOSE_L2 1
+#define COLUMNSORT_VERBOSE 0
+#define COLUMNSORT_VERBOSE_L2 0
 #define IO_VERBOSE 0
 
 data_base_t* g_dbs[MAX_DATABASES];
@@ -1135,7 +1135,6 @@ int column_sort_table_parallel(data_base_t *db, table_t *table, int column, int 
 		goto cleanup;
 	}
 
-	DBG("allocated row, for row_size:%d table:%s\n", row_size(table), table->name.c_str()); 
 	if(tid == 0) {
 		dbuf = new dbg_buffer(20);
 		ret = column_sort_pick_params(table->num_rows, table->sc.row_data_size, 
@@ -1673,9 +1672,11 @@ int column_sort_table_parallel(data_base_t *db, table_t *table, int column, int 
 		/* In Shantanu's implementation (no +/-infinity) the first column
 	           is special --- it's sorted so instead of shifting we have to 
 		   splice it: first half of the column stays in it's place, the 
-		   second half (the max elements) go to the last column */
+		   second half (the max elements) goes to the last column */
 
-		unshift = r - r / 2; 	
+		unshift = r - r / 2; 
+		/* Read half of the row from the st[0] table and write it into 
+                   s[0] table -- this part doesn't move */	
 		for (unsigned int j = 0; j < unshift; j ++) {
 
 			/* Read row from st table */
@@ -1696,6 +1697,8 @@ int column_sort_table_parallel(data_base_t *db, table_t *table, int column, int 
 			row_num ++;
 		}
 
+		/* Read the second half of the st[0] table and write it to the 
+                   very end of s[s-1] table */
 		for (unsigned int j = unshift; j < s; j ++) {
 
 			/* Read row from st table */
@@ -1716,10 +1719,15 @@ int column_sort_table_parallel(data_base_t *db, table_t *table, int column, int 
 			row_num ++;
 		}
 
-		/* Now shift the rest of the table */
+		/* Now shift the rest of the table 
+		   we start from st[1] table and shift it into the
+		   end of s[0], and so on
+		*/
+
 		for (unsigned int i = 1; i < s; i ++) {
 
 			for (unsigned int j = 0; j < r; j ++) {
+				unsigned int serial; 
 	
 				/* Read row from st table */
 				ret = read_row(st_tables[i], j, row);
@@ -1730,16 +1738,22 @@ int column_sort_table_parallel(data_base_t *db, table_t *table, int column, int 
 				}
 
 				/* Add row to the st table */
-				DBG_ON(COLUMNSORT_VERBOSE_L2,
-					"insert row %d of unshifted table (%s) at row %d, row_num:%d, shitf:%d\n", 
-					j, s_tables[((row_num + (r * s) - shift) / r) % s]->name.c_str(), 
-					(row_num + (r * s) - shift) % r, row_num, shift); 
+				//DBG_ON(COLUMNSORT_VERBOSE_L2,
+				//	"insert row %d of unshifted table (%s) at row %d, row_num:%d, shitf:%d\n", 
+				//	j, s_tables[((row_num + (r * s) - shift) / r) % s]->name.c_str(), 
+				//	(row_num + (r * s) - shift) % r, 
+				//	row_num, shift); 
 	
-
+				serial = (i * r) + j; 
+				serial -= shift; 
 				
+				DBG_ON(COLUMNSORT_VERBOSE_L2,
+					"insert row %d of st[%d] into s[%d], row %d, shitf:%d\n", 
+					j, i, serial / r, serial % r, shift); 
+
 				/* Add row to the s table */
-				ret = write_row_dbg(s_tables[((row_num + (r * s) - shift) / r) % s], 
-							row, (row_num + (r * s) - shift) % r);
+				ret = write_row_dbg(s_tables[serial / r], 
+							row, serial % r);
 				if(ret) {
 					ERR("failed to insert row %d of unshifted column table %s\n",
 						row, s_tables[i]->name.c_str());
