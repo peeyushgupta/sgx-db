@@ -1144,7 +1144,7 @@ int column_sort_pick_params(unsigned long num_records,
 
 int reassemble_column_tables(table_t** s_tables, table_t *table, row_t *row, int s, int r, int tid, int num_threads)
 {
-	unsigned int row_num; 
+	unsigned int row_num = 0; 
 	int ret; 
 	
 	/* In a parallel setup all work is done by tid 0 */
@@ -1516,6 +1516,7 @@ int column_sort_table_parallel(data_base_t *db, table_t *table, int column, int 
 	for (unsigned int i = 0 + tid; i < s; i += num_threads) {
 
 		for (unsigned int j = 0; j < r; j ++) {
+			unsigned int seq; 
 
 			// Read old row
 			ret = read_row(s_tables[i], j, row);
@@ -1525,16 +1526,23 @@ int column_sort_table_parallel(data_base_t *db, table_t *table, int column, int 
 				goto cleanup;
 			}
 
+			seq = i * r + j; 
 				
 			/* Add row to the st table */
+			//DBG_ON(COLUMNSORT_VERBOSE,
+			//	"tid (%d): insert row %d of s_tables[%d] into row:%d of st_tables[%d]"
+			//	"r:%d, s:%d, j%d, r/s:%d, j/s:%d, row_size:%d\n", 
+			//	tid, j, i, tid * (r/s) + j / s, j % s, 
+			//	r, s, j, r/s, j/s, row_size(s_tables[i])); 
+
 			DBG_ON(COLUMNSORT_VERBOSE,
 				"tid (%d): insert row %d of s_tables[%d] into row:%d of st_tables[%d]"
-				"r:%d, s:%d, j%d, r/s:%d, j/s:%d, row_size:%d\n", 
-				tid, j, i, tid * (r/s) + j / s, j % s, 
-				r, s, j, r/s, j/s, row_size(s_tables[i])); 
+				"r:%d, s:%d, j%d, seq:%d, row_size:%d\n", 
+				tid, j, i, seq/s, seq % s, 
+				r, s, j, seq, row_size(s_tables[i])); 
 
 			
-			ret = write_row_dbg(st_tables[j % s], row, tid * (r/s) + j / s);
+			ret = write_row_dbg(st_tables[seq % s], row, seq / s);
 			if(ret) {
 				ERR("failed to insert row %d of transposed column table %s\n",
 					j, st_tables[j % s]->name.c_str());

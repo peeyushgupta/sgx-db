@@ -653,7 +653,7 @@ int test_column_sort(sgx_enclave_id_t eid)
 		
 	unsigned long long start, end;
 	start = RDTSC_START();
-	auto num_threads = 4;
+	auto num_threads = 1;
 	//ecall_column_sort_table_dbg(eid, &ret, db_id, table_id, column);
 
 	column_sort_table_parallel(eid, db_id, table_id, column, num_threads);
