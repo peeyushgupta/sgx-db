@@ -67,6 +67,17 @@
     #define DBG_ON(_g, _f, _a...)    do { } while (0)
 #endif 
 
+    #define INFO(_f, _a...)  do {                               \
+        printf(TXT_FG_GREEN "INFO:" TXT_FG_WHITE "(%s)"         \
+                _f, __func__, ## _a);                           \
+    } while (0)
+
+    #define INFO_ON(_g, _f, _a...) do {                         \
+            if (_g) {                                           \
+                INFO(_f, ## _a);                                \
+            }                                                   \
+    } while (0)
+
 
     #define WARN(_f, _a...)  do {                               \
         printf(TXT_FG_YELLOW "WARN:" TXT_FG_WHITE "(%s)"        \

@@ -560,6 +560,46 @@ void *get_column(schema_t *sc, int field, row_t *row) {
 	return(void*)&row->data[sc->offsets[field]];
 }
 
+/* returns ture if column of row_l is found respectively to be greater then column of row_r */
+
+bool compare_rows(schema_t *sc, int column, row_t *row_l, row_t *row_r) {
+	bool res; 
+
+	/* make sure fake touples are always greater */
+	if (row_l->header.fake)
+		return true; 
+
+	switch(sc->types[column]) {
+	case BOOLEAN:
+		res = *(bool*)&row_l->data[sc->offsets[column]] >
+			*(bool*)&row_r->data[sc->offsets[column]]; 
+		break;
+	
+	case CHARACTER: 
+		res = *(char*)&row_l->data[sc->offsets[column]] >
+			*(char*)&row_r->data[sc->offsets[column]]; 
+		break;
+ 
+	case TINYTEXT:
+	case VARCHAR: {
+		int str_ret = strcmp (&row_l->data[sc->offsets[column]], 
+			&row_r->data[sc->offsets[column]]) ;
+		res = (str_ret > 0);
+		break;
+	}
+	case INTEGER:
+		res = *(int*)&row_l->data[sc->offsets[column]] > 
+			*(int*)&row_r->data[sc->offsets[column]]; 
+
+		break;
+	default: 
+		res = false;
+	}
+	return res;
+}
+
+/* XXX: accidentally ended up writing the same function twice */
+
 bool cmp_row(table_t *tbl_left, row_t *row_left, int field_left, table_t *tbl_right, row_t *row_right, int field_right) {
 
 	if(tbl_left->sc.types[field_left] != tbl_right->sc.types[field_right])
@@ -1102,6 +1142,115 @@ int column_sort_pick_params(unsigned long num_records,
 	return 0;
 }
 
+int reassemble_column_tables(table_t** s_tables, table_t *table, row_t *row, int s, int r, int tid, int num_threads)
+{
+	unsigned int row_num; 
+	int ret; 
+	
+	/* In a parallel setup all work is done by tid 0 */
+	if (tid != 0) 
+		return 0; 
+
+	/* Write sorted table back  */
+	for (unsigned int i = 0; i < s; i ++) {
+
+		for (unsigned int j = 0; j < r; j ++) {
+
+			/* Read row from s table */
+			ret = read_row(s_tables[i], j, row);
+			if(ret) {
+				ERR("failed to read row %d of table %s\n",
+					row_num, s_tables[i]->name.c_str());
+				return -1;
+			}
+
+			/* Add row to the st table */
+			ret = write_row_dbg(table, row, row_num);
+			if(ret) {
+				ERR("failed to insert row %d of sorted table %s\n",
+					row_num, table->name.c_str());
+				return -2;
+			}
+			row_num ++;
+		}
+	}
+	return 0; 
+}
+
+int compare_tables(table_t *left_tbl, table_t *right_tbl, int tid, int num_threads) {
+
+	row_t *right_row, *left_row; 
+	int ret;  
+
+	/* In a parallel setup all work is done by tid 0 */
+	if (tid != 0) 
+		return 0; 
+
+	left_row = (row_t*) malloc(row_size(left_tbl));
+	if(!left_row)
+		return -1;
+
+	right_row = (row_t*) malloc(row_size(right_tbl));
+	if(!right_row)
+		return -2;
+
+	if(left_tbl->num_rows != left_tbl->num_rows) {
+		ERR("tables have different size: (%s,%d) != (%s, %d)\n",
+			left_tbl->name.c_str(), left_tbl->num_rows, 
+			right_tbl->name.c_str(), right_tbl->num_rows);
+		return -3;
+	};
+
+	for (unsigned long i = 0; i < left_tbl->num_rows; i ++) {
+
+		// Read old row
+		ret = read_row(left_tbl, i, left_row);
+		if(ret) {
+			ERR("failed to read row %d of table %s\n",
+				i, left_tbl->name.c_str());
+			goto cleanup;
+		}
+
+				
+		/* Add row to the promoted table */
+		ret = read_row(right_tbl, i, right_row);
+		if(ret) {
+			ERR("failed to insert row %d of promoted table %s\n",
+				i, right_tbl->name.c_str());
+			goto cleanup;
+		}
+
+		ret = memcmp(left_row, right_row, row_size(left_tbl)); 
+		if (ret) {
+			ERR("tables have different rows: (%s, row:%d) != (%s, row:%d)\n",
+			left_tbl->name.c_str(), i, 
+			right_tbl->name.c_str(), i);
+			print_row(&left_tbl->sc, left_row); 
+			print_row(&right_tbl->sc, right_row);
+			goto cleanup; 
+		}
+	}
+
+	INFO("passed comparison: (%s) == (%s)\n",
+		left_tbl->name.c_str(), right_tbl->name.c_str());
+
+
+	ret = 0;
+cleanup: 
+	if (left_row)
+		free(left_row); 
+
+	if (right_row)
+		free(right_row); 
+
+
+	return ret; 
+};
+
+int compare_tables(table_t *left, table_t *right) {
+	return compare_tables(left, right, 0, 1);
+}
+
 
 barrier_t b1 = {.count = 0, .seen = 0}; 
 barrier_t b2 = {.count = 0, .seen = 0}; 
@@ -1121,6 +1270,9 @@ int column_sort_table_parallel(data_base_t *db, table_t *table, int column, int 
 	unsigned long row_num;  
 	unsigned long shift, unshift;
 
+#if defined(COLUMNSORT_DBG_L2)
+	table_t *tmp_table; 
+#endif
 
 #if defined(REPORT_COLUMNSORT_STATS)
 	unsigned long long start, end; 
@@ -1270,7 +1422,19 @@ int column_sort_table_parallel(data_base_t *db, table_t *table, int column, int 
 #endif
 
 
-#if defined(COLUMNSORT_DBG)
+#if defined(COLUMNSORT_DBG_L2)
+		/* Create a temporary table to compare against the original one  */
+		tmp_tbl_name = "tmp:" + table->name ; 
+			
+		ret = create_table(db, tmp_tbl_name, &table->sc, &tmp_table);
+		if (ret) {
+			ERR("create table:%d\n", ret);
+			goto cleanup; 
+		}
+	
+		DBG_ON(COLUMNSORT_VERBOSE_L2, "Created tmp table %s, id:%d\n", 
+            		tmp_tbl_name.c_str(), tmp_table->id); 
+
 		printf("Column tables\n");
 		for (unsigned int i = 0; i < s; i++) {
 			print_table_dbg(s_tables[i], 0, s_tables[i]->num_rows);
@@ -1302,8 +1466,9 @@ int column_sort_table_parallel(data_base_t *db, table_t *table, int column, int 
 		if(tid == 0) 
 			barrier_reset(&b1, num_threads); 
 
+#if !defined(SKIP_BITONIC)
 		ret = sort_table_parallel(s_tables[i], column, tid, num_threads);
-
+#endif
 		barrier_wait(&b2, num_threads); 	
 		if(tid == 0) {
 			barrier_reset(&b2, num_threads); 
@@ -1417,8 +1582,9 @@ int column_sort_table_parallel(data_base_t *db, table_t *table, int column, int 
 		barrier_wait(&b1, num_threads);
 		if(tid == 0) 
 			barrier_reset(&b1, num_threads); 
-
+#if !defined(SKIP_BITONIC)
 		ret = sort_table_parallel(st_tables[i], column, tid, num_threads);
+#endif
 		barrier_wait(&b2, num_threads); 	
 		if(tid == 0) { 
 			barrier_reset(&b2, num_threads); 
@@ -1501,7 +1667,7 @@ int column_sort_table_parallel(data_base_t *db, table_t *table, int column, int 
 	} /* tid == 0 */
 
 #if defined(REPORT_COLUMNSORT_STATS)
-		start = RDTSC(); 
+	start = RDTSC(); 
 #endif
 
 	for (unsigned int i = 0; i < s; i++) {
@@ -1514,8 +1680,9 @@ int column_sort_table_parallel(data_base_t *db, table_t *table, int column, int 
 		barrier_wait(&b1, num_threads);
 		if(tid == 0) 
 			barrier_reset(&b1, num_threads); 
-
+#if !defined(SKIP_BITONIC)
 		ret = sort_table_parallel(s_tables[i], column, tid, num_threads);
+#endif
 		barrier_wait(&b2, num_threads); 	
 		if(tid == 0) {
 			barrier_reset(&b2, num_threads); 
@@ -1524,8 +1691,19 @@ int column_sort_table_parallel(data_base_t *db, table_t *table, int column, int 
 #endif
 		}
 	}
+#if defined(COLUMNSORT_DBG_L2)
+ 	ret = reassemble_column_tables(s_tables, tmp_table, row, s, r, tid, num_threads); 
+	if (ret) 
+		goto cleanup; 
 
-	if (tid == 0) {
+ 	ret = compare_tables(table, tmp_table, tid, num_threads); 
+	if (ret) {
+		print_table_dbg(table, 0, 16);
+ 		print_table_dbg(tmp_table, 0, 16);
+		goto cleanup; 
+	}
+#endif
+	if (tid == 0 && 1) {
 
 #if defined(REPORT_COLUMNSORT_STATS)
 		end = RDTSC();
@@ -1613,7 +1791,7 @@ int column_sort_table_parallel(data_base_t *db, table_t *table, int column, int 
 	} /* tid == 0 */
 
 #if defined(REPORT_COLUMNSORT_STATS)
-		start = RDTSC(); 
+	start = RDTSC(); 
 #endif
 
 	for (unsigned int i = 0; i < s; i++) {
@@ -1626,8 +1804,9 @@ int column_sort_table_parallel(data_base_t *db, table_t *table, int column, int 
 		barrier_wait(&b1, num_threads);
 		if(tid == 0) 
 			barrier_reset(&b1, num_threads); 
-
+#if !defined(SKIP_BITONIC)
 		ret = sort_table_parallel(st_tables[i], column, tid, num_threads);
+#endif		
 		barrier_wait(&b2, num_threads); 	
 		if(tid == 0) {
 			barrier_reset(&b2, num_threads); 
@@ -1638,7 +1817,7 @@ int column_sort_table_parallel(data_base_t *db, table_t *table, int column, int 
 
 	}
 
-	if (tid == 0) {
+	if (tid == 0 && 1) {
 
 #if defined(REPORT_COLUMNSORT_STATS)
 		end = RDTSC();
@@ -1788,31 +1967,25 @@ int column_sort_table_parallel(data_base_t *db, table_t *table, int column, int 
 		start = RDTSC(); 
 #endif
 
-		row_num = 0;  
-	
-		/* Write sorted table back  */
-		for (unsigned int i = 0; i < s; i ++) {
+#if defined(COLUMNSORT_DBG_L2)
+	 	ret = reassemble_column_tables(s_tables, tmp_table, row, s, r, tid, num_threads); 
+		if (ret) 
+			goto cleanup; 
 
-			for (unsigned int j = 0; j < r; j ++) {
-
-				/* Read row from s table */
-				ret = read_row(s_tables[i], j, row);
-				if(ret) {
-					ERR("failed to read row %d of table %s\n",
-						row_num, s_tables[i]->name.c_str());
-					goto cleanup;
-				}
-
-				/* Add row to the st table */
-				ret = write_row_dbg(table, row, row_num);
-				if(ret) {
-					ERR("failed to insert row %d of sorted table %s\n",
-						row_num, table->name.c_str());
-					goto cleanup;
-				}
-				row_num ++;
-			}
+	 	ret = compare_tables(table, tmp_table, tid, num_threads); 
+		if (ret) {
+ 			print_table_dbg(table, 0, 16);
+ 			print_table_dbg(tmp_table, 0, 16);
+			goto cleanup; 
 		}
+#endif
+
+
+		row_num = 0;  
+
+	 	ret = reassemble_column_tables(s_tables, table, row, s, r, tid, num_threads);
+		if (ret) 
+			goto cleanup; 
 
 #if defined(REPORT_COLUMNSORT_STATS)
 		end = RDTSC();
@@ -1834,6 +2007,7 @@ int column_sort_table_parallel(data_base_t *db, table_t *table, int column, int 
 		print_table_dbg(table, 0, table->num_rows);
 #endif
 	} /* tid == 0 */
+
 
 	ret = 0;
 cleanup: 
@@ -1934,44 +2108,6 @@ inline int exchange(table_t *tbl, int i, int j, row_t *row_i, row_t *row_j, int 
   free(row_tmp);
 #endif
   return 0;
-}
-
-/* returns ture if column of row_l is found respectively to be greater then column of row_r */
-
-bool compare_rows(schema_t *sc, int column, row_t *row_l, row_t *row_r) {
-	bool res; 
-
-	/* make sure fake touples are always greater */
-	if (row_l->header.fake)
-		return true; 
-
-	switch(sc->types[column]) {
-	case BOOLEAN:
-		res = *(bool*)&row_l->data[sc->offsets[column]] >
-			*(bool*)&row_r->data[sc->offsets[column]]; 
-		break;
-	
-	case CHARACTER: 
-		res = *(char*)&row_l->data[sc->offsets[column]] >
-			*(char*)&row_r->data[sc->offsets[column]]; 
-		break;
- 
-	case TINYTEXT:
-	case VARCHAR: {
-		int str_ret = strcmp (&row_l->data[sc->offsets[column]], 
-			&row_r->data[sc->offsets[column]]) ;
-		res = (str_ret > 0);
-		break;
-	}
-	case INTEGER:
-		res = *(int*)&row_l->data[sc->offsets[column]] > 
-			*(int*)&row_r->data[sc->offsets[column]]; 
-
-		break;
-	default: 
-		res = false;
-	}
-	return res;
 }
 
 /** procedure compare() 

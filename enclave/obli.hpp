@@ -96,7 +96,7 @@ void obli_cswap_128(double *src, double *dst, bool cond)
 
 //unsigned long counter_cswap = 0; 
 #ifdef AVX2
-#warning "Compiling with AVX2"
+//#warning "Compiling with AVX2"
 void obli_cswap_256(double *src, double *dst, bool cond)
 {
 	

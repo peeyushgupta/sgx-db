@@ -172,6 +172,10 @@ int column_sort_table(data_base_t *db, table_t *table, int column);
 
 int print_table_dbg(table_t *table, int start, int end);
 
+int compare_tables(table_t *left, table_t *right, int tid, int num_threads);
+int compare_tables(table_t *left, table_t *right);
+
+
 inline int exchange(table_t *tbl, int i, int j, row_t *row_i, row_t *row_j);
 int compare(table_t *tbl, int column, int i, int j, int dir);
 void bitonicMerge(table_t *tbl, int lo, int cnt, int column, int dir);

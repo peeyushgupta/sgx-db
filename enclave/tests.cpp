@@ -268,68 +268,6 @@ int ecall_bcache_test_read_write(int db_id, int from_table_id, int to_table_id) 
 	return ret; 
 };
 
-int bcache_test_cmp_read_write(data_base_t *db, table_t *from_tbl, table_t *to_tbl) { 
-	row_t *from_row, *to_row; 
-	int ret;  
-
-	from_row = (row_t*) malloc(row_size(from_tbl));
-	if(!from_row)
-		return -1;
-
-	to_row = (row_t*) malloc(row_size(to_tbl));
-	if(!to_row)
-		return -2;
-
-	if(from_tbl->num_rows != to_tbl->num_rows) {
-		ERR("tables have different size: (%s,%d) != (%s, %d)\n",
-			from_tbl->name.c_str(), from_tbl->num_rows, 
-			to_tbl->name.c_str(), to_tbl->num_rows);
-		return -3;
-	};
-
-	for (unsigned long i = 0; i < from_tbl->num_rows; i ++) {
-
-		// Read old row
-		ret = read_row(from_tbl, i, from_row);
-		if(ret) {
-			ERR("failed to read row %d of table %s\n",
-				i, from_tbl->name.c_str());
-			goto cleanup;
-		}
-
-				
-		/* Add row to the promoted table */
-		ret = read_row(to_tbl, i, to_row);
-		if(ret) {
-			ERR("failed to insert row %d of promoted table %s\n",
-				i, to_tbl->name.c_str());
-			goto cleanup;
-		}
-
-		ret = memcmp(from_row, to_row, from_tbl->sc.row_data_size); 
-		if (ret) {
-			ERR("tables have different rows: (%s,%d) != (%s, %d)\n",
-			from_tbl->name.c_str(), i, 
-			to_tbl->name.c_str(), i);
-			print_row(&from_tbl->sc, from_row); 
-			print_row(&to_tbl->sc, to_row);
-			goto cleanup; 
-		}
-	}
-
-	ret = 0;
-cleanup: 
-	if (from_row)
-		free(from_row); 
-
-	if (to_row)
-		free(to_row); 
-
-
-	return ret; 
-};
-
-
 int ecall_bcache_test_cmp_read_write(int db_id, int from_table_id, int to_table_id) {
 	int ret;
 	data_base_t *db;
@@ -347,7 +285,7 @@ int ecall_bcache_test_cmp_read_write(int db_id, int from_table_id, int to_table_
 	if (! from_tbl || ! to_tbl)
 		return -3; 
 
-	ret = bcache_test_cmp_read_write(db, from_tbl, to_tbl); 
+	ret = compare_tables(from_tbl, to_tbl); 
 	if (ret) {
 		ERR("reading/writing table:%d\n", ret);
 		return ret; 
