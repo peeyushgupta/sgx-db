@@ -27,15 +27,19 @@ int main(){
     	}
 
 	DBG("Created enclave... starting DB tests\n");
-#if defined(COLUMNSORT_TESTS)
+
+#if defined(TEST_SPINLOCK)
 	test_spinlock_inc(eid, 10000);
 #endif
-
+#if defined(TEST_PROJECTIONS)
         test_project_schema(eid);
         test_pad_schema(eid);
         test_project_row(eid);
+#endif
+#if defined(TEST_BARRIERS)
 	// 8 threads, 50 iterations
 	test_barriers(eid, 8, 50);
+#endif
 #if defined(OCALL_ECALL_TESTS)
 	test_null_ocalls(eid);
 #endif
@@ -44,12 +48,18 @@ int main(){
 	test_threads(eid);
 #endif
 
+#if defined(TEST_COLUMN_SORT_16)
 	test_column_sort(eid);
+#endif
 
+#if defined(TEST_BITONIC)
 	test_bitonic_sort(eid);
-#if 1
+#endif
+
+	/* Launch a collection of tests inside that require
+	   rankings and udata tables */
 	test_rankings(eid);
-#endif	
+	
 	/* Destroy the enclave */
 	sgx_destroy_enclave(eid);
  

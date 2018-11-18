@@ -1700,7 +1700,6 @@ int column_sort_table_parallel(data_base_t *db, table_t *table, int column, int 
 	if (ret) {
 		print_table_dbg(table, 0, 16);
  		print_table_dbg(tmp_table, 0, 16);
-		goto cleanup; 
 	}
 #endif
 	if (tid == 0 && 1) {

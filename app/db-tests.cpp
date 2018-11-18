@@ -328,13 +328,14 @@ int test_rankings(sgx_enclave_id_t eid) {
 	}
 #endif
 
+#if defined(TEST_BCACHE)
 	/* Buffer cache testst */
-	if (0)
 	{	
 		bcache_test(eid, db_id, rankings_table_id);
 	}
+#endif
 
-	if (0)
+#if defined(TEST_PROMOTE_COLUMN)
 	/* Promote column tests */
 	{
 		int p_rankings_table_id;
@@ -347,13 +348,16 @@ int test_rankings(sgx_enclave_id_t eid) {
 		ecall_print_table_dbg(eid, &ret, db_id, rankings_table_id, 359990, 360020);
 		ecall_print_table_dbg(eid, &ret, db_id, p_rankings_table_id, 359990, 360020);
 	}
+#endif
 
-	if(0) {
-		// Run it in a separate thread to get fine-grained profiling data
+#if defined(TEST_RANKINGS_IN_A_SEPARATE_THREAD)
+	// Run rankings test in a separate thread to get fine-grained profiling data
+	{
 		run_rankings_test(eid, db_id, rankings_table_id);
 	}
+#endif
 
-	if(1)
+#if defined(TEST_COLUMN_SORT_RANKINGS)	
 	{
 		/* Column sort tests */
 		
@@ -380,8 +384,9 @@ int test_rankings(sgx_enclave_id_t eid) {
 		ecall_print_table_dbg(eid, &ret, db_id, rankings_table_id, 0, 23);
 
 	}
+#endif
 
-	if (0)
+#if defined(TEST_JOIN)
 	{
 
 		// Join tests
@@ -406,6 +411,7 @@ int test_rankings(sgx_enclave_id_t eid) {
 		printf("joined successfully\n");
 
 	}
+#endif
 	return 0;
 
 }
