@@ -1994,8 +1994,14 @@ int compare_and_exchange(table_t *tbl, int column, int i, int j, int dir, int ti
 		return -6;
 #elif defined(STACK_ALLOC)
 	// FIXME: if tables are pinned, this stack allocation is not needed
-	__attribute__((aligned(ALIGNMENT))) row_t row_i_stack;
-	__attribute__((aligned(ALIGNMENT))) row_t row_j_stack;
+#if defined(ALIGNMENT)
+	__attribute__((aligned(ALIGNMENT))) 
+#endif 
+	row_t row_i_stack;
+#if defined(ALIGNMENT)
+	__attribute__((aligned(ALIGNMENT))) 
+#endif	
+	row_t row_j_stack;
 	row_i = &row_i_stack;
 	row_j = &row_j_stack;
 #else
