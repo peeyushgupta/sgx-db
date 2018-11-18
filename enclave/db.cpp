@@ -1270,7 +1270,7 @@ int column_sort_table_parallel(data_base_t *db, table_t *table, int column, int 
 	unsigned long row_num;  
 	unsigned long shift, unshift;
 
-#if defined(COLUMNSORT_DBG_L2)
+#if defined(COLUMNSORT_COMPARE_TABLES)
 	table_t *tmp_table; 
 #endif
 
@@ -1422,7 +1422,7 @@ int column_sort_table_parallel(data_base_t *db, table_t *table, int column, int 
 #endif
 
 
-#if defined(COLUMNSORT_DBG_L2)
+#if defined(COLUMNSORT_COMPARE_TABLES)
 		/* Create a temporary table to compare against the original one  */
 		tmp_tbl_name = "tmp:" + table->name ; 
 			
@@ -1691,7 +1691,7 @@ int column_sort_table_parallel(data_base_t *db, table_t *table, int column, int 
 #endif
 		}
 	}
-#if defined(COLUMNSORT_DBG_L2)
+#if defined(COLUMNSORT_COMPARE_TABLES)
  	ret = reassemble_column_tables(s_tables, tmp_table, row, s, r, tid, num_threads); 
 	if (ret) 
 		goto cleanup; 
@@ -1966,7 +1966,7 @@ int column_sort_table_parallel(data_base_t *db, table_t *table, int column, int 
 		start = RDTSC(); 
 #endif
 
-#if defined(COLUMNSORT_DBG_L2)
+#if defined(COLUMNSORT_COMPARE_TABLES)
 	 	ret = reassemble_column_tables(s_tables, tmp_table, row, s, r, tid, num_threads); 
 		if (ret) 
 			goto cleanup; 
