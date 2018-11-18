@@ -125,7 +125,7 @@ int bcache_test(sgx_enclave_id_t eid, int db_id, int from_table_id)
 	return 0;
 }
 
-void run_rankings_fn(sgx_enclave_id_t eid, int db_id, int rankings_table_id)
+void run_rankings_test(sgx_enclave_id_t eid, int db_id, int rankings_table_id)
 {
 	/* Column sort tests */
 	unsigned int column;
@@ -141,21 +141,12 @@ void run_rankings_fn(sgx_enclave_id_t eid, int db_id, int rankings_table_id)
 	unsigned long long start, end;
 	start = RDTSC_START();
 
-	//ecall_column_sort_table_dbg(eid, &ret, db_id, rankings_table_id, column);
 	column_sort_table_parallel(eid, db_id, rankings_table_id, column, num_threads);
 	ecall_flush_table(eid, &ret, db_id, rankings_table_id);
 	end = RDTSCP();
 
 	printf("Sorting + flushing took %llu cycles\n", end - start);
 	ecall_print_table_dbg(eid, &ret, db_id, rankings_table_id, 0, 23);
-}
-
-int run_rankings_test(sgx_enclave_id_t eid, int db_id, int rankings_table_id)
-{
-	//thread t1(run_rankings_fn, eid, db_id, rankings_table_id);
-	//t1.join();
-	run_rankings_fn(eid, db_id, rankings_table_id);
-	return 0;
 }
 
 int test_rankings(sgx_enclave_id_t eid) {
