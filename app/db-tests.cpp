@@ -134,7 +134,7 @@ void run_rankings_fn(sgx_enclave_id_t eid, int db_id, int rankings_table_id)
 	// Rankings is 360000
 	//r = 16384;
 	//s = 16;
-	column = 1;
+	column = 2;
 
 	printf(TXT_FG_YELLOW "Column sort test" TXT_NORMAL ": sorting rankings table \n");
 
@@ -348,10 +348,12 @@ int test_rankings(sgx_enclave_id_t eid) {
 		ecall_print_table_dbg(eid, &ret, db_id, p_rankings_table_id, 359990, 360020);
 	}
 
-	// Run it in a separate thread to get fine-grained profiling data
-	run_rankings_test(eid, db_id, rankings_table_id);
+	if(0) {
+		// Run it in a separate thread to get fine-grained profiling data
+		run_rankings_test(eid, db_id, rankings_table_id);
+	}
 
-	if(0)
+	if(1)
 	{
 		/* Column sort tests */
 		
@@ -366,8 +368,11 @@ int test_rankings(sgx_enclave_id_t eid) {
 			
 		unsigned long long start, end;
 		start = RDTSC_START();
+		auto num_threads = 4;
+		
+		//ecall_column_sort_table_dbg(eid, &ret, db_id, rankings_table_id, column);
+		column_sort_table_parallel(eid, db_id, rankings_table_id, column, num_threads);
 
-		ecall_column_sort_table_dbg(eid, &ret, db_id, rankings_table_id, column);
 		ecall_flush_table(eid, &ret, db_id, rankings_table_id);
 		end = RDTSCP();
 
