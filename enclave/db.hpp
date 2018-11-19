@@ -75,10 +75,10 @@ typedef struct table {
 	unsigned long id; 
 	std::string name;
 	schema_t sc;
-	unsigned int num_rows;  /* Number of rows in the table (used only 
+	unsigned int num_rows;    /* Number of rows in the table (used only 
 					 for bulk insertion) */
-	unsigned long num_blks;  /* Number of blocks allocated */
-	int fd;                       /* File descriptor backing up the table data */
+	unsigned long num_blks;   /* Number of blocks allocated */
+	int fd [THREADS_PER_DB];  /* File descriptor backing up the table data */
 	data_block_t **pinned_blocks; 
 	unsigned long rows_per_blk; 
 	struct data_base *db; 

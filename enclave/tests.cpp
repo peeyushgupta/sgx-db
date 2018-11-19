@@ -231,7 +231,7 @@ int bcache_test_read_write(data_base_t *db, table_t *from_tbl, table_t *to_tbl) 
 
 	}
 
-	bflush(to_tbl); 
+	//bflush(to_tbl); 
 
 	ret = 0;
 cleanup: 

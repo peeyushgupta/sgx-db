@@ -294,8 +294,11 @@ int read_data_block(table *table, unsigned long blk_num, void *buf) {
 	unsigned long long start, end; 
 	start = RDTSC();
 #endif
-	
-	ocall_seek(&ret, table->fd, blk_num*DATA_BLOCK_SIZE); 
+	if(tid() >= THREADS_PER_DB) {
+		ERR("tid():%d >= THREADS_PER_DB (%d)\n", tid(), THREADS_PER_DB); 
+		return -1; 
+	}	
+	ocall_seek(&ret, table->fd[tid()], blk_num*DATA_BLOCK_SIZE); 
 
 #if defined(REPORT_IO_STATS)	
 	end = RDTSC();
@@ -306,7 +309,7 @@ int read_data_block(table *table, unsigned long blk_num, void *buf) {
 	start = RDTSC();
 #endif
 	while (total_read < DATA_BLOCK_SIZE) { 
-		ocall_read_file(&read, table->fd, 
+		ocall_read_file(&read, table->fd[tid()], 
 				table->db->io_buf[tid()], 
 				FILE_READ_SIZE);
 		if (read < 0) {
@@ -342,7 +345,12 @@ int write_data_block(table *table, unsigned long blk_num, void *buf) {
 	unsigned long long total_written = 0, write_size; 
 	int written, ret; 
 
-	ocall_seek(&ret, table->fd, blk_num*DATA_BLOCK_SIZE);
+	if(tid() >= THREADS_PER_DB) {
+		ERR("tid():%d >= THREADS_PER_DB (%d)\n", tid(), THREADS_PER_DB); 
+		return -1; 
+	}	
+
+	ocall_seek(&ret, table->fd[tid()], blk_num*DATA_BLOCK_SIZE);
  
 	while (total_written < DATA_BLOCK_SIZE) { 
 		/* make sure we don't write more than DATA_BLOCK_SIZE */
@@ -353,7 +361,7 @@ int write_data_block(table *table, unsigned long blk_num, void *buf) {
 		memcpy(table->db->io_buf[tid()], 
 			(void *)((char *)buf + total_written), write_size); 
 		/* Submit I/O buffer */
-		ocall_write_file(&written, table->fd, 
+		ocall_write_file(&written, table->fd[tid()], 
 			table->db->io_buf[tid()], 
 			write_size);
 		if (written < 0) {
@@ -456,15 +464,17 @@ int create_table(data_base_t *db, std::string &name, schema_t *schema, table_t *
 	table->pinned_blocks = NULL; 
 	table->rows_per_blk = DATA_BLOCK_SIZE / row_size(table); 
 	
+	for (i = 0; i < THREADS_PER_DB; i++) {
+		/* Call outside of enclave to open a file for the table */
+		sgx_ret = ocall_open_file(&fd, name.c_str());
+		if (sgx_ret || fd < 0) {
+			ret = -5;
+			goto cleanup; 
+		} 
 
-	/* Call outside of enclave to open a file for the table */
-	sgx_ret = ocall_open_file(&fd, name.c_str());
-	if (sgx_ret || fd < 0) {
-		ret = -5;
-		goto cleanup; 
-	} 
-
-	table->fd = fd;
+		table->fd[i] = fd;
+		
+	};
 
 	*new_table = table; 
 	return 0;
@@ -507,11 +517,13 @@ int delete_table(data_base_t *db, table_t *table) {
 	//DBG("deleting table %p\n", table); 
 	
 	db->tables[table->id] = NULL;
-	
-	sgx_ret = ocall_close_file(&ret, table->fd);
-	if (sgx_ret) {
-		ret = sgx_ret;
-	} 
+
+	for(int i = 0; i < THREADS_PER_DB; i++) {
+		sgx_ret = ocall_close_file(&ret, table->fd[i]);
+		if (sgx_ret) {
+			ret = sgx_ret;
+		} 
+	}
 
 	/* Call outside of enclave to open a file for the table */
 	sgx_ret = ocall_rm_file(&ret, table->name.c_str());
@@ -1227,7 +1239,7 @@ int compare_tables(table_t *left_tbl, table_t *right_tbl, int tid, int num_threa
 			right_tbl->name.c_str(), i);
 			print_row(&left_tbl->sc, left_row); 
 			print_row(&right_tbl->sc, right_row);
-			goto cleanup; 
+			bcache_info_printf(left_tbl);			
 		}
 	}
 
@@ -1281,6 +1293,7 @@ int column_sort_table_parallel(data_base_t *db, table_t *table, int column, int 
 	bcache_stats_t bstats;
 	dbg_buffer *dbuf;
 #endif
+	
 	row = (row_t*) malloc(row_size(table));
 	if(!row) {
 		ERR("failed to alloc row\n"); 
@@ -2102,6 +2115,7 @@ int ecall_column_sort_table_parallel(int db_id, int table_id, int column, int ti
 		return -2;
 
 	table = db->tables[table_id];
+	thread_id = tid; 
 	return column_sort_table_parallel(db, table, column, tid, num_threads); 
 
 };
@@ -2483,6 +2497,8 @@ int ecall_sort_table_parallel(int db_id, int table_id, int column, int tid, int 
 		if(!g_row_i[i] || !g_row_j[i] || !g_row_tmp[i])
 			printf("%s, alloc failed\n");
 	}
+
+	thread_id = tid; 
 
 	return sort_table_parallel(table, column, tid, num_threads);
 };

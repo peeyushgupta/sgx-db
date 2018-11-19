@@ -115,6 +115,13 @@ int bcache_test(sgx_enclave_id_t eid, int db_id, int from_table_id)
 
 	bcache_test_run_threads(eid, db_id, from_table_id, to_table_id);
 
+	ecall_flush_table(eid, &ret, db_id, from_table_id);
+	ecall_flush_table(eid, &ret, db_id, to_table_id);
+
+	ecall_print_table_dbg(eid, &ret, db_id, from_table_id, 0, 23);
+	ecall_print_table_dbg(eid, &ret, db_id, to_table_id, 0, 23);
+
+
 	sgx_ret = ecall_bcache_test_cmp_read_write(eid, &ret, db_id, from_table_id, to_table_id);
 	if (sgx_ret || ret) {
 		ERR("error:%d (sgx ret:%d)\n", ret, sgx_ret);
