@@ -1516,7 +1516,7 @@ int column_sort_table_parallel(data_base_t *db, table_t *table, int column, int 
 	for (unsigned int i = 0 + tid; i < s; i += num_threads) {
 
 		for (unsigned int j = 0; j < r; j ++) {
-			unsigned int seq; 
+			unsigned long seq; 
 
 			// Read old row
 			ret = read_row(s_tables[i], j, row);
@@ -1541,13 +1541,22 @@ int column_sort_table_parallel(data_base_t *db, table_t *table, int column, int 
 				tid, j, i, seq/s, seq % s, 
 				r, s, j, seq, row_size(s_tables[i])); 
 
-			
+#if defined(COLUMNSORT_APPENDS)
+			ret = insert_row_dbg(st_tables[seq % s], row);
+			if(ret) {
+				ERR("failed to insert row %d of transposed column table %s\n",
+					j, st_tables[j % s]->name.c_str());
+				goto cleanup;
+			}
+
+#else			
 			ret = write_row_dbg(st_tables[seq % s], row, seq / s);
 			if(ret) {
 				ERR("failed to insert row %d of transposed column table %s\n",
 					j, st_tables[j % s]->name.c_str());
 				goto cleanup;
 			}
+#endif
 		}
 	}
 
@@ -1588,8 +1597,14 @@ int column_sort_table_parallel(data_base_t *db, table_t *table, int column, int 
 		}
 #endif
 		barrier_wait(&b1, num_threads);
-		if(tid == 0) 
-			barrier_reset(&b1, num_threads); 
+		if(tid == 0) { 
+			barrier_reset(&b1, num_threads);
+			// Clean s tables so we can do insert_row again
+			for (unsigned int i = 0; i < s; i++) {
+				s_tables[i]->num_rows = 0; 
+			}
+ 
+		}
 #if !defined(SKIP_BITONIC)
 		ret = sort_table_parallel(st_tables[i], column, tid, num_threads);
 #endif
@@ -1627,31 +1642,45 @@ int column_sort_table_parallel(data_base_t *db, table_t *table, int column, int 
 #if defined(REPORT_COLUMNSORT_STATS)
 		start = RDTSC(); 
 #endif
+	}
+	
+	/* Untranspose st transposed column tables into s tables  */
+	for (unsigned int i = tid; i < r; i += num_threads) {
 
-		/* Untranspose st transposed column tables into s tables  */
-		for (unsigned int i = 0; i < r; i ++) {
+		for (unsigned int j = 0; j < s; j ++) {
+			unsigned long seq; 
 
-			for (unsigned int j = 0; j < s; j ++) {
-
-				/* Read row from st table */
-				ret = read_row(st_tables[j], i, row);
-				if(ret) {
-					ERR("failed to read row %d of table %s\n",
-						i, st_tables[j]->name.c_str());
-					goto cleanup;
-				}
-
-				
-				/* Add row to the s table */
-				ret = write_row_dbg(s_tables[row_num / r], row, row_num % r);
-				if(ret) {
-					ERR("failed to insert row %d of untransposed column table %s\n",
-						row_num / r, s_tables[i]->name.c_str());
-					goto cleanup;
-				}
-				row_num ++; 
+			/* Read row from st table */
+			ret = read_row(st_tables[j], i, row);
+			if(ret) {
+				ERR("failed to read row %d of table %s\n",
+					i, st_tables[j]->name.c_str());
+				goto cleanup;
 			}
+
+			seq = i * s + j; 
+		
+			//DBG_ON(COLUMNSORT_VERBOSE,
+			//	"tid (%d): insert row %d of st_tables[%d] into row:%d of st_tables[%d]"
+			//	"r:%d, s:%d, j%d, seq:%d, row_size:%d\n", 
+			//	tid, i, j, seq/s, seq % s, 
+			//	r, s, j, seq, row_size(s_tables[i])); 
+
+			/* Add row to the s table */
+			//ret = write_row_dbg(s_tables[row_num / r], row, row_num % r);
+
+			ret = insert_row_dbg(s_tables[seq / r], row);
+			if(ret) {
+				ERR("failed to insert row %d of untransposed column table %s\n",
+					seq / r, s_tables[i]->name.c_str());
+				goto cleanup;
+			}
+
+			row_num ++; 
 		}
+	}
+
+	if(tid == 0) {
 
 #if defined(REPORT_COLUMNSORT_STATS)
 		end = RDTSC();
@@ -2525,25 +2554,25 @@ int write_row_dbg(table_t *table, row_t *row, unsigned int row_num) {
 
 
 int insert_row_dbg(table_t *table, row_t *row) {
-	unsigned long dblk_num;
+	unsigned long dblk_num, row_num;
 	unsigned long row_off; 
 	data_block_t *b;
 
 	//DBG("insert row, row size:%lu\n", table->sc.row_size); 
+	
+	row_num = __sync_fetch_and_add(&table->num_rows, 1);
 
-	dblk_num = table->num_rows / table->rows_per_blk;
+	dblk_num = row_num / table->rows_per_blk;
 
 	/* Offset of the row within the data block in bytes */
-	row_off = (table->num_rows - dblk_num * table->rows_per_blk) * row_size(table); 
+	row_off = (row_num - dblk_num * table->rows_per_blk) * row_size(table); 
 	
         b = bread(table, dblk_num);
 	ERR_ON(!b, "got NULL block"); 
 
 	/* Copy the row into the data block */
 	memcpy((char*)b->data + row_off, row, row_size(table)); 
-
-	__sync_fetch_and_add(&table->num_rows, 1);
-
+	
 	bwrite(b);
 	brelse(b);
 	return 0; 

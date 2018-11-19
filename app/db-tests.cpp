@@ -357,7 +357,7 @@ int test_rankings(sgx_enclave_id_t eid) {
 		// Rankings is 360000 
 		//r = 16384;
 		//s = 16; 
-		column = 2;
+		column = 1;
 		
 		printf(TXT_FG_YELLOW "Column sort test" TXT_NORMAL ": sorting rankings table \n"); 
 			
