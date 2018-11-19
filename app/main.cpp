@@ -29,7 +29,7 @@ int main(){
 	DBG("Created enclave... starting DB tests\n");
 
 #if defined(TEST_SPINLOCK)
-	test_spinlock_inc(eid, 10000);
+	test_spinlock_inc(eid, 1000000);
 #endif
 #if defined(TEST_PROJECTIONS)
         test_project_schema(eid);

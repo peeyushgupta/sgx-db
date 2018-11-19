@@ -472,6 +472,7 @@ int create_table(data_base_t *db, std::string &name, schema_t *schema, table_t *
 			goto cleanup; 
 		} 
 
+		DBG("table:%s, fd[%d]:%d\n", table->name.c_str(), i, fd); 
 		table->fd[i] = fd;
 		
 	};
@@ -2532,7 +2533,7 @@ int read_row(table_t *table, unsigned int row_num, row_t *row) {
 	ERR_ON(!b, "got NULL block"); 
 
 	/* Copy the row into the data block */
-	 memcpy(row, (char*)b->data + row_off, row_size(table)); 
+	memcpy(row, (char*)b->data + row_off, row_size(table)); 
 
 	brelse(b);
 	return 0; 
