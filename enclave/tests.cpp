@@ -16,8 +16,8 @@ extern data_base_t* g_dbs[MAX_DATABASES];
 
 struct spinlock s_inc = {.locked = 0};
 struct two_numbers {
-	volatile unsigned long a __attribute__((aligned(64))); 
-	volatile unsigned long b __attribute__((aligned(64))); 
+	volatile unsigned long a /*__attribute__((aligned(64)))*/; 
+	volatile unsigned long b /*__attribute__((aligned(64)))*/; 
 };
 struct two_numbers tn = {.a = 0, .b = 0};
 
