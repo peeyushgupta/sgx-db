@@ -28,6 +28,7 @@ void binit(bcache_t *bcache)
 	data_block_t *b;
 
 	initlock(&bcache->lock, std::string("bcache"));
+	initlock(&bcache->iolock, std::string("bcache io"));
 
 	// Create linked list of buffers
 	bcache->head.prev = &bcache->head;
@@ -115,12 +116,19 @@ data_block_t *bget(struct table *table, unsigned int blk_num)
 	// Is the block already cached?
 	for(b = bcache->head.next; b != &bcache->head; b = b->next){
 		if(b->table == table && b->blk_num == blk_num){
+			//unsigned long refcnt = b->refcnt;
 			// Atomic increment, relies on GCC builtins
 			__sync_fetch_and_add(&b->refcnt, 1);
 			
-			//release(&bcache->lock);
-			acquire(&b->lock);
+			//ERR_ON(refcnt == b->refcnt, "error refcnt (%d) == b->refcnt (%d)\n", 
+			//	refcnt, b->refcnt);
+			//WARN_ON(refcnt + 1 != b->refcnt, "error refcnt + 1 (%d) != b->refcnt (%d)\n", 
+			//	refcnt + 1, b->refcnt);
+ 
+			
 			release(&bcache->lock);
+			acquire(&b->lock);
+			//release(&bcache->lock);
 
 			DBG_ON(VERBOSE_BCACHE, "blk:%p (flags:%x), num:%d, b->table:%s for table:%s\n", 
 				b, b->flags, blk_num, b->table->name.c_str(), table->name.c_str());
@@ -154,9 +162,15 @@ data_block_t *bget(struct table *table, unsigned int blk_num)
 			b->table = table;
 			b->blk_num = blk_num;
 			b->flags = 0;
+			//ERR_ON(b->refcnt != 0, "ref counter (%d) != 0 blk:%p (flags:%x), num:%d, b->table:%s for table:%s\n", 
+			//	b->refcnt, b, b->flags, blk_num, b->table ? b->table->name.c_str() : "NULL", table->name.c_str()); 
+
+
+
 			b->refcnt = 1;
-			acquire(&b->lock);
 			release(&bcache->lock);
+			acquire(&b->lock);
+			//release(&bcache->lock);
 
 			return b;
 		}
@@ -237,13 +251,13 @@ data_block_t* bread(table_t *table, unsigned int blk_num)
 // Mark block as dirty
 void bwrite(data_block_t *b)
 {
-	acquire(&b->table->db->bcache.lock);
+	//acquire(&b->table->db->bcache.lock);
 	DBG_ON(VERBOSE_BCACHE, "marking dirty blk:%p (flags:%x), num:%lu, b->table:%s\n", 
 		b, b->flags, b->blk_num, b->table->name.c_str()); 
 	acquire(&b->lock); 
 	b->flags |= B_DIRTY;
 	release(&b->lock);
-	release(&b->table->db->bcache.lock);
+	//release(&b->table->db->bcache.lock);
 
 }
 
@@ -255,19 +269,25 @@ void brelse(data_block_t *b)
 	bcache_t *bcache = &b->table->db->bcache;
 	//releasesleep(&b->lock);
 
-	acquire(&bcache->lock);
+	//acquire(&bcache->lock);
 
 	acquire(&b->lock);
 
-	//b->refcnt--;
+	//unsigned long refcnt = b->refcnt;
+
 	old = __sync_fetch_and_sub(&b->refcnt, 1);
-	if (old != 1) {
+	
+	//ERR_ON(refcnt == b->refcnt, "error refcnt (%d) == b->refcnt (%d)\n", 
+	//	refcnt, b->refcnt);
+	//WARN_ON(refcnt - 1 != b->refcnt, "error refcnt - 1 (%d) != b->refcnt (%d)\n", 
+	//			refcnt - 1, b->refcnt);
+ 	if (old != 1) {
 		release(&b->lock);
-		release(&bcache->lock);
+		//release(&bcache->lock);
 		return; 
 	}	
 
-	//acquire(&bcache->lock);
+	acquire(&bcache->lock);
 
 	// no one is waiting for it.
 	b->next->prev = b->prev;
@@ -277,8 +297,9 @@ void brelse(data_block_t *b)
 	bcache->head.next->prev = b;
 	bcache->head.next = b;
 
-	release(&b->lock);
+	//release(&b->lock);
 	release(&bcache->lock);
-	
+	release(&b->lock);
+
 	return;
 }

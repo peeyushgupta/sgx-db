@@ -297,7 +297,9 @@ int read_data_block(table *table, unsigned long blk_num, void *buf) {
 	if(tid() >= THREADS_PER_DB) {
 		ERR("tid():%d >= THREADS_PER_DB (%d)\n", tid(), THREADS_PER_DB); 
 		return -1; 
-	}	
+	}
+
+	acquire(&table->db->bcache.iolock); 	
 	ocall_seek(&ret, table->fd[tid()], blk_num*DATA_BLOCK_SIZE); 
 
 #if defined(REPORT_IO_STATS)	
@@ -313,6 +315,7 @@ int read_data_block(table *table, unsigned long blk_num, void *buf) {
 				table->db->io_buf[tid()], 
 				FILE_READ_SIZE);
 		if (read < 0) {
+			release(&table->db->bcache.iolock); 	
 			ERR("read filed\n"); 
 			return -1; 
 		}
@@ -321,6 +324,7 @@ int read_data_block(table *table, unsigned long blk_num, void *buf) {
 			/* We've reached the end of file, pad with zeroes */
 			read = DATA_BLOCK_SIZE - total_read; 
 			memset((void *)((char *)buf + total_read), 0, read); 
+			release(&table->db->bcache.iolock); 	
 			return 0; 
 		} else {
 			/* Copy data from the I/O buffer into bcache buffer */
@@ -328,6 +332,8 @@ int read_data_block(table *table, unsigned long blk_num, void *buf) {
 		}
 		total_read += read;  
 	}
+
+	release(&table->db->bcache.iolock); 	
 
 #if defined(REPORT_IO_STATS)
 	end = RDTSC();
@@ -350,6 +356,8 @@ int write_data_block(table *table, unsigned long blk_num, void *buf) {
 		return -1; 
 	}	
 
+	acquire(&table->db->bcache.iolock); 	
+
 	ocall_seek(&ret, table->fd[tid()], blk_num*DATA_BLOCK_SIZE);
  
 	while (total_written < DATA_BLOCK_SIZE) { 
@@ -365,11 +373,13 @@ int write_data_block(table *table, unsigned long blk_num, void *buf) {
 			table->db->io_buf[tid()], 
 			write_size);
 		if (written < 0) {
+			release(&table->db->bcache.iolock); 	
 			ERR("write filed\n"); 
 			return -1; 
 		} 
 		total_written += written;  
 	}
+	release(&table->db->bcache.iolock); 	
 	return 0; 
 }
 
@@ -2565,6 +2575,11 @@ int write_row_dbg(table_t *table, row_t *row, unsigned int row_num) {
 	memcpy((char*)b->data + row_off, row, row_size(table)); 
 
 	bwrite(b);
+	ERR_ON(b->blk_num != dblk_num, "b->blk_num (%d) != dblk_num (%d) blk:%p (flags:%x), num:%d, b->table:%s for table:%s\n", 
+				b->blk_num, dblk_num, b, b->flags, b->blk_num, b->table ? b->table->name.c_str() : "NULL", table->name.c_str()); 
+
+
+
 	brelse(b);
 	return 0; 
 }

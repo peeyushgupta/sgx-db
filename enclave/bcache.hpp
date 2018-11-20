@@ -19,7 +19,7 @@ typedef struct data_block {
   int flags;
   struct table *table;
   unsigned long blk_num;
-  unsigned int refcnt;
+  volatile unsigned int refcnt;
   struct spinlock lock;
 
   struct data_block *prev; // LRU cache list
@@ -40,6 +40,8 @@ typedef struct bcache_stats {
 
 typedef struct bcache {
 	struct spinlock lock;
+	struct spinlock iolock;
+
 	data_block_t data_blks[DATA_BLKS_PER_DB];
 	int fd; 
 	bcache_stats_t stats; 
