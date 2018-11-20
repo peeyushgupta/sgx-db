@@ -299,7 +299,9 @@ int read_data_block(table *table, unsigned long blk_num, void *buf) {
 		return -1; 
 	}
 
+#if defined(IO_LOCK)
 	acquire(&table->db->bcache.iolock); 	
+#endif 
 	ocall_seek(&ret, table->fd[tid()], blk_num*DATA_BLOCK_SIZE); 
 
 #if defined(REPORT_IO_STATS)	
@@ -315,7 +317,9 @@ int read_data_block(table *table, unsigned long blk_num, void *buf) {
 				table->db->io_buf[tid()], 
 				FILE_READ_SIZE);
 		if (read < 0) {
+#if defined(IO_LOCK)
 			release(&table->db->bcache.iolock); 	
+#endif
 			ERR("read filed\n"); 
 			return -1; 
 		}
@@ -324,7 +328,9 @@ int read_data_block(table *table, unsigned long blk_num, void *buf) {
 			/* We've reached the end of file, pad with zeroes */
 			read = DATA_BLOCK_SIZE - total_read; 
 			memset((void *)((char *)buf + total_read), 0, read); 
+#if defined(IO_LOCK)
 			release(&table->db->bcache.iolock); 	
+#endif
 			return 0; 
 		} else {
 			/* Copy data from the I/O buffer into bcache buffer */
@@ -332,8 +338,9 @@ int read_data_block(table *table, unsigned long blk_num, void *buf) {
 		}
 		total_read += read;  
 	}
-
+#if defined(IO_LOCK)
 	release(&table->db->bcache.iolock); 	
+#endif
 
 #if defined(REPORT_IO_STATS)
 	end = RDTSC();
@@ -356,7 +363,9 @@ int write_data_block(table *table, unsigned long blk_num, void *buf) {
 		return -1; 
 	}	
 
+#if defined(IO_LOCK)
 	acquire(&table->db->bcache.iolock); 	
+#endif
 
 	ocall_seek(&ret, table->fd[tid()], blk_num*DATA_BLOCK_SIZE);
  
@@ -373,13 +382,17 @@ int write_data_block(table *table, unsigned long blk_num, void *buf) {
 			table->db->io_buf[tid()], 
 			write_size);
 		if (written < 0) {
+#if defined(IO_LOCK)
 			release(&table->db->bcache.iolock); 	
+#endif
 			ERR("write filed\n"); 
 			return -1; 
 		} 
 		total_written += written;  
 	}
+#if defined(IO_LOCK)
 	release(&table->db->bcache.iolock); 	
+#endif
 	return 0; 
 }
 
@@ -473,16 +486,23 @@ int create_table(data_base_t *db, std::string &name, schema_t *schema, table_t *
 	table->db = db; 
 	table->pinned_blocks = NULL; 
 	table->rows_per_blk = DATA_BLOCK_SIZE / row_size(table); 
+
+	/* Call outside of enclave to open a file for the table */
+	sgx_ret = ocall_open_file(&fd, name.c_str());
+	if (sgx_ret || fd < 0) {
+		ret = -5;
+		goto cleanup; 
+	} 
 	
 	for (i = 0; i < THREADS_PER_DB; i++) {
 		/* Call outside of enclave to open a file for the table */
-		sgx_ret = ocall_open_file(&fd, name.c_str());
-		if (sgx_ret || fd < 0) {
-			ret = -5;
-			goto cleanup; 
-		} 
+		//sgx_ret = ocall_open_file(&fd, name.c_str());
+		//if (sgx_ret || fd < 0) {
+		//	ret = -5;
+		//	goto cleanup; 
+		//} 
 
-		DBG("table:%s, fd[%d]:%d\n", table->name.c_str(), i, fd); 
+		//DBG("table:%s, fd[%d]:%d\n", table->name.c_str(), i, fd); 
 		table->fd[i] = fd;
 		
 	};
@@ -529,7 +549,8 @@ int delete_table(data_base_t *db, table_t *table) {
 	
 	db->tables[table->id] = NULL;
 
-	for(int i = 0; i < THREADS_PER_DB; i++) {
+
+	for(int i = 0; i < 1 /* THREADS_PER_DB*/; i++) {
 		sgx_ret = ocall_close_file(&ret, table->fd[i]);
 		if (sgx_ret) {
 			ret = sgx_ret;
