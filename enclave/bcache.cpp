@@ -118,8 +118,9 @@ data_block_t *bget(struct table *table, unsigned int blk_num)
 			// Atomic increment, relies on GCC builtins
 			__sync_fetch_and_add(&b->refcnt, 1);
 			
-			release(&bcache->lock);
+			//release(&bcache->lock);
 			acquire(&b->lock);
+			release(&bcache->lock);
 
 			DBG_ON(VERBOSE_BCACHE, "blk:%p (flags:%x), num:%d, b->table:%s for table:%s\n", 
 				b, b->flags, blk_num, b->table->name.c_str(), table->name.c_str());
@@ -139,6 +140,7 @@ data_block_t *bget(struct table *table, unsigned int blk_num)
 				if (ret) {
 					ERR("writing dirty block:%lu for table %s\n", 
 						b->blk_num, b->table->name.c_str());
+					
  					release(&bcache->lock);
 					//acquire(&b->lock);
 					return NULL;
@@ -153,8 +155,8 @@ data_block_t *bget(struct table *table, unsigned int blk_num)
 			b->blk_num = blk_num;
 			b->flags = 0;
 			b->refcnt = 1;
-			release(&bcache->lock);
 			acquire(&b->lock);
+			release(&bcache->lock);
 
 			return b;
 		}
@@ -235,11 +237,14 @@ data_block_t* bread(table_t *table, unsigned int blk_num)
 // Mark block as dirty
 void bwrite(data_block_t *b)
 {
+	acquire(&b->table->db->bcache.lock);
 	DBG_ON(VERBOSE_BCACHE, "marking dirty blk:%p (flags:%x), num:%lu, b->table:%s\n", 
 		b, b->flags, b->blk_num, b->table->name.c_str()); 
 	acquire(&b->lock); 
 	b->flags |= B_DIRTY;
 	release(&b->lock);
+	release(&b->table->db->bcache.lock);
+
 }
 
 // Release a buffer.
@@ -250,16 +255,19 @@ void brelse(data_block_t *b)
 	bcache_t *bcache = &b->table->db->bcache;
 	//releasesleep(&b->lock);
 
+	acquire(&bcache->lock);
+
 	acquire(&b->lock);
 
 	//b->refcnt--;
 	old = __sync_fetch_and_sub(&b->refcnt, 1);
 	if (old != 1) {
 		release(&b->lock);
+		release(&bcache->lock);
 		return; 
 	}	
 
-	acquire(&bcache->lock);
+	//acquire(&bcache->lock);
 
 	// no one is waiting for it.
 	b->next->prev = b->prev;
@@ -269,8 +277,8 @@ void brelse(data_block_t *b)
 	bcache->head.next->prev = b;
 	bcache->head.next = b;
 
-	release(&bcache->lock);
 	release(&b->lock);
-
+	release(&bcache->lock);
+	
 	return;
 }
