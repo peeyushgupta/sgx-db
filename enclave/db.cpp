@@ -2948,13 +2948,13 @@ cleanup:
     
 } 
 
-int join_and_write_sorted_table(int db_id, table_t *tbl, join_condition_t *c, 
-	int *join_table_id)
+int join_and_write_sorted_table(table_t *tbl, int db_id, join_condition_t *c, int *join_table_id)
 {
 	auto N = tbl->num_rows;
 	assert (((N & (N - 1)) == 0));
 	// printf("%s, num_rows %d | tid = %d\n", __func__, table->num_rows, tid);
 
+	int ret;
 	data_base_t *db;
 	table_t *tbl_left, *tbl_right, *join_table;
 	row_t *row_left = NULL, *row_right = NULL, *join_row = NULL;
@@ -3007,16 +3007,15 @@ int join_and_write_sorted_table(int db_id, table_t *tbl, join_condition_t *c,
 
 	for (unsigned long i = 0; i < tbl->num_rows; i ++) {
 
-		// Read row for left
+		// Read left row
 		ret = read_row(tbl, i, row_left);
 		if(ret) {
 			ERR("failed to read row %d of table %s\n",
-				i, left_tbl->name.c_str());
+				i, tbl_left->name.c_str());
 			goto cleanup;
 		}
 
-		// Read row for right
-		// Check if j + max_row_to_join does not exceed the size of table index
+		// Read right row
 		for (unsigned long j = i+1; j < tbl->num_rows; j ++) {
 
 			bool equal = true;
@@ -3025,16 +3024,16 @@ int join_and_write_sorted_table(int db_id, table_t *tbl, join_condition_t *c,
 			ret = read_row(tbl, j, row_right);
 			if(ret) {
 				ERR("failed to read row %d of table %s\n",
-					i, right_tbl->name.c_str());
+					i, tbl_right->name.c_str());
 				goto cleanup;
 			}
 
-			// If left_row and right_row came from the same table, add fake row 
-			if( left_row.from == right_row.from )
+			// If row_left and row_right came from the same table, add a fake row 
+			if( row_left->from == row_right->from )
 			{
-				join_row.header.fake = true; 
+				join_row->header.fake = true; 
 			
-				// Add fake row to the join table
+				// Add a fake row to the join table
 				ret = insert_row_dbg(join_table, join_row);
 				if(ret) {
 					ERR("failed to insert fake row %d of table %s with row %d of table %s\n",
