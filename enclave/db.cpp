@@ -2660,7 +2660,8 @@ int ecall_insert_row_dbg(int db_id, int table_id, void *row_data) {
 	if(!row)
 		return -3;
 
-	row->header.fake = false; 
+	row->header.fake = false;
+	row->header.from = table_id;
 	memcpy(row->data, row_data, row_data_size(table)); 
 	ret = insert_row_dbg(table, row); 	
 
