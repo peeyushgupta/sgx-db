@@ -3030,7 +3030,7 @@ int join_and_write_sorted_table(table_t *tbl, int db_id, join_condition_t *c, in
 			}
 
 			// If row_left and row_right came from the same table, add a fake row 
-			if( row_left->from == row_right->from )
+			if( row_left->header.from == row_right->header.from )
 			{
 				join_row->header.fake = true; 
 			
