@@ -54,6 +54,11 @@ struct Schema{
 
 typedef struct {
 	bool fake;
+	// we need to identify which table a particular row came from during
+	// join. Basically, we just store the table_id here. For now assume
+	// that we will only join tables within a database, where table_id
+	// would be unique
+	int from;
 } row_header_t;
 
 typedef struct {
