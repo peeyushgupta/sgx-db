@@ -3134,6 +3134,8 @@ void quickSort(table_t *tbl, int start, int end) {
 int partition(table_t *tbl, int column, int start, int end) {
 	int mid = start + (end - start) / 2;
 
+	int ret = 0;
+
 	row_t *row = NULL, *start_row = NULL, *end_row = NULL, *temp_row = NULL;
 
 	row = (row_t *) malloc(row_size(tbl));
@@ -3155,31 +3157,31 @@ int partition(table_t *tbl, int column, int start, int end) {
 	ret = read_row(tbl, mid, row);
 	if(ret) {
 		ERR("failed to read row %d of table %s\n",
-			i, tbl->name.c_str());
+			mid, tbl->name.c_str());
 		goto cleanup;
 	}
 
 	ret = read_row(tbl, start, start_row);
 	if(ret) {
 		ERR("failed to read row %d of table %s\n",
-			i, tbl->name.c_str());
+			start, tbl->name.c_str());
 		goto cleanup;
 	}
 
 	ret = read_row(tbl, end, end_row);
 	if(ret) {
 		ERR("failed to read row %d of table %s\n",
-			i, tbl->name.c_str());
+			end, tbl->name.c_str());
 		goto cleanup;
 	}
 
 	while (start < end) {
 
 		switch (tbl->sc.types[column]) {
-			case BOOLEAN: 
-				bool pivot = *((bool*)get_column(&tbl->sc, column, row);
-				bool start_val = *((bool*)get_column(&tbl->sc, column, start_row);
-				bool end_val = *((bool*)get_column(&tbl->sc, column, end_row); 
+			case BOOLEAN: {
+				bool pivot = *((bool*)get_column(&tbl->sc, column, row));
+				bool start_val = *((bool*)get_column(&tbl->sc, column, start_row));
+				bool end_val = *((bool*)get_column(&tbl->sc, column, end_row)); 
 
 				while (start_val < pivot) {
 					start++;          
@@ -3194,8 +3196,9 @@ int partition(table_t *tbl, int column, int start, int end) {
 				memcpy(end_row, temp_row, row_size(tbl)); 
 
 				break;
+			}
 
-			case INTEGER: 
+			case INTEGER: {
 				int pivot = *((int*)get_column(&tbl->sc, column, row);
 				int start_val = *((int*)get_column(&tbl->sc, column, start_row);
 				int end_val = *((int*)get_column(&tbl->sc, column, end_row); 
@@ -3213,8 +3216,8 @@ int partition(table_t *tbl, int column, int start, int end) {
 				memcpy(end_row, temp_row, row_size(tbl)); 
 
 				break;
-
-			case TINYTEXT: 
+			}
+			case TINYTEXT: {
 				char *pivot = (char*)get_column(&tbl->sc, column, row);
 				char *start_val = (char*)get_column(&tbl->sc, column, start_row);
 				char *end_val = (char*)get_column(&tbl->sc, column, end_row); 
@@ -3242,7 +3245,7 @@ int partition(table_t *tbl, int column, int start, int end) {
 				}
 
 				break;
-
+			}
 			default:
 				break;
 		}
