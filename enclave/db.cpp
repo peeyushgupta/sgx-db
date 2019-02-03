@@ -3094,3 +3094,155 @@ cleanup:
 	return ret; 
 
 }
+
+int quick_sort_table(data_base_t *db, table_t *tbl, int column, table_t **p_tbl)
+{
+	int ret = 0;
+
+#ifdef CREATE_SORTED_TABLE
+	std::string s_tbl_name;  
+    schema_t p_sc;
+
+	s_tbl_name = "s:" + tbl->name; 
+
+	ret = create_table(db, s_tbl_name, &p_sc, p_tbl);
+	if (ret) {
+		ERR("create table:%d\n", ret);
+		return ret; 
+	}
+
+	DBG("Created sorted table %s, id:%d\n", 
+            s_tbl_name.c_str(), s_tbl->id); 
+#endif
+	quickSort(tbl, 0, tbl->num_rows);
+
+#ifdef CREATE_SORTED_TABLE
+	bflush(*p_tbl);
+#endif
+	return ret; 	
+}
+ 
+void quickSort(table_t *tbl, int start, int end) {
+	if (start >= end) {
+		return;
+	}
+	int pivot = partition(tbl, start, end);
+	quickSort(tbl, start, pivot - 1);
+	quickSort(tbl, pivot + 1, end);
+}
+ 
+int partition(table_t *tbl, int column, int start, int end) {
+	int mid = start + (end - start) / 2;
+
+	row_t *row = NULL, *start_row = NULL, *end_row = NULL, *temp_row = NULL;
+
+	row = (row_t *) malloc(row_size(tbl));
+	if(!row)
+		return -5;
+
+	start_row = (row_t *) malloc(row_size(tbl));
+	if(!start_row)
+		return -5;
+	
+	end_row = (row_t *) malloc(row_size(tbl));
+	if(!end_row)
+		return -5;
+		
+	ret = read_row(tbl, mid, row);
+	if(ret) {
+		ERR("failed to read row %d of table %s\n",
+			i, tbl->name.c_str());
+		goto cleanup;
+	}
+
+	ret = read_row(tbl, start, start_row);
+	if(ret) {
+		ERR("failed to read row %d of table %s\n",
+			i, tbl->name.c_str());
+		goto cleanup;
+	}
+
+	ret = read_row(tbl, end, end_row);
+	if(ret) {
+		ERR("failed to read row %d of table %s\n",
+			i, tbl->name.c_str());
+		goto cleanup;
+	}
+
+	while (start < end) {
+
+		switch (tbl->sc.types[column]) {
+			case BOOLEAN: 
+				bool pivot = *((bool*)get_column(&tbl->sc, column, row);
+				bool start_val = *((bool*)get_column(&tbl->sc, column, start_row);
+				bool end_val = *((bool*)get_column(&tbl->sc, column, end_row); 
+
+				while (start_val < pivot) {
+					start++;          
+				}       
+				while (end_val > pivot) {
+					end--;
+				}
+
+				// swap
+				memcpy(temp_row, start_row, row_size(tbl)); 
+				memcpy(start_row, end_row, row_size(tbl)); 
+				memcpy(end_row, temp_row, row_size(tbl)); 
+
+				break;
+
+			case INTEGER: 
+				int pivot = *((int*)get_column(&tbl->sc, column, row);
+				int start_val = *((int*)get_column(&tbl->sc, column, start_row);
+				int end_val = *((int*)get_column(&tbl->sc, column, end_row); 
+
+				while (start_val < pivot) {
+					start++;          
+				}       
+				while (end_val > pivot) {
+					end--;
+				}
+
+				// swap
+				memcpy(temp_row, start_row, row_size(tbl)); 
+				memcpy(start_row, end_row, row_size(tbl)); 
+				memcpy(end_row, temp_row, row_size(tbl)); 
+
+				break;
+
+			case TINYTEXT: {
+				char *pivot = (char*)get_column(&tbl->sc, column, row);
+				char *start_val = (char*)get_column(&tbl->sc, column, start_row);
+				char *end_val = (char*)get_column(&tbl->sc, column, end_row); 
+
+				int start_cmp = strncmp(start_val, pivot, MAX_ROW_SIZE);
+				int end_cmp = strncmp(end_val, pivot, MAX_ROW_SIZE);
+
+				// start_val < pivot
+				while ( start_cmp < 0 ) {
+					start++;          
+				}      
+
+				// end_val > pivot  
+				while ( end_cmp > 0 ) {
+					end--;
+				}
+
+				int ret = strncmp(start_val, end_val, MAX_ROW_SIZE);
+				if (ret < 0) // str2 > str1
+				{
+					// swap
+					memcpy(temp_row, start_row, row_size(tbl)); 
+					memcpy(start_row, end_row, row_size(tbl)); 
+					memcpy(end_row, temp_row, row_size(tbl)); 
+				}
+
+				break;
+
+			default:
+				break;
+		}
+	
+	}
+	return start;
+}
