@@ -3147,6 +3147,10 @@ int partition(table_t *tbl, int column, int start, int end) {
 	end_row = (row_t *) malloc(row_size(tbl));
 	if(!end_row)
 		return -5;
+
+	temp_row = (row_t *) malloc(row_size(tbl));
+	if(!temp_row)
+		return -5;
 		
 	ret = read_row(tbl, mid, row);
 	if(ret) {
@@ -3210,7 +3214,7 @@ int partition(table_t *tbl, int column, int start, int end) {
 
 				break;
 
-			case TINYTEXT: {
+			case TINYTEXT: 
 				char *pivot = (char*)get_column(&tbl->sc, column, row);
 				char *start_val = (char*)get_column(&tbl->sc, column, start_row);
 				char *end_val = (char*)get_column(&tbl->sc, column, end_row); 
@@ -3244,5 +3248,19 @@ int partition(table_t *tbl, int column, int start, int end) {
 		}
 	
 	}
+
+cleanup: 
+	if (row)
+		free(row); 
+	
+	if (start_row)
+		free(start_row); 
+
+	if (end_row)
+		free(end_row);
+
+	if (temp_row)
+		free(temp_row);
+
 	return start;
 }
