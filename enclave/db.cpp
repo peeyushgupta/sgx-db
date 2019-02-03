@@ -3199,9 +3199,9 @@ int partition(table_t *tbl, int column, int start, int end) {
 			}
 
 			case INTEGER: {
-				int pivot = *((int*)get_column(&tbl->sc, column, row);
-				int start_val = *((int*)get_column(&tbl->sc, column, start_row);
-				int end_val = *((int*)get_column(&tbl->sc, column, end_row); 
+				int pivot = *((int*)get_column(&tbl->sc, column, row));
+				int start_val = *((int*)get_column(&tbl->sc, column, start_row));
+				int end_val = *((int*)get_column(&tbl->sc, column, end_row)); 
 
 				while (start_val < pivot) {
 					start++;          
