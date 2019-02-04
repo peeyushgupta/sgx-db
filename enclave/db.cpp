@@ -3095,6 +3095,66 @@ cleanup:
 
 }
 
+int ecall_quicksort_table(int db_id, int table_id, int field, int *sorted_id) {
+	int ret; 
+	data_base_t *db;
+	table_t *table, *s_table;
+
+	if ((db_id > (MAX_DATABASES - 1)) || !g_dbs[db_id] )
+		return -1; 
+
+	db = g_dbs[db_id]; 
+	
+	if ((table_id > (MAX_TABLES - 1)) || !db->tables[table_id])
+		return -2; 
+
+	table = db->tables[table_id];
+
+	ret = quick_sort_table(db, table, field, &s_table); 
+
+#ifdef CREATE_SORTED_TABLE
+	*sorted_id = s_table->id; 
+#endif
+	return ret; 
+}
+
+int quicksort_table_parallel(table_t *table, int column, int tid, int num_threads) {
+	return 0;
+}
+
+int ecall_quicksort_table_parallel(int db_id, int table_id, int column, int tid, int num_threads)
+{
+	int ret;
+	data_base_t *db;
+	table_t *table;
+
+	if ((db_id > (MAX_DATABASES - 1)) || !g_dbs[db_id])
+		return -1;
+
+	db = g_dbs[db_id];
+
+	if ((table_id > (MAX_TABLES - 1)) || !db->tables[table_id])
+		return -2;
+
+	table = db->tables[table_id];
+
+	g_row_i = (row_t**) malloc(sizeof(row_t*) * num_threads);
+	g_row_j = (row_t**) malloc(sizeof(row_t*) * num_threads);
+	g_row_tmp = (row_t**) malloc(sizeof(row_t*) * num_threads);
+
+	for (auto i = 0u; i < num_threads; i++) {
+		g_row_i[i] = (row_t*) malloc(row_size(table));
+		g_row_j[i] = (row_t*) malloc(row_size(table));
+		g_row_tmp[i] = (row_t*) malloc(row_size(table));
+		if(!g_row_i[i] || !g_row_j[i] || !g_row_tmp[i])
+			printf("%s, alloc failed\n");
+	}
+
+	thread_id = tid; 
+
+	return quicksort_table_parallel(table, column, tid, num_threads);
+};
+
 int quick_sort_table(data_base_t *db, table_t *tbl, int column, table_t **p_tbl)
 {
 	int ret = 0;
