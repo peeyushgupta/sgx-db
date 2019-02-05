@@ -3239,39 +3239,41 @@ void quickSort(table_t *tbl, int column, int start, int end) {
 		ERR("Sorting failed\n");
 		return;
 	}
-
-	quickSort(tbl, column, start, pivot - 1);
-	quickSort(tbl, column, pivot + 1, end);
+	
+	if (start < pivot - 1)
+		quickSort(tbl, column, start, pivot - 1);
+	if (pivot < end)
+		quickSort(tbl, column, pivot, end);
 }
  
 int partition(table_t *tbl, int column, int start, int end) {
-	int mid = start + (end - start) / 2;
 
 	int ret = 0;
 
-	ret = read_row(tbl, mid, row);
+	while (start <= end) {
 
-	if(ret) {
-		ERR("failed to read row %d of table %s\n",
-			mid, tbl->name.c_str());
-		return -1;
-	}
+		int mid = start + (end - start) / 2;
 
-	ret = read_row(tbl, start, start_row);
-	if(ret) {
-		ERR("failed to read row %d of table %s\n",
-			start, tbl->name.c_str());
-		return -1;
-	}
+		ret = read_row(tbl, mid, row);
+		if(ret) {
+			ERR("failed to read row %d of table %s\n",
+				mid, tbl->name.c_str());
+			return -1;
+		}
 
-	ret = read_row(tbl, end, end_row);
-	if(ret) {
-		ERR("failed to read row %d of table %s\n",
-			end, tbl->name.c_str());
-		return -1;
-	}
+		ret = read_row(tbl, start, start_row);
+		if(ret) {
+			ERR("failed to read row %d of table %s\n",
+				start, tbl->name.c_str());
+			return -1;
+		}
 
-	while (start < end) {
+		ret = read_row(tbl, end, end_row);
+		if(ret) {
+			ERR("failed to read row %d of table %s\n",
+				end, tbl->name.c_str());
+			return -1;
+		}
 
 		switch (tbl->sc.types[column]) {
 			case BOOLEAN: {
@@ -3279,17 +3281,18 @@ int partition(table_t *tbl, int column, int start, int end) {
 				bool start_val = *((bool*)get_column(&tbl->sc, column, start_row));
 				bool end_val = *((bool*)get_column(&tbl->sc, column, end_row)); 
 
-				while (start_val < pivot) {
-					start++;          
-				}       
-				while (end_val > pivot) {
-					end--;
-				}
+				while (start_val < pivot) start++;          
+				while (end_val > pivot) end--;
 
 				// swap
-				memcpy(temp_row, start_row, row_size(tbl)); 
-				memcpy(start_row, end_row, row_size(tbl)); 
-				memcpy(end_row, temp_row, row_size(tbl)); 
+				if( start <= end )
+				{
+					memcpy(temp_row, start_row, row_size(tbl)); 
+					memcpy(start_row, end_row, row_size(tbl)); 
+					memcpy(end_row, temp_row, row_size(tbl));
+					start++;
+					end--; 
+				}
 
 				break;
 			}
@@ -3299,19 +3302,21 @@ int partition(table_t *tbl, int column, int start, int end) {
 				int start_val = *((int*)get_column(&tbl->sc, column, start_row));
 				int end_val = *((int*)get_column(&tbl->sc, column, end_row)); 
 
-				while (start_val < pivot) {
-					start++;          
-				}       
-				while (end_val > pivot) {
-					end--;
-				}
+				while (start_val < pivot) start++;          				     
+				while (end_val > pivot) end--;
 
 				// swap
-				memcpy(temp_row, start_row, row_size(tbl)); 
-				memcpy(start_row, end_row, row_size(tbl)); 
-				memcpy(end_row, temp_row, row_size(tbl)); 
+				if( start <= end )
+				{
+					memcpy(temp_row, start_row, row_size(tbl)); 
+					memcpy(start_row, end_row, row_size(tbl)); 
+					memcpy(end_row, temp_row, row_size(tbl));
+					start++;
+					end--; 
+				} 
 
 				break;
+
 			}
 			case TINYTEXT: {
 				char *pivot = (char*)get_column(&tbl->sc, column, row);
@@ -3322,22 +3327,20 @@ int partition(table_t *tbl, int column, int start, int end) {
 				int end_cmp = strncmp(end_val, pivot, MAX_ROW_SIZE);
 
 				// start_val < pivot
-				while ( start_cmp < 0 ) {
-					start++;          
-				}      
+				while ( start_cmp < 0 ) start++;            
 
 				// end_val > pivot  
-				while ( end_cmp > 0 ) {
-					end--;
-				}
+				while ( end_cmp > 0 ) end--;
 
 				int ret = strncmp(start_val, end_val, MAX_ROW_SIZE);
+				// swap
 				if (ret < 0) // str2 > str1
-				{
-					// swap
+				{				
 					memcpy(temp_row, start_row, row_size(tbl)); 
 					memcpy(start_row, end_row, row_size(tbl)); 
 					memcpy(end_row, temp_row, row_size(tbl)); 
+					start++;
+					end--; 
 				}
 
 				break;
