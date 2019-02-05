@@ -3097,7 +3097,7 @@ cleanup:
 
 row_t *row = NULL, *start_row = NULL, *end_row = NULL, *temp_row = NULL;
 
-void allocateMemoryForQuickSort() {
+int allocateMemoryForQuickSort(table_t *tbl) {
 			
 	row = (row_t *) malloc(row_size(tbl));
 	if(!row)
@@ -3117,7 +3117,7 @@ void allocateMemoryForQuickSort() {
 		
 }
 
-void deallocateMemoryForQuickSort() {
+void deallocate_memory_for_quicksort() {
 	if (row)
 		free(row); 
 	
@@ -3151,14 +3151,14 @@ int quick_sort_table(data_base_t *db, table_t *tbl, int column, table_t **p_tbl)
             s_tbl_name.c_str(), s_tbl->id); 
 #endif
 	
-	allocateMemoryForQuickSort();
+	allocateMemoryForQuickSort(tbl);
 	quickSort(tbl, 0, tbl->num_rows);
 
 #ifdef CREATE_SORTED_TABLE
 	bflush(*p_tbl);
 #endif
 
-	deallocateMemoryForQuickSort();
+	deallocate_memory_for_quicksort();
 	return ret; 	
 }
  
@@ -3181,21 +3181,21 @@ int partition(table_t *tbl, int column, int start, int end) {
 	if(ret) {
 		ERR("failed to read row %d of table %s\n",
 			mid, tbl->name.c_str());
-		deallocateMemoryForQuickSort();
+		deallocate_memory_for_quicksort();
 	}
 
 	ret = read_row(tbl, start, start_row);
 	if(ret) {
 		ERR("failed to read row %d of table %s\n",
 			start, tbl->name.c_str());
-		deallocateMemoryForQuickSort();
+		deallocate_memory_for_quicksort();
 	}
 
 	ret = read_row(tbl, end, end_row);
 	if(ret) {
 		ERR("failed to read row %d of table %s\n",
 			end, tbl->name.c_str());
-		deallocateMemoryForQuickSort();
+		deallocate_memory_for_quicksort();
 	}
 
 	while (start < end) {
