@@ -56,6 +56,10 @@ int main(){
 	test_bitonic_sort(eid);
 #endif
 
+#if defined(TEST_QUICKSORT)
+	test_quick_sort(eid);
+#endif
+
 	/* Launch a collection of tests inside that require
 	   rankings and udata tables */
 	test_rankings(eid);
