@@ -3229,11 +3229,17 @@ int quick_sort_table(data_base_t *db, table_t *tbl, int column, table_t **p_tbl)
 }
  
 void quickSort(table_t *tbl, int column, int start, int end) {
+
 	if (start >= end) {
 		return;
 	}
 
 	int pivot = partition(tbl, column, start, end);
+	if (pivot == -1) {
+		ERR("Sorting failed\n");
+		return;
+	}
+
 	quickSort(tbl, column, start, pivot - 1);
 	quickSort(tbl, column, pivot + 1, end);
 }
@@ -3244,24 +3250,25 @@ int partition(table_t *tbl, int column, int start, int end) {
 	int ret = 0;
 
 	ret = read_row(tbl, mid, row);
+
 	if(ret) {
 		ERR("failed to read row %d of table %s\n",
 			mid, tbl->name.c_str());
-		deallocate_memory_for_quicksort();
+		return -1;
 	}
 
 	ret = read_row(tbl, start, start_row);
 	if(ret) {
 		ERR("failed to read row %d of table %s\n",
 			start, tbl->name.c_str());
-		deallocate_memory_for_quicksort();
+		return -1;
 	}
 
 	ret = read_row(tbl, end, end_row);
 	if(ret) {
 		ERR("failed to read row %d of table %s\n",
 			end, tbl->name.c_str());
-		deallocate_memory_for_quicksort();
+		return -1;
 	}
 
 	while (start < end) {
