@@ -191,8 +191,8 @@ int sort_table_parallel(table_t *tbl, int column, int tid, int num_threads);
 int join_and_write_sorted_table(table_t *tbl, int db_id, join_condition_t *c, int *join_table_id);
 
 int quick_sort_table(data_base_t *db, table_t *tbl, int column, table_t **p_tbl);
-void quickSort(table_t *tbl, int start, int end);
-int partition(table_t *tbl, int start, int end);
+void quickSort(table_t *tbl, int column, int start, int end);
+int partition(table_t *tbl, int column, int start, int end);
 
 void *aligned_malloc(size_t size, size_t alignment);
 void aligned_free(void *aligned_ptr);

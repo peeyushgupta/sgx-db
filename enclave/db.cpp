@@ -3158,7 +3158,7 @@ int ecall_quicksort_table_parallel(int db_id, int table_id, int column, int tid,
 
 row_t *row = NULL, *start_row = NULL, *end_row = NULL, *temp_row = NULL;
 
-void allocate_memory_for_quicksort(table_t *tbl) {
+int allocate_memory_for_quicksort(table_t *tbl) {
 			
 	row = (row_t *) malloc(row_size(tbl));
 	if(!row)
@@ -3213,8 +3213,12 @@ int quick_sort_table(data_base_t *db, table_t *tbl, int column, table_t **p_tbl)
             s_tbl_name.c_str(), s_tbl->id); 
 #endif
 	
-	allocate_memory_for_quicksort();
-	quickSort(tbl, 0, tbl->num_rows);
+	if (ret = allocate_memory_for_quicksort(tbl)) {
+		ERR("memory allocation failed: %d\n", ret);
+		return ret;
+	}
+
+	quickSort(tbl, column, 0, tbl->num_rows);
 
 #ifdef CREATE_SORTED_TABLE
 	bflush(*p_tbl);
@@ -3224,14 +3228,14 @@ int quick_sort_table(data_base_t *db, table_t *tbl, int column, table_t **p_tbl)
 	return ret; 	
 }
  
-void quickSort(table_t *tbl, int start, int end) {
+void quickSort(table_t *tbl, int column, int start, int end) {
 	if (start >= end) {
 		return;
 	}
 
-	int pivot = partition(tbl, start, end);
-	quickSort(tbl, start, pivot - 1);
-	quickSort(tbl, pivot + 1, end);
+	int pivot = partition(tbl, column, start, end);
+	quickSort(tbl, column, start, pivot - 1);
+	quickSort(tbl, column, pivot + 1, end);
 }
  
 int partition(table_t *tbl, int column, int start, int end) {

@@ -46,7 +46,7 @@ enclave {
 		public int ecall_sort_table(int db_id, int table_id, int column, [out] int *sorted_table_id);
 		public int ecall_sort_table_parallel(int db_id, int table_id, int field, int tid, int num_threads);
 
-		public int ecall_quicksort_table(int db_id, int table_id, int field, int *sorted_id);
+		public int ecall_quicksort_table(int db_id, int table_id, int field, [out] int *sorted_id);
 
 		/* Various tests */
 		public int ecall_spinlock_inc(unsigned long count);
