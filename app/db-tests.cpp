@@ -719,7 +719,7 @@ int test_quick_sort(sgx_enclave_id_t eid)
 
 	std::ifstream file("rand.csv");
 
-	for(auto i = 0u; i < 256; i++) {
+	for(auto i = 0u; i < 16; i++) {
 
 		memset(row, 0x0, MAX_ROW_SIZE);
 		file.getline(line, MAX_ROW_SIZE); //get the field
@@ -759,7 +759,7 @@ int test_quick_sort(sgx_enclave_id_t eid)
 #endif
 		ecall_flush_table(eid, &ret, db_id, table_id);
 		end = RDTSCP();
-		printf("Sorting random table (in-place) + flushing took %llu cycles\n", end - start);
+		printf("Quick Sorting table (in-place) + flushing took %llu cycles\n", end - start);
 #ifdef PRINT_SORTED_TABLE
 		ecall_print_table_dbg(eid, &ret, db_id, table_id, 0, 16);
 #endif

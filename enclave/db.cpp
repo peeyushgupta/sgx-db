@@ -3213,12 +3213,15 @@ int quick_sort_table(data_base_t *db, table_t *tbl, int column, table_t **p_tbl)
             s_tbl_name.c_str(), s_tbl->id); 
 #endif
 	
-	if (ret = allocate_memory_for_quicksort(tbl)) {
+	ret = allocate_memory_for_quicksort(tbl);
+	if ( ret == -5 ) {
 		ERR("memory allocation failed: %d\n", ret);
 		return ret;
 	}
 
-	quickSort(tbl, column, 0, tbl->num_rows);
+	int num_of_rows = 16;
+	//quickSort(tbl, column, 0, tbl->num_rows);
+	quickSort(tbl, column, 0, num_of_rows);
 
 #ifdef CREATE_SORTED_TABLE
 	bflush(*p_tbl);
@@ -3281,8 +3284,34 @@ int partition(table_t *tbl, int column, int start, int end) {
 				bool start_val = *((bool*)get_column(&tbl->sc, column, start_row));
 				bool end_val = *((bool*)get_column(&tbl->sc, column, end_row)); 
 
-				while (start_val < pivot) start++;          
-				while (end_val > pivot) end--;
+				while (start_val < pivot) 
+				{
+					start++;    
+
+					ret = read_row(tbl, start, start_row);
+					if(ret) {
+						ERR("failed to read row %d of table %s\n",
+							start, tbl->name.c_str());
+						return -1;
+					}
+
+					start_val = *((bool*)get_column(&tbl->sc, column, start_row));				
+					
+				}  
+
+				while (end_val > pivot) 
+				{
+					end--;
+
+					ret = read_row(tbl, end, end_row);
+					if(ret) {
+						ERR("failed to read row %d of table %s\n",
+							end, tbl->name.c_str());
+						return -1;
+					}
+					end_val = *((bool*)get_column(&tbl->sc, column, end_row));
+					
+				}
 
 				// swap
 				if( start <= end )
@@ -3302,8 +3331,34 @@ int partition(table_t *tbl, int column, int start, int end) {
 				int start_val = *((int*)get_column(&tbl->sc, column, start_row));
 				int end_val = *((int*)get_column(&tbl->sc, column, end_row)); 
 
-				while (start_val < pivot) start++;          				     
-				while (end_val > pivot) end--;
+				while (start_val < pivot) 
+				{
+					start++;    
+
+					ret = read_row(tbl, start, start_row);
+					if(ret) {
+						ERR("failed to read row %d of table %s\n",
+							start, tbl->name.c_str());
+						return -1;
+					}
+
+					start_val = *((int*)get_column(&tbl->sc, column, start_row));				
+					
+				}  
+
+				while (end_val > pivot) 
+				{
+					end--;
+
+					ret = read_row(tbl, end, end_row);
+					if(ret) {
+						ERR("failed to read row %d of table %s\n",
+							end, tbl->name.c_str());
+						return -1;
+					}
+					end_val = *((int*)get_column(&tbl->sc, column, end_row));
+					
+				}
 
 				// swap
 				if( start <= end )
@@ -3326,11 +3381,37 @@ int partition(table_t *tbl, int column, int start, int end) {
 				int start_cmp = strncmp(start_val, pivot, MAX_ROW_SIZE);
 				int end_cmp = strncmp(end_val, pivot, MAX_ROW_SIZE);
 
-				// start_val < pivot
-				while ( start_cmp < 0 ) start++;            
+				while ( start_cmp < 0  ) 
+				{
+					start++;    
 
-				// end_val > pivot  
-				while ( end_cmp > 0 ) end--;
+					ret = read_row(tbl, start, start_row);
+					if(ret) {
+						ERR("failed to read row %d of table %s\n",
+							start, tbl->name.c_str());
+						return -1;
+					}
+
+					start_val = (char*)get_column(&tbl->sc, column, start_row);				
+					
+					start_cmp = strncmp(start_val, pivot, MAX_ROW_SIZE);
+				}  
+
+				while ( end_cmp > 0 ) 
+				{
+					end--;
+
+					ret = read_row(tbl, end, end_row);
+					if(ret) {
+						ERR("failed to read row %d of table %s\n",
+							end, tbl->name.c_str());
+						return -1;
+					}
+					end_val = (char*)get_column(&tbl->sc, column, end_row);
+
+					end_cmp = strncmp(end_val, pivot, MAX_ROW_SIZE);
+					
+				}
 
 				int ret = strncmp(start_val, end_val, MAX_ROW_SIZE);
 				// swap
@@ -3348,6 +3429,8 @@ int partition(table_t *tbl, int column, int start, int end) {
 			default:
 				break;
 		}
+
+		// write row if value has been swapped
 	
 	}
 
