@@ -3244,11 +3244,9 @@ void quickSort(table_t *tbl, int column, int start, int end) {
 		ERR("Sorting failed\n");
 		return;
 	}
-	
-	if (start < pivot - 1)
-		quickSort(tbl, column, start, pivot - 1);
-	if (pivot < end)
-		quickSort(tbl, column, pivot, end);
+		
+	quickSort(tbl, column, start, pivot-1);
+	quickSort(tbl, column, pivot+1, end);
 }
  
 int partition(table_t *tbl, int column, int start, int end) {
@@ -3283,6 +3281,8 @@ int partition(table_t *tbl, int column, int start, int end) {
 				end, tbl->name.c_str());
 			return -1;
 		}
+
+		INFO("mid: (%d), start: (%d), end: (%d)\n", mid, start, end);
 
 		switch (tbl->sc.types[column]) {
 			case BOOLEAN: {
@@ -3342,6 +3342,9 @@ int partition(table_t *tbl, int column, int start, int end) {
 
 				while (start_val < pivot) 
 				{
+
+					INFO("start_val: (%d), pivot: (%d)\n", start_val, pivot);
+
 					start++;    
 
 					ret = read_row(tbl, start, start_row);
@@ -3357,6 +3360,9 @@ int partition(table_t *tbl, int column, int start, int end) {
 
 				while (end_val > pivot) 
 				{
+
+					INFO("end_val: (%d), pivot: (%d)\n", end_val, pivot);
+
 					end--;
 
 					ret = read_row(tbl, end, end_row);
@@ -3374,9 +3380,11 @@ int partition(table_t *tbl, int column, int start, int end) {
 				{
 					start_row_num = end;
 					end_row_num = start;
+
 					memcpy(temp_row, start_row, row_size(tbl)); 
 					memcpy(start_row, end_row, row_size(tbl)); 
 					memcpy(end_row, temp_row, row_size(tbl));
+
 					start++;
 					end--; 
 					swapped = true;
@@ -3448,6 +3456,8 @@ int partition(table_t *tbl, int column, int start, int end) {
 		// write row if value has been swapped
 		if( swapped )
 		{
+			INFO("start_row_num: (%d)\n", start_row_num);
+
 			/* Add start row to the table */
 			ret = write_row_dbg(tbl, start_row, start_row_num);
 			if(ret) {
@@ -3455,6 +3465,8 @@ int partition(table_t *tbl, int column, int start, int end) {
 					start_row_num, tbl->name.c_str());
 				return -2;
 			}
+
+			INFO("end_row_num: (%d)\n", end_row_num);
 
 			/* Add end row to the table */
 			ret = write_row_dbg(tbl, end_row, end_row_num);
