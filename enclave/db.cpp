@@ -3345,7 +3345,7 @@ int partition(table_t *tbl, int column, int start, int end) {
 				while (start_val < pivot) 
 				{
 
-					INFO("start_val: (%d), pivot: (%d)\n", start_val, pivot);
+					INFO("start: (%d), start_val: (%d), pivot: (%d)\n", start, start_val, pivot);
 
 					start++;    
 
@@ -3363,7 +3363,7 @@ int partition(table_t *tbl, int column, int start, int end) {
 				while (end_val > pivot) 
 				{
 
-					INFO("end_val: (%d), pivot: (%d)\n", end_val, pivot);
+					INFO("end: (%d), end_val: (%d), pivot: (%d)\n", end, end_val, pivot);
 
 					end--;
 
@@ -3387,8 +3387,8 @@ int partition(table_t *tbl, int column, int start, int end) {
 					memcpy(start_row, end_row, row_size(tbl)); 
 					memcpy(end_row, temp_row, row_size(tbl));
 
-					start_row_num = end;
-					end_row_num = start;
+					start_row_num = start;
+					end_row_num = end;
 
 					start++;
 					end--; 
@@ -3480,6 +3480,10 @@ int partition(table_t *tbl, int column, int start, int end) {
 					end_row_num, tbl->name.c_str());
 				return -2;
 			}
+		}
+
+		for (unsigned int i = 0; i < 16; i++) {
+			print_table_dbg(tbl, 0, 16);
 		}
 	}
 
