@@ -3239,7 +3239,7 @@ void quickSort(table_t *tbl, int column, int start, int end) {
 		return;
 	}
 
-	int pivot = partition(tbl, column, start, end);
+	int pivot = partition(tbl, column, start, end-1);
 	if (pivot == -1) {
 		ERR("Sorting failed\n");
 		return;
@@ -3480,11 +3480,13 @@ int partition(table_t *tbl, int column, int start, int end) {
 					end_row_num, tbl->name.c_str());
 				return -2;
 			}
-		}
 
-		for (unsigned int i = 0; i < 16; i++) {
+			INFO("table after swap\n");
+			
 			print_table_dbg(tbl, 0, 16);
+			
 		}
+		
 	}
 
 	return start;
