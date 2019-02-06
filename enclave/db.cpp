@@ -3227,6 +3227,8 @@ int quick_sort_table(data_base_t *db, table_t *tbl, int column, table_t **p_tbl)
 	bflush(*p_tbl);
 #endif
 
+	print_table_dbg(tbl, 0, num_of_rows);
+
 	deallocate_memory_for_quicksort();
 	return ret; 	
 }
