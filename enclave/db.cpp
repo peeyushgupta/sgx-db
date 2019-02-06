@@ -3257,6 +3257,8 @@ int partition(table_t *tbl, int column, int start, int end) {
 
 		int mid = start + (end - start) / 2;
 
+		bool swapped = false;
+
 		ret = read_row(tbl, mid, row);
 		if(ret) {
 			ERR("failed to read row %d of table %s\n",
@@ -3316,11 +3318,14 @@ int partition(table_t *tbl, int column, int start, int end) {
 				// swap
 				if( start <= end )
 				{
+					start_row_num = end;
+					end_row_num = start;
 					memcpy(temp_row, start_row, row_size(tbl)); 
 					memcpy(start_row, end_row, row_size(tbl)); 
 					memcpy(end_row, temp_row, row_size(tbl));
 					start++;
 					end--; 
+					swapped = true;
 				}
 
 				break;
@@ -3363,11 +3368,14 @@ int partition(table_t *tbl, int column, int start, int end) {
 				// swap
 				if( start <= end )
 				{
+					start_row_num = end;
+					end_row_num = start;
 					memcpy(temp_row, start_row, row_size(tbl)); 
 					memcpy(start_row, end_row, row_size(tbl)); 
 					memcpy(end_row, temp_row, row_size(tbl));
 					start++;
 					end--; 
+					swapped = true;
 				} 
 
 				break;
@@ -3416,12 +3424,15 @@ int partition(table_t *tbl, int column, int start, int end) {
 				int ret = strncmp(start_val, end_val, MAX_ROW_SIZE);
 				// swap
 				if (ret < 0) // str2 > str1
-				{				
+				{			
+					start_row_num = end;
+					end_row_num = start;	
 					memcpy(temp_row, start_row, row_size(tbl)); 
 					memcpy(start_row, end_row, row_size(tbl)); 
 					memcpy(end_row, temp_row, row_size(tbl)); 
 					start++;
 					end--; 
+					swapped = true;
 				}
 
 				break;
@@ -3431,7 +3442,24 @@ int partition(table_t *tbl, int column, int start, int end) {
 		}
 
 		// write row if value has been swapped
-	
+		if( swapped )
+		{
+			/* Add start row to the table */
+			ret = write_row_dbg(tbl, start_row, start_row_num);
+			if(ret) {
+				ERR("failed to insert row %d of table %s\n",
+					start_row_num, table->name.c_str());
+				return -2;
+			}
+
+			/* Add end row to the table */
+			ret = write_row_dbg(tbl, end_row, end_row_num);
+			if(ret) {
+				ERR("failed to insert row %d of table %s\n",
+					end_row_num, table->name.c_str());
+				return -2;
+			}
+		}
 	}
 
 	return start;
