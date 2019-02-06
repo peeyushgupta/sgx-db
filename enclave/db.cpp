@@ -3340,6 +3340,8 @@ int partition(table_t *tbl, int column, int start, int end) {
 				int start_val = *((int*)get_column(&tbl->sc, column, start_row));
 				int end_val = *((int*)get_column(&tbl->sc, column, end_row)); 
 
+				INFO("start_val: (%d), end_val: (%d), pivot: (%d)\n", start_val, end_val, pivot);
+
 				while (start_val < pivot) 
 				{
 
@@ -3375,15 +3377,18 @@ int partition(table_t *tbl, int column, int start, int end) {
 					
 				}
 
+				INFO("pivot: (%d), start_val: (%d), end_val: (%d)\n", pivot, start_val, end_val;
+				INFO("mid: (%d), start: (%d), end: (%d)\n", mid, start, end);
+
 				// swap
 				if( start <= end )
 				{
-					start_row_num = end;
-					end_row_num = start;
-
 					memcpy(temp_row, start_row, row_size(tbl)); 
 					memcpy(start_row, end_row, row_size(tbl)); 
 					memcpy(end_row, temp_row, row_size(tbl));
+
+					start_row_num = end;
+					end_row_num = start;
 
 					start++;
 					end--; 
