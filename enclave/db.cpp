@@ -3377,7 +3377,7 @@ int partition(table_t *tbl, int column, int start, int end) {
 					
 				}
 
-				INFO("pivot: (%d), start_val: (%d), end_val: (%d)\n", pivot, start_val, end_val;
+				INFO("pivot: (%d), start_val: (%d), end_val: (%d)\n", pivot, start_val, end_val);
 				INFO("mid: (%d), start: (%d), end: (%d)\n", mid, start, end);
 
 				// swap
