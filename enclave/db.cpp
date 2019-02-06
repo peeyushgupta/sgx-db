@@ -3347,7 +3347,7 @@ int partition(table_t *tbl, int column, int start, int end) {
 
 					INFO("start: (%d), start_val: (%d), pivot: (%d)\n", start, start_val, pivot);
 
-					if( start == pivot -1 )
+					if( start == mid -1 )
 						break;
 					else
 						start++; 
@@ -3368,7 +3368,7 @@ int partition(table_t *tbl, int column, int start, int end) {
 
 					INFO("end: (%d), end_val: (%d), pivot: (%d)\n", end, end_val, pivot);
 
-					if( end == pivot + 1 )
+					if( end == mid + 1 )
 						break;
 					else
 						end--;
