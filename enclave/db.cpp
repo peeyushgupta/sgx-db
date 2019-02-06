@@ -3258,6 +3258,8 @@ int partition(table_t *tbl, int column, int start, int end) {
 		int mid = start + (end - start) / 2;
 
 		bool swapped = false;
+		int start_row_num = start;
+		int end_row_num = end;
 
 		ret = read_row(tbl, mid, row);
 		if(ret) {
@@ -3448,7 +3450,7 @@ int partition(table_t *tbl, int column, int start, int end) {
 			ret = write_row_dbg(tbl, start_row, start_row_num);
 			if(ret) {
 				ERR("failed to insert row %d of table %s\n",
-					start_row_num, table->name.c_str());
+					start_row_num, tbl->name.c_str());
 				return -2;
 			}
 
@@ -3456,7 +3458,7 @@ int partition(table_t *tbl, int column, int start, int end) {
 			ret = write_row_dbg(tbl, end_row, end_row_num);
 			if(ret) {
 				ERR("failed to insert row %d of table %s\n",
-					end_row_num, table->name.c_str());
+					end_row_num, tbl->name.c_str());
 				return -2;
 			}
 		}
