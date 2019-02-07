@@ -13,6 +13,7 @@
 
 using namespace std;
 #define OCALL_TEST_LENGTH 10000
+#define NUM_OF_ROWS 32
 
 void column_sort_table_parallel(sgx_enclave_id_t eid, int db_id, int table_id, int field, int num_threads);
 
@@ -719,7 +720,7 @@ int test_quick_sort(sgx_enclave_id_t eid)
 
 	std::ifstream file("rand.csv");
 
-	for(auto i = 0u; i < 16; i++) {
+	for(auto i = 0u; i < NUM_OF_ROWS; i++) {
 
 		memset(row, 0x0, MAX_ROW_SIZE);
 		file.getline(line, MAX_ROW_SIZE); //get the field

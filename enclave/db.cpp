@@ -29,6 +29,7 @@
 #define COLUMNSORT_VERBOSE 0
 #define COLUMNSORT_VERBOSE_L2 0
 #define IO_VERBOSE 0
+#define NUM_OF_ROWS 32
 
 data_base_t* g_dbs[MAX_DATABASES];
 
@@ -3219,15 +3220,14 @@ int quick_sort_table(data_base_t *db, table_t *tbl, int column, table_t **p_tbl)
 		return ret;
 	}
 
-	int num_of_rows = 16;
 	//quickSort(tbl, column, 0, tbl->num_rows);
-	quickSort(tbl, column, 0, num_of_rows-1);
+	quickSort(tbl, column, 0, NUM_OF_ROWS-1);
 
 #ifdef CREATE_SORTED_TABLE
 	bflush(*p_tbl);
 #endif
 
-	print_table_dbg(tbl, 0, num_of_rows);
+	print_table_dbg(tbl, 0, NUM_OF_ROWS);
 
 	deallocate_memory_for_quicksort();
 	return ret; 	
@@ -3492,7 +3492,7 @@ int partition(table_t *tbl, int column, int start, int end) {
 
 			INFO("table after swap\n");
 			
-			print_table_dbg(tbl, 0, 16);
+			print_table_dbg(tbl, 0, NUM_OF_ROWS);
 			
 		}
 		
