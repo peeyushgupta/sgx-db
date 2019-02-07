@@ -3253,20 +3253,20 @@ int partition(table_t *tbl, int column, int start, int end) {
 
 	int ret = 0;
 
-	while (start < end) {
+	int mid = start + (end - start) / 2;
 
-		int mid = start + (end - start) / 2;
+	ret = read_row(tbl, mid, row);
+	if(ret) {
+		ERR("failed to read row %d of table %s\n",
+			mid, tbl->name.c_str());
+		return -1;
+	}
+
+	while (start < end) {
 
 		bool swapped = false;
 		int start_row_num = start;
 		int end_row_num = end;
-
-		ret = read_row(tbl, mid, row);
-		if(ret) {
-			ERR("failed to read row %d of table %s\n",
-				mid, tbl->name.c_str());
-			return -1;
-		}
 
 		ret = read_row(tbl, start, start_row);
 		if(ret) {
