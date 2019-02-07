@@ -3221,7 +3221,7 @@ int quick_sort_table(data_base_t *db, table_t *tbl, int column, table_t **p_tbl)
 
 	int num_of_rows = 16;
 	//quickSort(tbl, column, 0, tbl->num_rows);
-	quickSort(tbl, column, 0, num_of_rows);
+	quickSort(tbl, column, 0, num_of_rows-1);
 
 #ifdef CREATE_SORTED_TABLE
 	bflush(*p_tbl);
@@ -3239,7 +3239,7 @@ void quickSort(table_t *tbl, int column, int start, int end) {
 		return;
 	}
 
-	int pivot = partition(tbl, column, start, end-1);
+	int pivot = partition(tbl, column, start, end);
 	if (pivot == -1) {
 		ERR("Sorting failed\n");
 		return;
@@ -3253,7 +3253,7 @@ int partition(table_t *tbl, int column, int start, int end) {
 
 	int ret = 0;
 
-	while (start <= end) {
+	while (start < end) {
 
 		int mid = start + (end - start) / 2;
 
@@ -3346,11 +3346,12 @@ int partition(table_t *tbl, int column, int start, int end) {
 				{
 
 					INFO("start: (%d), start_val: (%d), pivot: (%d)\n", start, start_val, pivot);
-
-					if( start == mid -1 )
+					/*
+					if( start == mid )
 						break;
 					else
-						start++; 
+					*/
+					start++; 
 
 					ret = read_row(tbl, start, start_row);
 					if(ret) {
@@ -3368,10 +3369,12 @@ int partition(table_t *tbl, int column, int start, int end) {
 
 					INFO("end: (%d), end_val: (%d), pivot: (%d)\n", end, end_val, pivot);
 
-					if( end == mid + 1 )
+					/*
+					if( end == mid )
 						break;
 					else
-						end--;
+					*/
+					end--;
 
 					ret = read_row(tbl, end, end_row);
 					if(ret) {
@@ -3387,7 +3390,7 @@ int partition(table_t *tbl, int column, int start, int end) {
 				INFO("mid: (%d), start: (%d), end: (%d)\n", mid, start, end);
 
 				// swap
-				if( start <= end )
+				//if( start <= end )
 				{
 					memcpy(temp_row, start_row, row_size(tbl)); 
 					memcpy(start_row, end_row, row_size(tbl)); 
@@ -3396,8 +3399,8 @@ int partition(table_t *tbl, int column, int start, int end) {
 					start_row_num = start;
 					end_row_num = end;
 
-					start++;
-					end--; 
+					//start++;
+					//end--; 
 					swapped = true;
 				} 
 
