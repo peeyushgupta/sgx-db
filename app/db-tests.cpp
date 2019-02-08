@@ -13,7 +13,7 @@
 
 using namespace std;
 #define OCALL_TEST_LENGTH 10000
-#define NUM_OF_ROWS 32
+int NUM_OF_ROWS = 256;
 
 void column_sort_table_parallel(sgx_enclave_id_t eid, int db_id, int table_id, int field, int num_threads);
 

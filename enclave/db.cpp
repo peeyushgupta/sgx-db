@@ -29,7 +29,7 @@
 #define COLUMNSORT_VERBOSE 0
 #define COLUMNSORT_VERBOSE_L2 0
 #define IO_VERBOSE 0
-#define NUM_OF_ROWS 64
+int NUM_OF_ROWS = 256;
 
 data_base_t* g_dbs[MAX_DATABASES];
 
@@ -3340,17 +3340,13 @@ int partition(table_t *tbl, int column, int start, int end) {
 				int start_val = *((int*)get_column(&tbl->sc, column, start_row));
 				int end_val = *((int*)get_column(&tbl->sc, column, end_row)); 
 
-				INFO("start_val: (%d), end_val: (%d), pivot: (%d)\n", start_val, end_val, pivot);
+				// INFO("start_val: (%d), end_val: (%d), pivot: (%d)\n", start_val, end_val, pivot);
 
 				while (start_val < pivot) 
 				{
 
-					INFO("start: (%d), start_val: (%d), pivot: (%d)\n", start, start_val, pivot);
-					/*
-					if( start == mid )
-						break;
-					else
-					*/
+					// INFO("start: (%d), start_val: (%d), pivot: (%d)\n", start, start_val, pivot);
+				
 					start++; 
 
 					ret = read_row(tbl, start, start_row);
@@ -3367,13 +3363,7 @@ int partition(table_t *tbl, int column, int start, int end) {
 				while (end_val > pivot) 
 				{
 
-					INFO("end: (%d), end_val: (%d), pivot: (%d)\n", end, end_val, pivot);
-
-					/*
-					if( end == mid )
-						break;
-					else
-					*/
+					// INFO("end: (%d), end_val: (%d), pivot: (%d)\n", end, end_val, pivot);
 					end--;
 
 					ret = read_row(tbl, end, end_row);
@@ -3386,24 +3376,19 @@ int partition(table_t *tbl, int column, int start, int end) {
 					
 				}
 
-				INFO("pivot: (%d), start_val: (%d), end_val: (%d)\n", pivot, start_val, end_val);
-				INFO("mid: (%d), start: (%d), end: (%d)\n", mid, start, end);
+				// INFO("pivot: (%d), start_val: (%d), end_val: (%d)\n", pivot, start_val, end_val);
+				// INFO("mid: (%d), start: (%d), end: (%d)\n", mid, start, end);
 
-				if( start >= end )
+				if( (start >= end) || (start_val == end_val))
 					return end;
 
-				// swap
-				//if( start <= end )
 				{
 					memcpy(temp_row, start_row, row_size(tbl)); 
 					memcpy(start_row, end_row, row_size(tbl)); 
 					memcpy(end_row, temp_row, row_size(tbl));
 
 					start_row_num = start;
-					end_row_num = end;
-
-					//start++;
-					//end--; 
+					end_row_num = end; 
 					swapped = true;
 				} 
 
@@ -3473,7 +3458,7 @@ int partition(table_t *tbl, int column, int start, int end) {
 		// write row if value has been swapped
 		if( swapped )
 		{
-			INFO("start_row_num: (%d)\n", start_row_num);
+			//INFO("start_row_num: (%d)\n", start_row_num);
 
 			/* Add start row to the table */
 			ret = write_row_dbg(tbl, start_row, start_row_num);
@@ -3483,7 +3468,7 @@ int partition(table_t *tbl, int column, int start, int end) {
 				return -2;
 			}
 
-			INFO("end_row_num: (%d)\n", end_row_num);
+			//INFO("end_row_num: (%d)\n", end_row_num);
 
 			/* Add end row to the table */
 			ret = write_row_dbg(tbl, end_row, end_row_num);
@@ -3493,9 +3478,8 @@ int partition(table_t *tbl, int column, int start, int end) {
 				return -2;
 			}
 
-			INFO("table after swap\n");
-			
-			print_table_dbg(tbl, 0, NUM_OF_ROWS);
+			//INFO("table after swap\n");			
+			//print_table_dbg(tbl, 0, NUM_OF_ROWS);
 			
 		}
 		
