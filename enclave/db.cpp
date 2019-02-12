@@ -18,6 +18,8 @@
 #include <string.h>
 #include <atomic>
 #include <cmath>
+#include <errno.h>
+
 #include "mbusafecrt.h"
 
 //#define FILE_READ_SIZE (1 << 12)
@@ -3160,23 +3162,34 @@ int ecall_quicksort_table_parallel(int db_id, int table_id, int column, int tid,
 row_t *row = NULL, *start_row = NULL, *end_row = NULL, *temp_row = NULL;
 
 int allocate_memory_for_quicksort(table_t *tbl) {
-			
+	int ret;
+
 	row = (row_t *) malloc(row_size(tbl));
 	if(!row)
-		return -5;
+		goto fail1;
 
 	start_row = (row_t *) malloc(row_size(tbl));
 	if(!start_row)
-		return -5;
+		goto fail2;
 	
 	end_row = (row_t *) malloc(row_size(tbl));
 	if(!end_row)
-		return -5;
+		goto fail3;
 
 	temp_row = (row_t *) malloc(row_size(tbl));
 	if(!temp_row)
-		return -5;
-		
+		goto fail4;
+
+	return 0;
+
+fail4:
+	free(end_row);
+fail3:
+	free(start_row);
+fail2:
+	free(row);
+fail1:
+	return -ENOMEM;
 }
 
 void deallocate_memory_for_quicksort() {
@@ -3215,7 +3228,7 @@ int quick_sort_table(data_base_t *db, table_t *tbl, int column, table_t **p_tbl)
 #endif
 	
 	ret = allocate_memory_for_quicksort(tbl);
-	if ( ret == -5 ) {
+	if (ret) {
 		ERR("memory allocation failed: %d\n", ret);
 		return ret;
 	}
