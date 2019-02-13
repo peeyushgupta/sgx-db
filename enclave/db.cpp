@@ -2767,6 +2767,23 @@ int ecall_scan_table_dbg(int db_id, int table_id) {
 	return scan_table_dbg(table); 	
 }
 
+void *get_element(table_t *tbl, int row_num, row_t *row_buf, int column)
+{
+	int ret;
+	void *element;
+
+	ret = read_row(tbl, row_num, row_buf);
+
+	if(ret) {
+		ERR("failed to read row %d of table %s\n",
+			row_num, tbl->name.c_str());
+		return NULL;
+	}
+
+	element = get_column(&tbl->sc, column, row_buf);
+	return element;
+}
+
 int verify_sorted_output(table_t *tbl, int start, int end, int column)
 {
 	int ret = 0;
