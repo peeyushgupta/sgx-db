@@ -3297,10 +3297,17 @@ int quick_sort_table(data_base_t *db, table_t *tbl, int column, table_t **p_tbl)
 #ifdef CREATE_SORTED_TABLE
 	bflush(*p_tbl);
 #endif
-
 	print_table_dbg(tbl, 0, tbl->num_rows);
+
 	ret = verify_sorted_output(tbl, 0, tbl->num_rows, column);
+
 	INFO("%s, verify_sorted_output returned %d\n", __func__, ret);
+
+	if (ret) {
+		ERR("============================\n");
+		ERR("%s: SORTED OUTPUT INCORRECT \n");
+		ERR("============================\n");
+	}
 
 	deallocate_memory_for_quicksort();
 	return ret; 	
