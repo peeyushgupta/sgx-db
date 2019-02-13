@@ -260,7 +260,7 @@ cleanup:
 #endif
 		db->bcache.data_blks[j].data = NULL; 
 	};
-	return -1; 
+	return -ENOMEM;
 };
 
 /* Free data blocks in enclave's memory */
@@ -323,7 +323,7 @@ int read_data_block(table *table, unsigned long blk_num, void *buf) {
 #if defined(IO_LOCK)
 			release(&table->db->bcache.iolock); 	
 #endif
-			ERR("read filed\n"); 
+			ERR("read failed\n");
 			return -1; 
 		}
 
@@ -2766,6 +2766,48 @@ int ecall_scan_table_dbg(int db_id, int table_id) {
 
 	return scan_table_dbg(table); 	
 }
+
+int verify_sorted_output(table_t *tbl, int start, int end, int column)
+{
+	int ret = 0;
+	unsigned long i, j;
+	row_t *row_i, *row_j;
+
+	if (end > tbl->num_rows) {
+		end = tbl->num_rows;
+	}
+	// alloc two rows
+	row_i = (row_t *)malloc(row_size(tbl));
+	if (!row_i) {
+		ERR("can't allocate memory for the row\n");
+		return -ENOMEM;
+	}
+
+	row_j = (row_t *)malloc(row_size(tbl));
+	if (!row_j) {
+		ERR("can't allocate memory for the row\n");
+		return -ENOMEM;
+	}
+
+	// end is tbl->num_rows; we check until end - 2
+	for (i = start; i < end - 2; i++) {
+		void *element_i = get_element(tbl, i, row_i, column);
+		void *element_j = get_element(tbl, i + 1, row_j, column);
+		if (!element_i || !element_j) {
+			ERR("%s, failed\n", __func__);
+			ret = 1;
+			goto exit;
+		}
+		// assuming integer
+		ret |= (*((int*)element_i) > *((int *)element_j));
+	}
+
+	free(row_i);
+	free(row_j);
+exit:
+	return ret;
+}
+
 
 /* 
  * 
