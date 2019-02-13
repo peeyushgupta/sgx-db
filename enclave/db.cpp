@@ -2814,8 +2814,12 @@ int verify_sorted_output(table_t *tbl, int start, int end, int column)
 			ret = 1;
 			goto exit;
 		}
-		// assuming integer
-		ret |= (*((int*)element_i) > *((int *)element_j));
+
+		if (tbl->sc.types[column] == INTEGER) {
+			ret |= (*((int*)element_i) > *((int *)element_j));
+		} else if (tbl->sc.types[column] == TINYTEXT) {
+			ret |= (strncmp((char*) element_i, (char*) element_j, MAX_ROW_SIZE) > 0);
+		}
 	}
 
 	free(row_i);
@@ -3308,7 +3312,6 @@ int quick_sort_table(data_base_t *db, table_t *tbl, int column, table_t **p_tbl)
 		ERR("%s: SORTED OUTPUT INCORRECT \n");
 		ERR("============================\n");
 	}
-
 	deallocate_memory_for_quicksort();
 	return ret; 	
 }
@@ -3396,22 +3399,12 @@ int partition(table_t *tbl, int column, int start, int end) {
 				if (i >= j)
 					return j;
 
-				// FIXME: What is the condition for swapping?
-				// Let's revisit when the intention is clear
-				int ret = strncmp(start_val, end_val, MAX_ROW_SIZE);
-				if (ret < 0) // str2 > str1
-				{
-					goto swap;
-				} else {
-					continue;
-				}
-
 				break;
 			}
 			default:
 				break;
 		}
-swap:
+
 		// if we break from switch, we should swap
 		memcpy(temp_row, start_row, row_size(tbl));
 		memcpy(start_row, end_row, row_size(tbl));
