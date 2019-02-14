@@ -188,7 +188,17 @@ void recBitonicSort(table_t *tbl, int lo, int cnt, int column, int dir, int tid)
 int bitonic_sort_table(data_base_t *db, table_t *tbl, int column, table_t **p_tbl);
 int sort_table_parallel(table_t *tbl, int column, int tid, int num_threads);
 
-int join_and_write_sorted_table(table_t *tbl, int db_id, join_condition_t *c, int *join_table_id);
+int merge_and_sort_and_write(data_base_t *db, 
+		table_t *tbl, 
+		int project_columns_left [], 
+		int num_project_columns_left,
+		int promote_columns_left [],
+		int num_pad_bytes_left,
+		int project_columns_right [], 
+		int num_project_columns_right,
+		int promote_columns_right [],
+		int num_pad_bytes_right);
+int join_and_write_sorted_table(int db_id, table_t *tbl, join_condition_t *c, int *join_table_id);
 
 int quick_sort_table(data_base_t *db, table_t *tbl, int column, table_t **p_tbl);
 void quickSort(table_t *tbl, int column, int start, int end);

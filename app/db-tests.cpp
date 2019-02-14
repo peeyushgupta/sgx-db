@@ -769,4 +769,9 @@ int test_quick_sort(sgx_enclave_id_t eid)
 	return 0;	
 }
 
+int test_merge_sort_write(sgx_enclave_id_t eid)
+{
+	return 0;	
+}
+
 

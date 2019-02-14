@@ -2950,7 +2950,150 @@ cleanup:
     
 } 
 
-int join_and_write_sorted_table(table_t *tbl, int db_id, join_condition_t *c, int *join_table_id)
+/* Number of parameters -- needs improvement */
+int merge_and_sort_and_write(data_base_t *db, 
+		table_t *tbl, 
+		int project_columns_left [], 
+		int num_project_columns_left,
+		int promote_columns_left [],
+		int num_pad_bytes_left,
+		int project_columns_right [], 
+		int num_project_columns_right,
+		int promote_columns_right [],
+		int num_pad_bytes_right)
+{
+
+	int ret;
+
+	data_base_t *db;
+	table_t *tbl_left, *tbl_right, *p3_tbl_left, *p3_tbl_right, *append_tabl, *s_table;
+	row_t *row_left = NULL, *row_right = NULL, *join_row = NULL;
+	schema_t append_sc;
+	std::string append_table_name;  
+
+	if ((db_id > (MAX_DATABASES - 1)) || !g_dbs[db_id] || !c )	
+		return -1; 
+
+	db = g_dbs[db_id];
+	if(!db)
+		return -2;
+
+	tbl_left = db->tables[c->table_left];
+	tbl_right = db->tables[c->table_right];
+	if (! tbl_left || ! tbl_right)
+		return -3; 
+
+	append_table_name = "append:" + tbl_left->name + tbl_right->name; 
+
+	/* Is this the right way to create a schema to append? */
+	ret = join_schema(&append_sc, &tbl_left->sc, &tbl_right->sc); 
+	if (ret) {
+		ERR("create table error:%d\n", ret);
+		return ret; 
+	}
+
+	ret = create_table(db, append_table_name, &append_sc, &append_table);
+	if (ret) {
+		ERR("create table:%d\n", ret);
+		return ret; 
+	}
+
+	*append_table_id = append_table->id; 
+
+	DBG("Created append table %s, id:%d\n", append_table_name.c_str(), append_table_id); 
+
+	/* Project promote pad R */
+	ret = project_promote_pad_table( db, tbl_left, project_columns_left, num_project_columns_left, 
+		promote_columns_left, num_pad_bytes_left, p3_tbl_left);
+
+	/* Project promote pad S */
+	ret = project_promote_pad_table( db, tbl_right, project_columns_right, num_project_columns_right, 
+		promote_columns_right, num_pad_bytes_right, p3_tbl_right);
+
+
+	row_left = (row_t *) malloc(row_size(p3_tbl_left));
+	if(!row_left)
+		return -5;
+
+	row_right = (row_t *) malloc(row_size(p3_tbl_right));
+	if(!row_right)
+		return -6;
+
+	/* Append R and S */
+	// Read R row and append
+	for(int i=0; i < tbl_left->num_rows; i ++)
+	{
+		ret = read_row(p3_tbl_left, i, row_left);
+		if(ret) {
+			ERR("failed to read row %d of table %s\n",
+				i, tbl_left->name.c_str());
+			goto cleanup;
+		}
+
+		/* Add left row to the append table */
+			ret = insert_row_dbg(append_table, row_left);
+			if(ret) {
+				ERR("failed to append row %d of table %s to %s table\n",
+					i, tbl_left->name.c_str(), j, append_table->name.c_str());
+				goto cleanup;
+			}
+	}
+
+	// Read S row and append	
+	for (unsigned int j = 0; j < tbl_right->num_rows; j ++) {
+
+		// Read right row
+		ret = read_row(p3_tbl_right, j, row_right);
+		if(ret) {
+			ERR("failed to read row %d of table %s\n",
+				i, tbl_right->name.c_str());
+			goto cleanup;
+		}
+
+		/* Add row to the append table */
+		ret = insert_row_dbg(append_table, row_right);
+		if(ret) {
+			ERR("failed to append row %d of table %s to %s table\n",
+				i, tbl_right->name.c_str(), j, append_table->name.c_str());
+			goto cleanup;
+		}
+	}
+
+	// Sort: 1) bitonic 2) quick
+	// Which field to apply sort
+	ret = bitonic_sort_table(db, append_table, field, &s_table); 
+	if(ret) {
+			ERR("failed to bitonic sort table %s\n",
+				append_table->name.c_str());
+			goto cleanup;
+	}
+
+#ifdef CREATE_SORTED_TABLE
+	*sorted_id = s_table->id; 
+#endif
+
+	// Join and write sorted tabl
+	int join_table_id = -1;
+	ret = join_and_write_sorted_table( db_id, s_table, c, join_table_id );
+	if(ret) {
+			ERR("failed to join and write sorted table %s\n",
+				s_table->name.c_str());
+			goto cleanup;
+	}
+
+	ret = 0;
+
+cleanup:
+	if (row_left)
+		free(row_left); 
+
+	if (row_right)
+		free(row_right); 
+
+	return ret; 
+}
+
+int join_and_write_sorted_table(int db_id, table_t *tbl, join_condition_t *c, int *join_table_id)
 {
 	auto N = tbl->num_rows;
 	assert (((N & (N - 1)) == 0));
