@@ -3123,7 +3123,8 @@ int merge_and_sort_and_write(data_base_t *db,
 
 	// Sort: 1) bitonic or 2) quick
 	/* Which field to sort? */
-	int field = 0;
+	int field;
+	field = 0;
 	ret = bitonic_sort_table(db, append_table, field, &s_table); 
 	//ret = quick_sort_table(db, append_table, field, &s_table); 
 	if(ret) {
