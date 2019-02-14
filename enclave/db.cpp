@@ -3078,7 +3078,7 @@ int merge_and_sort_and_write(data_base_t *db,
 
 	/* Validate the number of fields for each table is same */
 	// Is this validation enough before appending?
-	if( p3_tbl_left->sc.num_fields != tbl_left->sc.p3_tbl_right )
+	if( p3_tbl_left->sc.num_fields != p3_tbl_right->sc.num_fields)
 		return -6;
 
 	/* Append R and S */
@@ -3138,7 +3138,7 @@ int merge_and_sort_and_write(data_base_t *db,
 	c.table_right = tbl_right->id;
 	
 	// Join and write sorted table
-	ret = join_and_write_sorted_table( db.id, s_table, &c, write_table_id );
+	ret = join_and_write_sorted_table( db, s_table, &c, write_table_id );
 	if(ret) {
 			ERR("failed to join and write sorted table %s\n",
 				s_table->name.c_str());
@@ -3288,6 +3288,7 @@ int join_and_write_sorted_table(data_base_t *db, table_t *tbl, join_condition_t 
 	bflush(join_table); 
 
 	ret = 0;
+
 cleanup: 
 	if (join_row)
 		free(join_row); 
