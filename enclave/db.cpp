@@ -18,6 +18,8 @@
 #include <string.h>
 #include <atomic>
 #include <cmath>
+#include <errno.h>
+
 #include "mbusafecrt.h"
 
 //#define FILE_READ_SIZE (1 << 12)
@@ -29,7 +31,6 @@
 #define COLUMNSORT_VERBOSE 0
 #define COLUMNSORT_VERBOSE_L2 0
 #define IO_VERBOSE 0
-#define NUM_OF_ROWS 64
 
 data_base_t* g_dbs[MAX_DATABASES];
 
@@ -258,7 +259,7 @@ cleanup:
 #endif
 		db->bcache.data_blks[j].data = NULL; 
 	};
-	return -1; 
+	return -ENOMEM;
 };
 
 /* Free data blocks in enclave's memory */
@@ -321,7 +322,7 @@ int read_data_block(table *table, unsigned long blk_num, void *buf) {
 #if defined(IO_LOCK)
 			release(&table->db->bcache.iolock); 	
 #endif
-			ERR("read filed\n"); 
+			ERR("read failed\n");
 			return -1; 
 		}
 
@@ -2765,6 +2766,69 @@ int ecall_scan_table_dbg(int db_id, int table_id) {
 	return scan_table_dbg(table); 	
 }
 
+void *get_element(table_t *tbl, int row_num, row_t *row_buf, int column)
+{
+	int ret;
+	void *element;
+
+	ret = read_row(tbl, row_num, row_buf);
+
+	if(ret) {
+		ERR("failed to read row %d of table %s\n",
+			row_num, tbl->name.c_str());
+		return NULL;
+	}
+
+	element = get_column(&tbl->sc, column, row_buf);
+	return element;
+}
+
+int verify_sorted_output(table_t *tbl, int start, int end, int column)
+{
+	int ret = 0;
+	unsigned long i, j;
+	row_t *row_i, *row_j;
+
+	if (end > tbl->num_rows) {
+		end = tbl->num_rows;
+	}
+	// alloc two rows
+	row_i = (row_t *)malloc(row_size(tbl));
+	if (!row_i) {
+		ERR("can't allocate memory for the row\n");
+		return -ENOMEM;
+	}
+
+	row_j = (row_t *)malloc(row_size(tbl));
+	if (!row_j) {
+		ERR("can't allocate memory for the row\n");
+		return -ENOMEM;
+	}
+
+	// end is tbl->num_rows; we check until end - 2
+	for (i = start; i < end - 2; i++) {
+		void *element_i = get_element(tbl, i, row_i, column);
+		void *element_j = get_element(tbl, i + 1, row_j, column);
+		if (!element_i || !element_j) {
+			ERR("%s, failed\n", __func__);
+			ret = 1;
+			goto exit;
+		}
+
+		if (tbl->sc.types[column] == INTEGER) {
+			ret |= (*((int*)element_i) > *((int *)element_j));
+		} else if (tbl->sc.types[column] == TINYTEXT) {
+			ret |= (strncmp((char*) element_i, (char*) element_j, MAX_ROW_SIZE) > 0);
+		}
+	}
+
+	free(row_i);
+	free(row_j);
+exit:
+	return ret;
+}
+
+
 /* 
  * 
  * Print the table... debug only 
@@ -3303,23 +3367,34 @@ int ecall_quicksort_table_parallel(int db_id, int table_id, int column, int tid,
 row_t *row = NULL, *start_row = NULL, *end_row = NULL, *temp_row = NULL;
 
 int allocate_memory_for_quicksort(table_t *tbl) {
-			
+	int ret;
+
 	row = (row_t *) malloc(row_size(tbl));
 	if(!row)
-		return -5;
+		goto fail1;
 
 	start_row = (row_t *) malloc(row_size(tbl));
 	if(!start_row)
-		return -5;
+		goto fail2;
 	
 	end_row = (row_t *) malloc(row_size(tbl));
 	if(!end_row)
-		return -5;
+		goto fail3;
 
 	temp_row = (row_t *) malloc(row_size(tbl));
 	if(!temp_row)
-		return -5;
-		
+		goto fail4;
+
+	return 0;
+
+fail4:
+	free(end_row);
+fail3:
+	free(start_row);
+fail2:
+	free(row);
+fail1:
+	return -ENOMEM;
 }
 
 void deallocate_memory_for_quicksort() {
@@ -3343,7 +3418,7 @@ int quick_sort_table(data_base_t *db, table_t *tbl, int column, table_t **p_tbl)
 
 #ifdef CREATE_SORTED_TABLE
 	std::string s_tbl_name;  
-    schema_t p_sc;
+	schema_t p_sc;
 
 	s_tbl_name = "s:" + tbl->name; 
 
@@ -3358,20 +3433,28 @@ int quick_sort_table(data_base_t *db, table_t *tbl, int column, table_t **p_tbl)
 #endif
 	
 	ret = allocate_memory_for_quicksort(tbl);
-	if ( ret == -5 ) {
+	if (ret) {
 		ERR("memory allocation failed: %d\n", ret);
 		return ret;
 	}
 
-	//quickSort(tbl, column, 0, tbl->num_rows);
-	quickSort(tbl, column, 0, NUM_OF_ROWS-1);
+	// index runs from 0 to (num_rows - 1)
+	quickSort(tbl, column, 0, tbl->num_rows - 1);
 
 #ifdef CREATE_SORTED_TABLE
 	bflush(*p_tbl);
 #endif
+	print_table_dbg(tbl, 0, tbl->num_rows);
 
-	print_table_dbg(tbl, 0, NUM_OF_ROWS);
+	ret = verify_sorted_output(tbl, 0, tbl->num_rows, column);
 
+	INFO("%s, verify_sorted_output returned %d\n", __func__, ret);
+
+	if (ret) {
+		ERR("============================\n");
+		ERR("%s: SORTED OUTPUT INCORRECT \n");
+		ERR("============================\n");
+	}
 	deallocate_memory_for_quicksort();
 	return ret; 	
 }
@@ -3388,224 +3471,76 @@ void quickSort(table_t *tbl, int column, int start, int end) {
 		return;
 	}
 		
-	quickSort(tbl, column, start, pivot-1);
-	quickSort(tbl, column, pivot+1, end);
+	quickSort(tbl, column, start, pivot);
+	quickSort(tbl, column, pivot + 1, end);
 }
- 
+
 int partition(table_t *tbl, int column, int start, int end) {
 
 	int ret = 0;
 
 	int mid = start + (end - start) / 2;
+	int i = start - 1;
+	int j = end + 1;
+	void *pivot_data = get_element(tbl, mid, row, column);
 
-	ret = read_row(tbl, mid, row);
-	if(ret) {
-		ERR("failed to read row %d of table %s\n",
-			mid, tbl->name.c_str());
+	if (!pivot_data)
 		return -1;
-	}
 
-	while (start < end) {
-
-		bool swapped = false;
-		int start_row_num = start;
-		int end_row_num = end;
-
-		ret = read_row(tbl, start, start_row);
-		if(ret) {
-			ERR("failed to read row %d of table %s\n",
-				start, tbl->name.c_str());
-			return -1;
-		}
-
-		ret = read_row(tbl, end, end_row);
-		if(ret) {
-			ERR("failed to read row %d of table %s\n",
-				end, tbl->name.c_str());
-			return -1;
-		}
-
-		INFO("mid: (%d), start: (%d), end: (%d)\n", mid, start, end);
-
+	while (true) {
 		switch (tbl->sc.types[column]) {
 			case BOOLEAN: {
-				bool pivot = *((bool*)get_column(&tbl->sc, column, row));
-				bool start_val = *((bool*)get_column(&tbl->sc, column, start_row));
-				bool end_val = *((bool*)get_column(&tbl->sc, column, end_row)); 
+				bool pivot = *((bool*)pivot_data);
+				bool start_val, end_val;
 
-				while (start_val < pivot) 
-				{
-					start++;    
+				do {
+					i++;
+				} while ((start_val = *((bool*)get_element(tbl, i, start_row, column))) < pivot);
 
-					ret = read_row(tbl, start, start_row);
-					if(ret) {
-						ERR("failed to read row %d of table %s\n",
-							start, tbl->name.c_str());
-						return -1;
-					}
+				do {
+					j--;
+				} while ((end_val = *((bool*)get_element(tbl, j, end_row, column))) > pivot);
 
-					start_val = *((bool*)get_column(&tbl->sc, column, start_row));				
-					
-				}  
-
-				while (end_val > pivot) 
-				{
-					end--;
-
-					ret = read_row(tbl, end, end_row);
-					if(ret) {
-						ERR("failed to read row %d of table %s\n",
-							end, tbl->name.c_str());
-						return -1;
-					}
-					end_val = *((bool*)get_column(&tbl->sc, column, end_row));
-					
-				}
-
-				// swap
-				if( start <= end )
-				{
-					start_row_num = end;
-					end_row_num = start;
-					memcpy(temp_row, start_row, row_size(tbl)); 
-					memcpy(start_row, end_row, row_size(tbl)); 
-					memcpy(end_row, temp_row, row_size(tbl));
-					start++;
-					end--; 
-					swapped = true;
-				}
+				if (i >= j)
+					return j;
 
 				break;
 			}
-
 			case INTEGER: {
-				int pivot = *((int*)get_column(&tbl->sc, column, row));
-				int start_val = *((int*)get_column(&tbl->sc, column, start_row));
-				int end_val = *((int*)get_column(&tbl->sc, column, end_row)); 
+				int pivot = *((int*)pivot_data);
+				int start_val, end_val;
 
-				INFO("start_val: (%d), end_val: (%d), pivot: (%d)\n", start_val, end_val, pivot);
+				do {
+					i++;
+				} while ((start_val = *((int*)get_element(tbl, i, start_row, column))) < pivot);
 
-				while (start_val < pivot) 
-				{
+				do {
+					j--;
+				} while ((end_val = *((int*)get_element(tbl, j, end_row, column))) > pivot);
 
-					INFO("start: (%d), start_val: (%d), pivot: (%d)\n", start, start_val, pivot);
-					/*
-					if( start == mid )
-						break;
-					else
-					*/
-					start++; 
-
-					ret = read_row(tbl, start, start_row);
-					if(ret) {
-						ERR("failed to read row %d of table %s\n",
-							start, tbl->name.c_str());
-						return -1;
-					}
-
-					start_val = *((int*)get_column(&tbl->sc, column, start_row));				
-					
-				}  
-
-				while (end_val > pivot) 
-				{
-
-					INFO("end: (%d), end_val: (%d), pivot: (%d)\n", end, end_val, pivot);
-
-					/*
-					if( end == mid )
-						break;
-					else
-					*/
-					end--;
-
-					ret = read_row(tbl, end, end_row);
-					if(ret) {
-						ERR("failed to read row %d of table %s\n",
-							end, tbl->name.c_str());
-						return -1;
-					}
-					end_val = *((int*)get_column(&tbl->sc, column, end_row));
-					
-				}
-
-				INFO("pivot: (%d), start_val: (%d), end_val: (%d)\n", pivot, start_val, end_val);
-				INFO("mid: (%d), start: (%d), end: (%d)\n", mid, start, end);
-
-				if( start >= end )
-					return end;
-
-				// swap
-				//if( start <= end )
-				{
-					memcpy(temp_row, start_row, row_size(tbl)); 
-					memcpy(start_row, end_row, row_size(tbl)); 
-					memcpy(end_row, temp_row, row_size(tbl));
-
-					start_row_num = start;
-					end_row_num = end;
-
-					//start++;
-					//end--; 
-					swapped = true;
-				} 
+				if (i >= j)
+					return j;
 
 				break;
 
 			}
+
 			case TINYTEXT: {
-				char *pivot = (char*)get_column(&tbl->sc, column, row);
-				char *start_val = (char*)get_column(&tbl->sc, column, start_row);
-				char *end_val = (char*)get_column(&tbl->sc, column, end_row); 
+				char *pivot = (char*)pivot_data;
+				char *start_val, *end_val;
 
-				int start_cmp = strncmp(start_val, pivot, MAX_ROW_SIZE);
-				int end_cmp = strncmp(end_val, pivot, MAX_ROW_SIZE);
+				do {
+					i++;
+					start_val = (char*)get_element(tbl, i, start_row, column);
+				} while (strncmp(start_val, pivot, MAX_ROW_SIZE) < 0);
 
-				while ( start_cmp < 0  ) 
-				{
-					start++;    
+				do {
+					j--;
+					end_val = (char*)get_element(tbl, j, end_row, column);
+				} while (strncmp(end_val, pivot, MAX_ROW_SIZE) > 0);
 
-					ret = read_row(tbl, start, start_row);
-					if(ret) {
-						ERR("failed to read row %d of table %s\n",
-							start, tbl->name.c_str());
-						return -1;
-					}
-
-					start_val = (char*)get_column(&tbl->sc, column, start_row);				
-					
-					start_cmp = strncmp(start_val, pivot, MAX_ROW_SIZE);
-				}  
-
-				while ( end_cmp > 0 ) 
-				{
-					end--;
-
-					ret = read_row(tbl, end, end_row);
-					if(ret) {
-						ERR("failed to read row %d of table %s\n",
-							end, tbl->name.c_str());
-						return -1;
-					}
-					end_val = (char*)get_column(&tbl->sc, column, end_row);
-
-					end_cmp = strncmp(end_val, pivot, MAX_ROW_SIZE);
-					
-				}
-
-				int ret = strncmp(start_val, end_val, MAX_ROW_SIZE);
-				// swap
-				if (ret < 0) // str2 > str1
-				{			
-					start_row_num = end;
-					end_row_num = start;	
-					memcpy(temp_row, start_row, row_size(tbl)); 
-					memcpy(start_row, end_row, row_size(tbl)); 
-					memcpy(end_row, temp_row, row_size(tbl)); 
-					start++;
-					end--; 
-					swapped = true;
-				}
+				if (i >= j)
+					return j;
 
 				break;
 			}
@@ -3613,36 +3548,24 @@ int partition(table_t *tbl, int column, int start, int end) {
 				break;
 		}
 
-		// write row if value has been swapped
-		if( swapped )
-		{
-			INFO("start_row_num: (%d)\n", start_row_num);
+		// if we break from switch, we should swap
+		memcpy(temp_row, start_row, row_size(tbl));
+		memcpy(start_row, end_row, row_size(tbl));
+		memcpy(end_row, temp_row, row_size(tbl));
 
-			/* Add start row to the table */
-			ret = write_row_dbg(tbl, start_row, start_row_num);
-			if(ret) {
-				ERR("failed to insert row %d of table %s\n",
-					start_row_num, tbl->name.c_str());
-				return -2;
-			}
-
-			INFO("end_row_num: (%d)\n", end_row_num);
-
-			/* Add end row to the table */
-			ret = write_row_dbg(tbl, end_row, end_row_num);
-			if(ret) {
-				ERR("failed to insert row %d of table %s\n",
-					end_row_num, tbl->name.c_str());
-				return -2;
-			}
-
-			INFO("table after swap\n");
-			
-			print_table_dbg(tbl, 0, NUM_OF_ROWS);
-			
+		// write swapped rows i and j
+		ret = write_row_dbg(tbl, start_row, i);
+		if (ret) {
+			ERR("failed to insert row %d of table %s\n",
+				i, tbl->name.c_str());
+			return -1;
 		}
-		
-	}
 
-	return start;
+		ret = write_row_dbg(tbl, end_row, j);
+		if (ret) {
+			ERR("failed to insert row %d of table %s\n",
+				j, tbl->name.c_str());
+			return -1;
+		}
+	}
 }
