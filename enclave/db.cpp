@@ -3031,19 +3031,11 @@ int merge_and_sort_and_write(data_base_t *db,
 
 	int ret;
 
-	data_base_t *db;
-	table_t *p3_tbl_left, *p3_tbl_right, *append_tabl, *s_table;
+	table_t *p3_tbl_left, *p3_tbl_right, *append_table, *s_table;
 	row_t *row_left = NULL, *row_right = NULL, *join_row = NULL;
 	schema_t append_sc;
 	std::string append_table_name;  
 	int *append_table_id;
-
-	if ((db_id > (MAX_DATABASES - 1)) || !g_dbs[db_id] )	
-		return -1; 
-
-	db = g_dbs[db_id];
-	if(!db)
-		return -2;
 
 	/* Assuming tables are coming from the same db? */
 	if (! tbl_left || ! tbl_right)
@@ -3070,11 +3062,11 @@ int merge_and_sort_and_write(data_base_t *db,
 
 	/* Project promote pad R */
 	ret = project_promote_pad_table( db, tbl_left, project_columns_left, num_project_columns_left, 
-		promote_columns_left, num_pad_bytes_left, p3_tbl_left);
+		promote_columns_left, num_pad_bytes_left, &p3_tbl_left);
 
 	/* Project promote pad S */
 	ret = project_promote_pad_table( db, tbl_right, project_columns_right, num_project_columns_right, 
-		promote_columns_right, num_pad_bytes_right, p3_tbl_right);
+		promote_columns_right, num_pad_bytes_right, &p3_tbl_right);
 
 	row_left = (row_t *) malloc(row_size(p3_tbl_left));
 	if(!row_left)
