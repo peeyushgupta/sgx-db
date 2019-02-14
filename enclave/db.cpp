@@ -3078,7 +3078,7 @@ int merge_and_sort_and_write(data_base_t *db,
 
 	/* Validate the number of fields for each table is same */
 	// Is this validation enough before appending?
-	if( p3_tbl_left->sc->num_fields != tbl_left->sc->p3_tbl_right )
+	if( p3_tbl_left->sc.num_fields != tbl_left->sc.p3_tbl_right )
 		return -6;
 
 	/* Append R and S */
@@ -3134,11 +3134,11 @@ int merge_and_sort_and_write(data_base_t *db,
 
 	/* Later remove join condition - each row has the info where it came from */
 	join_condition_t c;
-	c->table_left = tbl_left->id;
-	c->table_right = tbl_right->id;
+	c.table_left = tbl_left->id;
+	c.table_right = tbl_right->id;
 	
 	// Join and write sorted table
-	ret = join_and_write_sorted_table( db_id, s_table, &c, write_table_id );
+	ret = join_and_write_sorted_table( db.id, s_table, &c, write_table_id );
 	if(ret) {
 			ERR("failed to join and write sorted table %s\n",
 				s_table->name.c_str());
@@ -3157,23 +3157,22 @@ cleanup:
 	return ret; 
 }
 
-int join_and_write_sorted_table(int db_id, table_t *tbl, join_condition_t *c, int *join_table_id)
+/* Later replace db_id with db */
+int join_and_write_sorted_table(data_base_t *db, table_t *tbl, join_condition_t *c, int *join_table_id)
 {
 	auto N = tbl->num_rows;
 	assert (((N & (N - 1)) == 0));
 	// printf("%s, num_rows %d | tid = %d\n", __func__, table->num_rows, tid);
 
 	int ret;
-	data_base_t *db;
 	table_t *tbl_left, *tbl_right, *join_table;
 	row_t *row_left = NULL, *row_right = NULL, *join_row = NULL;
 	schema_t join_sc;
 	std::string join_table_name;  
 
-	if ((db_id > (MAX_DATABASES - 1)) || !g_dbs[db_id] || !c )	
+	if (!c)	
 		return -1; 
 
-	db = g_dbs[db_id];
 	if(!db)
 		return -2;
 
