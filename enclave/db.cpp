@@ -3016,40 +3016,42 @@ cleanup:
 
 /* Number of parameters -- needs improvement */
 int merge_and_sort_and_write(data_base_t *db, 
-		table_t *tbl, 
+		table_t *tbl_left, 
 		int project_columns_left [], 
 		int num_project_columns_left,
 		int promote_columns_left [],
 		int num_pad_bytes_left,
+		table_t *tbl_right, 
 		int project_columns_right [], 
 		int num_project_columns_right,
 		int promote_columns_right [],
-		int num_pad_bytes_right)
+		int num_pad_bytes_right,
+		int *write_table_id)
 {
 
 	int ret;
 
 	data_base_t *db;
-	table_t *tbl_left, *tbl_right, *p3_tbl_left, *p3_tbl_right, *append_tabl, *s_table;
+	table_t *p3_tbl_left, *p3_tbl_right, *append_tabl, *s_table;
 	row_t *row_left = NULL, *row_right = NULL, *join_row = NULL;
 	schema_t append_sc;
 	std::string append_table_name;  
+	int *append_table_id;
 
-	if ((db_id > (MAX_DATABASES - 1)) || !g_dbs[db_id] || !c )	
+	if ((db_id > (MAX_DATABASES - 1)) || !g_dbs[db_id] )	
 		return -1; 
 
 	db = g_dbs[db_id];
 	if(!db)
 		return -2;
 
-	tbl_left = db->tables[c->table_left];
-	tbl_right = db->tables[c->table_right];
+	/* Assuming tables are coming from the same db? */
 	if (! tbl_left || ! tbl_right)
 		return -3; 
 
 	append_table_name = "append:" + tbl_left->name + tbl_right->name; 
 
-	/* Is this the right way to create a schema to append? */
+	/* Is this the right way to create a schema to append two tables? */
 	ret = join_schema(&append_sc, &tbl_left->sc, &tbl_right->sc); 
 	if (ret) {
 		ERR("create table error:%d\n", ret);
@@ -3074,13 +3076,17 @@ int merge_and_sort_and_write(data_base_t *db,
 	ret = project_promote_pad_table( db, tbl_right, project_columns_right, num_project_columns_right, 
 		promote_columns_right, num_pad_bytes_right, p3_tbl_right);
 
-
 	row_left = (row_t *) malloc(row_size(p3_tbl_left));
 	if(!row_left)
-		return -5;
+		return -4;
 
 	row_right = (row_t *) malloc(row_size(p3_tbl_right));
 	if(!row_right)
+		return -5;
+
+	/* Validate the number of fields for each table is same */
+	// Is this validation enough before appending?
+	if( p3_tbl_left->sc->num_fields != tbl_left->sc->p3_tbl_right )
 		return -6;
 
 	/* Append R and S */
@@ -3098,7 +3104,7 @@ int merge_and_sort_and_write(data_base_t *db,
 			ret = insert_row_dbg(append_table, row_left);
 			if(ret) {
 				ERR("failed to append row %d of table %s to %s table\n",
-					i, tbl_left->name.c_str(), j, append_table->name.c_str());
+					i, tbl_left->name.c_str(), append_table->name.c_str());
 				goto cleanup;
 			}
 	}
@@ -3110,35 +3116,37 @@ int merge_and_sort_and_write(data_base_t *db,
 		ret = read_row(p3_tbl_right, j, row_right);
 		if(ret) {
 			ERR("failed to read row %d of table %s\n",
-				i, tbl_right->name.c_str());
+				j, tbl_right->name.c_str());
 			goto cleanup;
 		}
 
 		/* Add row to the append table */
 		ret = insert_row_dbg(append_table, row_right);
 		if(ret) {
-			ERR("failed to append row %d of table %s to %s table\n",
-				i, tbl_right->name.c_str(), j, append_table->name.c_str());
+			ERR("failed to append row %d of table to %s table\n",
+				j, tbl_right->name.c_str(), append_table->name.c_str());
 			goto cleanup;
 		}
 	}
 
-	// Sort: 1) bitonic 2) quick
-	// Which field to apply sort
+	// Sort: 1) bitonic or 2) quick
+	/* Which field to sort? */
+	int field = 0;
 	ret = bitonic_sort_table(db, append_table, field, &s_table); 
+	//ret = quick_sort_table(db, append_table, field, &s_table); 
 	if(ret) {
 			ERR("failed to bitonic sort table %s\n",
 				append_table->name.c_str());
 			goto cleanup;
 	}
 
-#ifdef CREATE_SORTED_TABLE
-	*sorted_id = s_table->id; 
-#endif
-
-	// Join and write sorted tabl
-	int join_table_id = -1;
-	ret = join_and_write_sorted_table( db_id, s_table, c, join_table_id );
+	/* Later remove join condition - each row has the info where it came from */
+	join_condition_t c;
+	c->table_left = tbl_left->id;
+	c->table_right = tbl_right->id;
+	
+	// Join and write sorted table
+	ret = join_and_write_sorted_table( db_id, s_table, &c, write_table_id );
 	if(ret) {
 			ERR("failed to join and write sorted table %s\n",
 				s_table->name.c_str());
