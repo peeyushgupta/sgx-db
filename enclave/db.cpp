@@ -2234,13 +2234,8 @@ int compare_and_exchange(table_t *tbl, int column, int i, int j, int dir, int ti
 		get_pinned_row(tbl, i, &b_i, &row_i); 
 		get_pinned_row(tbl, j, &b_j, &row_j);
 	} else {
-#if defined(PIN_ROWS)
-		get_row(tbl, i, &b_i, &row_i);
-		get_row(tbl, j, &b_j, &row_j);
-#else
 		read_row(tbl, i, row_i);
 		read_row(tbl, j, row_j);
-#endif
 	}
 
 #ifdef OBLI_XCHG
@@ -2256,11 +2251,6 @@ int compare_and_exchange(table_t *tbl, int column, int i, int j, int dir, int ti
 	if (dir == compare_rows(&tbl->sc, column, row_i, row_j)) {
 		exchange(tbl, i, j, row_i, row_j, tid);
 	}
-#endif
-
-#if defined(PIN_ROWS)
-	put_row_dirty(tbl, b_i, i); 
-	put_row_dirty(tbl, b_j, j); 
 #endif
 
 #ifdef LOCAL_ALLOC
