@@ -13,7 +13,7 @@
 
 using namespace std;
 #define OCALL_TEST_LENGTH 10000
-int NUM_OF_ROWS = 256;
+int NUM_OF_ROWS = 360000;
 
 void column_sort_table_parallel(sgx_enclave_id_t eid, int db_id, int table_id, int field, int num_threads);
 
@@ -688,8 +688,8 @@ void quick_sort_parallel(sgx_enclave_id_t eid, int db_id, int table_id, int fiel
 int test_quick_sort(sgx_enclave_id_t eid)
 {
 	schema_t sc;
-	std::string db_name("random-integers");
-	std::string table_name("rand_int");
+	std::string db_name("qsort_test");
+	std::string table_name("qsort_rankings");
 	int i, db_id, table_id, join_table_id, ret;
 	char line[MAX_ROW_SIZE] = {0};
 	char data[MAX_ROW_SIZE] = {0};
@@ -698,10 +698,19 @@ int test_quick_sort(sgx_enclave_id_t eid)
 
 	printf(TXT_FG_YELLOW "Starting quick sort test" TXT_NORMAL "\n");
 
-	sc.num_fields = 1;
+	sc.num_fields = 4;
 	sc.offsets[0] = 0;
-	sc.sizes[0] = 4;
-	sc.types[0] = INTEGER;
+	sc.sizes[0] = 1;
+	sc.types[0] = CHARACTER;
+	sc.offsets[1] = 1;
+	sc.sizes[1] = 255;
+	sc.types[1] = TINYTEXT;
+	sc.offsets[2] = 256;
+	sc.sizes[2] = 4;
+	sc.types[2] = INTEGER;
+	sc.offsets[3] = 260;
+	sc.sizes[3] = 4;
+	sc.types[3] = INTEGER;
 	sc.row_data_size = sc.offsets[sc.num_fields - 1] + sc.sizes[sc.num_fields - 1];
 
 	row = (uint8_t*)malloc(MAX_ROW_SIZE);
@@ -718,21 +727,25 @@ int test_quick_sort(sgx_enclave_id_t eid)
 		return ret;
 	}
 
-	std::ifstream file("rand.csv");
+	std::ifstream file("rankings.csv");
 
-	for(auto i = 0u; i < NUM_OF_ROWS; i++) {
-
-		memset(row, 0x0, MAX_ROW_SIZE);
+	row[0] = 'a';
+	for(int i = 0; i < NUM_OF_ROWS; i++) {
+		memset(row, 'a', MAX_ROW_SIZE);
 		file.getline(line, MAX_ROW_SIZE); //get the field
+
 		std::istringstream ss(line);
-		for(auto j = 0u; j < sc.num_fields; j++) {
+		for(int j = 1; j < sc.num_fields; j++) {
 			if(!ss.getline(data, MAX_ROW_SIZE, ',')) {
 				ERR("something is wrong with data (skipping):%s\n", line);
 				break;
 			}
 			if(sc.types[j] == INTEGER) {
-				auto d = atoi(data);
+				int d = 0;
+				d = atoi(data);
 				memcpy(&row[sc.offsets[j]], &d, 4);
+			} else if (sc.types[j] == TINYTEXT) {
+				strncpy((char*)&row[sc.offsets[j]], data, strlen(data) + 1);
 			}
 		}
 
@@ -742,17 +755,15 @@ int test_quick_sort(sgx_enclave_id_t eid)
 			return ret;
 		}
 	}
-
 	ecall_flush_table(eid, &ret, db_id, table_id);
-	printf("created random table\n");
+	printf("created %s table\n", table_name.c_str());
 
-#define PRINT_SORTED_TABLE
 	{
 		int sorted_id;
 		unsigned long long start, end;
 		start = RDTSC_START();
 		auto num_threads = 2u;
-		ecall_quicksort_table(eid, &ret, db_id, table_id, 0, &sorted_id);
+		ecall_quicksort_table(eid, &ret, db_id, table_id, 3, &sorted_id);
 
 		//quick_sort_parallel(eid, db_id, table_id, 0, num_threads);
 #ifdef CREATE_SORTED_TABLE

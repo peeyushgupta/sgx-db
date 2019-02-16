@@ -3417,6 +3417,12 @@ int quick_sort_table(data_base_t *db, table_t *tbl, int column, table_t **p_tbl)
 {
 	int ret = 0;
 
+#if defined(REPORT_QSORT_STATS)
+	unsigned long long start, end;
+	unsigned long long cycles = end - start;
+	unsigned long long secs = (cycles / cycles_per_sec);
+#endif
+
 #ifdef CREATE_SORTED_TABLE
 	std::string s_tbl_name;  
 	schema_t p_sc;
@@ -3439,13 +3445,24 @@ int quick_sort_table(data_base_t *db, table_t *tbl, int column, table_t **p_tbl)
 		return ret;
 	}
 
+#if defined(REPORT_QSORT_STATS)
+	start = RDTSC();
+#endif
 	// index runs from 0 to (num_rows - 1)
 	quickSort(tbl, column, 0, tbl->num_rows - 1);
+
+#if defined(REPORT_QSORT_STATS)
+	end = RDTSC();
+	cycles = end - start;
+	secs = (cycles / cycles_per_sec);
+
+	INFO("In-place quicksort took %llu cycles (%llu sec)\n", cycles, secs);
+#endif
 
 #ifdef CREATE_SORTED_TABLE
 	bflush(*p_tbl);
 #endif
-	print_table_dbg(tbl, 0, tbl->num_rows);
+	//print_table_dbg(tbl, 0, tbl->num_rows);
 
 	ret = verify_sorted_output(tbl, 0, tbl->num_rows, column);
 
