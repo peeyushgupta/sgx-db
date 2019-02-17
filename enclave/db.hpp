@@ -141,6 +141,30 @@ static inline unsigned long row_size(schema_t *sc) {
 	return row_header_size() + row_data_size(sc);
 }
 
+static inline int get_pinned_row(table_t *table, unsigned int row_num, data_block_t **block,  row_t **row) {
+
+	unsigned long dblk_num;
+	unsigned long row_off; 
+	data_block_t *b;
+
+	/* Make a fake row if it's outside of the table
+           assuming it's padding */
+	//if(row_num >= table->num_rows) {
+	//	return -1; 
+	//} 
+
+	dblk_num = row_num / table->rows_per_blk;
+
+	
+	/* Offset of the row within the data block in bytes */
+	row_off = (row_num - dblk_num * table->rows_per_blk) * row_size(table); 
+	//row_off = (row_num % table->rows_per_blk) * row_size(table); 
+
+        b = table->pinned_blocks[dblk_num]; 
+	*block = b;  	
+	*row = (row_t*) ((char*)b->data + row_off); 
+	return 0; 
+}
 
 
 int create_table(data_base_t *db, std::string &name, schema_t *schema, table_t **new_table);
@@ -166,27 +190,8 @@ int project_promote_pad_table(
     int num_pad_bytes,
     table_t **p3_tbl    
 );
-int column_sort_pick_params(unsigned long num_records, 
-				unsigned long rec_size, 
-				unsigned long bcache_rec_size, 
-				unsigned long sgx_mem_size, 
-				unsigned long *r, 
-				unsigned long *s); 
-
-int column_sort_table(data_base_t *db, table_t *table, int column);
 
 int print_table_dbg(table_t *table, int start, int end);
-
-int compare_tables(table_t *left, table_t *right, int tid, int num_threads);
-int compare_tables(table_t *left, table_t *right);
-
-
-inline int exchange(table_t *tbl, int i, int j, row_t *row_i, row_t *row_j);
-int compare(table_t *tbl, int column, int i, int j, int dir);
-void bitonicMerge(table_t *tbl, int lo, int cnt, int column, int dir);
-void recBitonicSort(table_t *tbl, int lo, int cnt, int column, int dir, int tid);
-int bitonic_sort_table(data_base_t *db, table_t *tbl, int column, table_t **p_tbl);
-int sort_table_parallel(table_t *tbl, int column, int tid, int num_threads);
 
 int merge_and_sort_and_write(data_base_t *db, 
 		table_t *tbl, 
@@ -198,16 +203,18 @@ int merge_and_sort_and_write(data_base_t *db,
 		int num_project_columns_right,
 		int promote_columns_right [],
 		int num_pad_bytes_right);
-int join_and_write_sorted_table(data_base_t *db, table_t *tbl, join_condition_t *c, int *join_table_id);
 
-int quick_sort_table(data_base_t *db, table_t *tbl, int column, table_t **p_tbl);
-void quickSort(table_t *tbl, int column, int start, int end);
-int partition(table_t *tbl, int column, int start, int end);
+int join_and_write_sorted_table(data_base_t *db, table_t *tbl, join_condition_t *c, int *join_table_id);
 
 void *aligned_malloc(size_t size, size_t alignment);
 void aligned_free(void *aligned_ptr);
+int pin_table(table_t *table);
+int unpin_table_dirty(table_t *table);
+int delete_table(data_base_t *db, table_t *table);
+data_base_t *get_db(unsigned int id);
+bool compare_rows(schema_t *sc, int column, row_t *row_l, row_t *row_r);
+void *get_column(schema_t *sc, int field, row_t *row);
 
- 
 /* Enclave interface */
 #if NO_SGX
 int ecall_create_db(const char *cname, int name_len, int *db_id);

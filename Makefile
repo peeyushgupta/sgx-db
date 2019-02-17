@@ -175,6 +175,10 @@ Crypto_Library_Name := sgx_tcrypto
 
 Enclave_Cpp_Files := enclave/bcache.cpp \
 			enclave/db.cpp \
+			enclave/sort_helper.cpp \
+			enclave/column_sort.cpp \
+			enclave/bitonic_sort.cpp \
+			enclave/quick_sort.cpp \
 			enclave/spinlock.cpp \
 			enclave/tests.cpp \
 			enclave/aligned_alloc.cpp \

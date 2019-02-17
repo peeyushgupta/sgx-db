@@ -8,6 +8,7 @@
 #endif
 #include "db.hpp"
 #include <string.h>
+#include "column_sort.hpp"
 using namespace std;
 
 #define ECALL_TEST_LENGTH 10000
