@@ -141,11 +141,11 @@ int compare_tables(table_t *left_tbl, table_t *right_tbl, int tid, int num_threa
 
 	left_row = (row_t*) malloc(row_size(left_tbl));
 	if(!left_row)
-		return -1;
+		return -ENOMEM;
 
 	right_row = (row_t*) malloc(row_size(right_tbl));
 	if(!right_row)
-		return -2;
+		return -ENOMEM;
 
 	if(left_tbl->num_rows != left_tbl->num_rows) {
 		ERR("tables have different size: (%s,%d) != (%s, %d)\n",

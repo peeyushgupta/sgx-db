@@ -175,7 +175,7 @@ int read_data_block(table *table, unsigned long blk_num, void *buf) {
 			release(&table->db->bcache.iolock); 	
 #endif
 			ERR("read failed\n");
-			return -1; 
+			return read;
 		}
 
 		if (read == 0) {
@@ -240,7 +240,7 @@ int write_data_block(table *table, unsigned long blk_num, void *buf) {
 			release(&table->db->bcache.iolock); 	
 #endif
 			ERR("write filed\n"); 
-			return -1; 
+			return written;
 		} 
 		total_written += written;  
 	}
@@ -275,11 +275,11 @@ int ecall_create_db(const char *cname, int name_len, int *db_id) {
 	}
 
 	if (i == MAX_DATABASES)
-		return -2; 
+		return -2;
 
 	db = new data_base_t();
 	if (!db) 
-		return -3;	
+		return -ENOMEM;
 	
 	db->name = name;
 
@@ -314,7 +314,7 @@ int create_table(data_base_t *db, std::string &name, schema_t *schema, table_t *
 
 	table = new table_t();
 	if (!table) 
-		return -4;
+		return -ENOMEM;
 
 	db->tables[i] = table;
 	table->id = i; 
@@ -621,6 +621,9 @@ int pin_table(table_t *table) {
 
 	table->pinned_blocks = (data_block_t **) malloc(number_of_blks*sizeof(data_block_t*)); 
 
+	if (table->pinned_blocks)
+		return -ENOMEM;
+
 	for(blk_num = 0; blk_num*table->rows_per_blk < table->num_rows; blk_num++) 
 	{ 
         	b = bread(table, blk_num);
@@ -698,15 +701,15 @@ int ecall_join(int db_id, join_condition_t *c, int *join_table_id) {
 
 	join_row = (row_t *) malloc(row_size(tbl_left) + row_size(tbl_right) - row_header_size());
 	if(!join_row)
-		return -4;
+		return -ENOMEM;
 
 	row_left = (row_t *) malloc(row_size(tbl_left));
 	if(!row_left)
-		return -5;
+		return -ENOMEM;
 
 	row_right = (row_t *) malloc(row_size(tbl_right));
 	if(!row_right)
-		return -6;
+		return -ENOMEM;
 
 #if defined(REPORT_JOIN_STATS)
 	unsigned long long start = RDTSC(), end; 
@@ -879,11 +882,11 @@ int promote_table(data_base_t *db, table_t *tbl, int column, table_t **p_tbl) {
 
 	row_old = (row_t*) malloc(row_size(tbl));
 	if(!row_old)
-		return -5;
+		return -ENOMEM;
 
 	row_new = (row_t*)malloc(row_size(tbl));
 	if(!row_new)
-		return -6;
+		return -ENOMEM;
 
 	for (unsigned int i = 0; i < tbl->num_rows; i ++) {
 
@@ -1046,7 +1049,7 @@ int ecall_insert_row_dbg(int db_id, int table_id, void *row_data) {
 	row = (row_t*) malloc(row_size(table)); 
 
 	if(!row)
-		return -3;
+		return -ENOMEM;
 
 	row->header.fake = false;
 	row->header.from = table_id;
@@ -1108,7 +1111,7 @@ int scan_table_dbg(table_t *table) {
 	row = (row_t *)malloc(row_size(table)); 
 	if (!row) {
 		ERR("can't allocate memory for the row\n");
-		return -1;
+		return -ENOMEM;
 	}
 
 	unsigned long long start, end; 
@@ -1166,7 +1169,7 @@ int print_table_dbg(table_t *table, int start, int end) {
 	row = (row_t *)malloc(row_size(table)); 
 	if (!row) {
 		ERR("can't allocate memory for the row\n");
-		return -1;
+		return -ENOMEM;
 	}
 
 	if (end > table->num_rows) {
@@ -1389,11 +1392,11 @@ int merge_and_sort_and_write(data_base_t *db,
 
 	row_left = (row_t *) malloc(row_size(p3_tbl_left));
 	if(!row_left)
-		return -4;
+		return -ENOMEM;
 
 	row_right = (row_t *) malloc(row_size(p3_tbl_right));
 	if(!row_right)
-		return -5;
+		return -ENOMEM;
 
 	/* Validate the number of fields for each table is same */
 	// Is this validation enough before appending?
@@ -1522,15 +1525,15 @@ int join_and_write_sorted_table(data_base_t *db, table_t *tbl, join_condition_t 
 	
 	join_row = (row_t *) malloc(row_size(tbl_left) + row_size(tbl_right) - row_header_size());
 	if(!join_row)
-		return -4;
+		return -ENOMEM;
 
 	row_left = (row_t *) malloc(row_size(tbl_left));
 	if(!row_left)
-		return -5;
+		return -ENOMEM;
 
 	row_right = (row_t *) malloc(row_size(tbl_right));
 	if(!row_right)
-		return -6;
+		return -ENOMEM;
 
 
 	for (unsigned long i = 0; i < tbl->num_rows; i ++) {
