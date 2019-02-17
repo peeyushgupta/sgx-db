@@ -1,10 +1,8 @@
 #pragma once 
 
-const unsigned long FREQ = 2200;
-
-const unsigned long long cycles_per_sec = FREQ*1000*1000;
-const unsigned long long cycles_per_msec = FREQ*1000;
-const unsigned long long cycles_per_usec = FREQ;
+const double cycles_per_sec = FREQ*1000*1000;
+const double cycles_per_msec = FREQ*1000;
+const double cycles_per_usec = FREQ;
 
 unsigned long long RDTSC_START ( void );
 unsigned long long RDTSCP ( void );
