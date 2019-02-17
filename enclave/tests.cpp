@@ -13,8 +13,6 @@ using namespace std;
 
 #define ECALL_TEST_LENGTH 10000
 
-extern data_base_t* g_dbs[MAX_DATABASES];
-
 struct spinlock s_inc = {.locked = 0};
 struct two_numbers {
 	volatile unsigned long a /*__attribute__((aligned(64)))*/; 
@@ -115,10 +113,8 @@ int ecall_promote_table_dbg(int db_id, int table_id, int column, int *promoted_t
 	data_base_t *db;
 	table_t *table, *p_table;
 
-	if ((db_id > (MAX_DATABASES - 1)) || !g_dbs[db_id] )
-		return -1; 
-
-	db = g_dbs[db_id]; 
+	if (!(db = get_db(db_id)))
+		return -1;
 	
 	if ((table_id > (MAX_TABLES - 1)) || !db->tables[table_id])
 		return -2; 
@@ -137,10 +133,8 @@ int ecall_column_sort_table_dbg(int db_id, int table_id, int column) {
 	data_base_t *db;
 	table_t *table;
 
-	if ((db_id > (MAX_DATABASES - 1)) || !g_dbs[db_id] )
-		return -1; 
-
-	db = g_dbs[db_id]; 
+	if (!(db = get_db(db_id)))
+		return -1;
 	
 	if ((table_id > (MAX_TABLES - 1)) || !db->tables[table_id])
 		return -2; 
@@ -178,12 +172,8 @@ int ecall_bcache_test_create_read_write_table(int db_id, int from_table_id, int 
 	data_base_t *db;
 	table_t *from_tbl, *to_tbl;
 
-	if ((db_id > (MAX_DATABASES - 1)) || !g_dbs[db_id] )	
-		return -1; 
-
-	db = g_dbs[db_id];
-	if(!db)
-		return -2;
+	if (!(db = get_db(db_id)))
+		return -1;
 
 	from_tbl = db->tables[from_table_id];
 	if (! from_tbl )
@@ -248,12 +238,8 @@ int ecall_bcache_test_read_write(int db_id, int from_table_id, int to_table_id) 
 	data_base_t *db;
 	table_t *from_tbl, *to_tbl;
 
-	if ((db_id > (MAX_DATABASES - 1)) || !g_dbs[db_id] )	
-		return -1; 
-
-	db = g_dbs[db_id];
-	if(!db)
-		return -2;
+	if (!(db = get_db(db_id)))
+		return -1;
 
 	from_tbl = db->tables[from_table_id];
 	to_tbl = db->tables[to_table_id];
@@ -274,12 +260,8 @@ int ecall_bcache_test_cmp_read_write(int db_id, int from_table_id, int to_table_
 	data_base_t *db;
 	table_t *from_tbl, *to_tbl;
 
-	if ((db_id > (MAX_DATABASES - 1)) || !g_dbs[db_id] )	
-		return -1; 
-
-	db = g_dbs[db_id];
-	if(!db)
-		return -2;
+	if (!(db = get_db(db_id)))
+		return -1;
 
 	from_tbl = db->tables[from_table_id];
 	to_tbl = db->tables[to_table_id];

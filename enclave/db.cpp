@@ -378,13 +378,9 @@ int ecall_create_table(int db_id, const char *cname, int name_len, schema_t *sch
 	data_base_t *db;
 	table_t *table;
 
-	if ((db_id > (MAX_DATABASES - 1)) || !g_dbs[db_id] 
-	   || !schema || !table_id || !cname || (name_len == 0))	
+	if (!(db = get_db(db_id)) || !schema || !table_id || !cname ||
+			(name_len == 0))
 		return -1; 
-
-	db = g_dbs[db_id];
-	if(!db)
-		return -2;
 
 	ret = create_table(db, name, schema, &table); 
 	if (ret) {
@@ -427,12 +423,8 @@ int ecall_flush_table(int db_id, int table_id) {
 	data_base_t *db;
 	table_t *table;
 
-	if (db_id > (MAX_DATABASES - 1))	
-		return -1; 
-
-	db = g_dbs[db_id];
-	if(!db)
-		return -2;
+	if (!(db = get_db(db_id)))
+		return -1;
 
 	if ((table_id > (MAX_TABLES - 1)) || !db->tables[table_id])
 		return -2; 
@@ -678,12 +670,8 @@ int ecall_join(int db_id, join_condition_t *c, int *join_table_id) {
 	schema_t join_sc;
 	std::string join_table_name;  
 
-	if ((db_id > (MAX_DATABASES - 1)) || !g_dbs[db_id] || !c )	
+	if (!(db = get_db(db_id)) || !c )
 		return -1; 
-
-	db = g_dbs[db_id];
-	if(!db)
-		return -2;
 
 	tbl_left = db->tables[c->table_left];
 	tbl_right = db->tables[c->table_right];
@@ -1047,11 +1035,8 @@ int ecall_insert_row_dbg(int db_id, int table_id, void *row_data) {
 	row_t *row;
 	int ret; 
 
-	if ((db_id > (MAX_DATABASES - 1)) || !g_dbs[db_id] 
-		|| !row_data )
+	if (!(db = get_db(db_id)) || !row_data)
 		return -1; 
-
-	db = g_dbs[db_id]; 
 	
 	if ((table_id > (MAX_TABLES - 1)) || !db->tables[table_id])
 		return -2; 
@@ -1154,11 +1139,9 @@ int ecall_scan_table_dbg(int db_id, int table_id) {
 	data_base_t *db;
 	table_t *table;
 
-	if ((db_id > (MAX_DATABASES - 1)) || !g_dbs[db_id] )
-		return -1; 
+	if (!(db = get_db(db_id)))
+		return -1;
 
-	db = g_dbs[db_id]; 
-	
 	if ((table_id > (MAX_TABLES - 1)) || !db->tables[table_id])
 		return -2; 
 
@@ -1209,10 +1192,8 @@ int ecall_print_table_dbg(int db_id, int table_id, int start, int end) {
 	data_base_t *db;
 	table_t *table;
 
-	if ((db_id > (MAX_DATABASES - 1)) || !g_dbs[db_id] )
-		return -1; 
-
-	db = g_dbs[db_id]; 
+	if (!(db = get_db(db_id)))
+		return -1;
 	
 	if ((table_id > (MAX_TABLES - 1)) || !db->tables[table_id])
 		return -2; 
