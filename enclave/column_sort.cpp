@@ -1,3 +1,4 @@
+#include <cerrno>
 #include "db.hpp"
 #include "util.hpp"
 #include "dbg.hpp"
@@ -421,7 +422,7 @@ int column_sort_table_parallel(data_base_t *db, table_t *table, int column, int 
 			barrier_reset(&b1, num_threads); 
 
 #if !defined(SKIP_BITONIC)
-		ret = sort_table_parallel(s_tables[i], column, tid, num_threads);
+		ret = bitonic_sort_table_parallel(s_tables[i], column, tid, num_threads);
 #endif
 		barrier_wait(&b2, num_threads); 	
 		if(tid == 0) {
@@ -560,7 +561,7 @@ int column_sort_table_parallel(data_base_t *db, table_t *table, int column, int 
  
 		}
 #if !defined(SKIP_BITONIC)
-		ret = sort_table_parallel(st_tables[i], column, tid, num_threads);
+		ret = bitonic_sort_table_parallel(st_tables[i], column, tid, num_threads);
 #endif
 		barrier_wait(&b2, num_threads); 	
 		if(tid == 0) { 
@@ -672,7 +673,7 @@ int column_sort_table_parallel(data_base_t *db, table_t *table, int column, int 
 		if(tid == 0) 
 			barrier_reset(&b1, num_threads); 
 #if !defined(SKIP_BITONIC)
-		ret = sort_table_parallel(s_tables[i], column, tid, num_threads);
+		ret = bitonic_sort_table_parallel(s_tables[i], column, tid, num_threads);
 #endif
 		barrier_wait(&b2, num_threads); 	
 		if(tid == 0) {
@@ -795,7 +796,7 @@ int column_sort_table_parallel(data_base_t *db, table_t *table, int column, int 
 		if(tid == 0) 
 			barrier_reset(&b1, num_threads); 
 #if !defined(SKIP_BITONIC)
-		ret = sort_table_parallel(st_tables[i], column, tid, num_threads);
+		ret = bitonic_sort_table_parallel(st_tables[i], column, tid, num_threads);
 #endif		
 		barrier_wait(&b2, num_threads); 	
 		if(tid == 0) {

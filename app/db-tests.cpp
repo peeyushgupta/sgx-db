@@ -454,7 +454,7 @@ void test_barriers(sgx_enclave_id_t eid, int num_threads, unsigned long count)
 void bitonic_sorter_fn(sgx_enclave_id_t eid, int db_id, int table_id, int field, int tid, int num_threads)
 {
 	int ret;
-	ecall_sort_table_parallel(eid, &ret, db_id, table_id, field, tid, num_threads);
+	ecall_bitonic_sort_table_parallel(eid, &ret, db_id, table_id, field, tid, num_threads);
 }
 
 void bitonic_sort_parallel(sgx_enclave_id_t eid, int db_id, int table_id, int field, int num_threads)
@@ -670,7 +670,7 @@ int test_column_sort(sgx_enclave_id_t eid)
 void quick_sorter_fn(sgx_enclave_id_t eid, int db_id, int table_id, int field, int tid, int num_threads)
 {
 	int ret;
-	ecall_sort_table_parallel(eid, &ret, db_id, table_id, field, tid, num_threads);
+	ecall_quicksort_table_parallel(eid, &ret, db_id, table_id, field, tid, num_threads);
 }
 
 void quick_sort_parallel(sgx_enclave_id_t eid, int db_id, int table_id, int field, int num_threads)
