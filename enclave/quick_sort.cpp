@@ -260,24 +260,8 @@ int partition(table_t *tbl, int column, int start, int end) {
 				break;
 		}
 
-		// if we break from switch, we should swap
-		memcpy(temp_row, start_row, row_size(tbl));
-		memcpy(start_row, end_row, row_size(tbl));
-		memcpy(end_row, temp_row, row_size(tbl));
-
-		// write swapped rows i and j
-		ret = write_row_dbg(tbl, start_row, i);
-		if (ret) {
-			ERR("failed to insert row %d of table %s\n",
-				i, tbl->name.c_str());
-			return -1;
-		}
-
-		ret = write_row_dbg(tbl, end_row, j);
-		if (ret) {
-			ERR("failed to insert row %d of table %s\n",
-				j, tbl->name.c_str());
-			return -1;
-		}
+		// Perform swap by writing start_row to jth position and
+		// end_row to ith position
+		exchange(tbl, i, j, start_row, end_row, 0);
 	}
 }
