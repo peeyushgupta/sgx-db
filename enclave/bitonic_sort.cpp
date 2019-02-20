@@ -191,7 +191,7 @@ barrier_t stage4a = {.count = 0, .seen = 0};
 barrier_t stage4b = {.count = 0, .seen = 0};
 
 
-int sort_table_parallel(table_t *table, int column, int tid, int num_threads) {
+int bitonic_sort_table_parallel(table_t *table, int column, int tid, int num_threads) {
 
 	auto N = table->num_rows;
 	assert (((N & (N - 1)) == 0));
@@ -318,7 +318,7 @@ int sort_table_parallel(table_t *table, int column, int tid, int num_threads) {
 	return 0;
 }
 
-int ecall_sort_table_parallel(int db_id, int table_id, int column, int tid, int num_threads)
+int ecall_bitonic_sort_table_parallel(int db_id, int table_id, int column, int tid, int num_threads)
 {
 	int ret;
 	data_base_t *db;
@@ -334,5 +334,5 @@ int ecall_sort_table_parallel(int db_id, int table_id, int column, int tid, int 
 
 	thread_id = tid; 
 
-	return sort_table_parallel(table, column, tid, num_threads);
+	return bitonic_sort_table_parallel(table, column, tid, num_threads);
 };
