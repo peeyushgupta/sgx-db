@@ -1359,6 +1359,12 @@ int merge_and_sort_and_write(data_base_t *db,
 	std::string append_table_name;  
 	int *append_table_id;
 
+#if defined(REPORT_3P_STATS)
+	unsigned long long start, end;
+	unsigned long long cycles;
+	double secs;
+#endif
+
 	/* Assuming tables are coming from the same db? */
 	if (! tbl_left || ! tbl_right)
 		return -3; 
@@ -1383,12 +1389,38 @@ int merge_and_sort_and_write(data_base_t *db,
 	DBG("Created append table %s, id:%d\n", append_table_name.c_str(), append_table_id); 
 
 	/* Project promote pad R */
+#if defined(REPORT_3P_STATS)
+	start = RDTSC();
+#endif
+
 	ret = project_promote_pad_table( db, tbl_left, project_columns_left, num_project_columns_left, 
 		promote_columns_left, num_pad_bytes_left, &p3_tbl_left);
 
+#if defined(REPORT_3P_STATS)
+	end = RDTSC();
+
+	cycles = end - start;
+	secs = (cycles / cycles_per_sec);
+
+	INFO("Project Promote Pad R took %llu cycles (%f sec)\n", cycles, secs);
+#endif
+
 	/* Project promote pad S */
+#if defined(REPORT_3P_STATS)
+	start = RDTSC();
+#endif
+
 	ret = project_promote_pad_table( db, tbl_right, project_columns_right, num_project_columns_right, 
 		promote_columns_right, num_pad_bytes_right, &p3_tbl_right);
+
+#if defined(REPORT_3P_STATS)
+	end = RDTSC();
+
+	cycles = end - start;
+	secs = (cycles / cycles_per_sec);
+
+	INFO("Project Promote Pad S took %llu cycles (%f sec)\n", cycles, secs);
+#endif
 
 	row_left = (row_t *) malloc(row_size(p3_tbl_left));
 	if(!row_left)
@@ -1405,6 +1437,10 @@ int merge_and_sort_and_write(data_base_t *db,
 
 	/* Append R and S */
 	// Read R row and append
+#if defined(REPORT_APPEND_STATS)
+	start = RDTSC();
+#endif
+
 	for(int i=0; i < tbl_left->num_rows; i ++)
 	{
 		ret = read_row(p3_tbl_left, i, row_left);
@@ -1422,6 +1458,20 @@ int merge_and_sort_and_write(data_base_t *db,
 				goto cleanup;
 			}
 	}
+
+#if defined(REPORT_APPEND_STATS)
+	end = RDTSC();
+
+	cycles = end - start;
+	secs = (cycles / cycles_per_sec);
+
+	INFO("Append R took %llu cycles (%f sec)\n", cycles, secs);
+#endif
+
+	
+#if defined(REPORT_APPEND_STATS)
+	start = RDTSC();
+#endif
 
 	// Read S row and append	
 	for (unsigned int j = 0; j < tbl_right->num_rows; j ++) {
@@ -1443,10 +1493,24 @@ int merge_and_sort_and_write(data_base_t *db,
 		}
 	}
 
+#if defined(REPORT_APPEND_STATS)
+	end = RDTSC();
+
+	cycles = end - start;
+	secs = (cycles / cycles_per_sec);
+
+	INFO("Append S took %llu cycles (%f sec)\n", cycles, secs);
+#endif
+
 	// Sort: 1) bitonic or 2) quick
 	/* Which field to sort? */
 	int field;
 	field = 0;
+
+#if defined(REPORT_SORT_STATS)
+	start = RDTSC();
+#endif
+
 	ret = bitonic_sort_table(db, append_table, field, &s_table); 
 	//ret = quick_sort_table(db, append_table, field, &s_table); 
 	if(ret) {
@@ -1455,11 +1519,23 @@ int merge_and_sort_and_write(data_base_t *db,
 			goto cleanup;
 	}
 
+#if defined(REPORT_SORT_STATS)
+	end = RDTSC();
+	cycles = end - start;
+	secs = (cycles / cycles_per_sec);
+
+	INFO("bitonic sork took %llu cycles (%f sec)\n", cycles, secs);
+#endif
+
 	/* Later remove join condition - each row has the info where it came from */
 	join_condition_t c;
 	c.table_left = tbl_left->id;
 	c.table_right = tbl_right->id;
-	
+
+#if defined(REPORT_JOIN_WRITE_STATS)
+	start = RDTSC();
+#endif	
+
 	// Join and write sorted table
 	ret = join_and_write_sorted_table( db, s_table, &c, write_table_id );
 	if(ret) {
@@ -1467,7 +1543,14 @@ int merge_and_sort_and_write(data_base_t *db,
 				s_table->name.c_str());
 			goto cleanup;
 	}
+	
+#if defined(REPORT_JOIN_WRITE_STATS)
+	end = RDTSC();
+	cycles = end - start;
+	secs = (cycles / cycles_per_sec);
 
+	INFO("join and write sorted table took %llu cycles (%f sec)\n", cycles, secs);
+#endif
 	ret = 0;
 
 cleanup:
