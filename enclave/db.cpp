@@ -555,7 +555,7 @@ int pin_table(table_t *table) {
 
 	table->pinned_blocks = (data_block_t **) malloc(number_of_blks*sizeof(data_block_t*)); 
 
-	if (table->pinned_blocks)
+	if (!table->pinned_blocks)
 		return -ENOMEM;
 
 	for(blk_num = 0; blk_num*table->rows_per_blk < table->num_rows; blk_num++) 
