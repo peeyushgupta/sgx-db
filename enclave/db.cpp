@@ -1359,10 +1359,12 @@ int merge_and_sort_and_write(data_base_t *db,
 	std::string append_table_name;  
 	int *append_table_id;
 
-#if defined(REPORT_3P_STATS)
 	unsigned long long start, end;
 	unsigned long long cycles;
 	double secs;
+
+#if defined(REPORT_3P_APPEND_SORT_JOIN_WRITE_STATS)
+	start = RDTSC();
 #endif
 
 	/* Assuming tables are coming from the same db? */
@@ -1430,45 +1432,13 @@ int merge_and_sort_and_write(data_base_t *db,
 	if(!row_right)
 		return -ENOMEM;
 
-	/* Validate the number of fields for each table is same */
+	/* Validate the size of row for each tablee */
 	// Is this validation enough before appending?
-	if( p3_tbl_left->sc.num_fields != p3_tbl_right->sc.num_fields)
+	if( row_size(p3_tbl_left) != row_size(p3_tbl_right) )
 		return -6;
-
-	/* Append R and S */
-	// Read R row and append
-#if defined(REPORT_APPEND_STATS)
-	start = RDTSC();
-#endif
-
-	for(int i=0; i < tbl_left->num_rows; i ++)
-	{
-		ret = read_row(p3_tbl_left, i, row_left);
-		if(ret) {
-			ERR("failed to read row %d of table %s\n",
-				i, tbl_left->name.c_str());
-			goto cleanup;
-		}
-
-		/* Add left row to the append table */
-			ret = insert_row_dbg(append_table, row_left);
-			if(ret) {
-				ERR("failed to append row %d of table %s to %s table\n",
-					i, tbl_left->name.c_str(), append_table->name.c_str());
-				goto cleanup;
-			}
-	}
-
-#if defined(REPORT_APPEND_STATS)
-	end = RDTSC();
-
-	cycles = end - start;
-	secs = (cycles / cycles_per_sec);
-
-	INFO("Append R took %llu cycles (%f sec)\n", cycles, secs);
-#endif
-
 	
+	/* Append R and S */
+	// READ S first then R 
 #if defined(REPORT_APPEND_STATS)
 	start = RDTSC();
 #endif
@@ -1502,6 +1472,40 @@ int merge_and_sort_and_write(data_base_t *db,
 	INFO("Append S took %llu cycles (%f sec)\n", cycles, secs);
 #endif
 
+	// Read R row and append
+#if defined(REPORT_APPEND_STATS)
+	start = RDTSC();
+#endif
+
+	for(int i=0; i < tbl_left->num_rows; i ++)
+	{
+		ret = read_row(p3_tbl_left, i, row_left);
+		if(ret) {
+			ERR("failed to read row %d of table %s\n",
+				i, tbl_left->name.c_str());
+			goto cleanup;
+		}
+
+		/* Add left row to the append table */
+			ret = insert_row_dbg(append_table, row_left);
+			if(ret) {
+				ERR("failed to append row %d of table %s to %s table\n",
+					i, tbl_left->name.c_str(), append_table->name.c_str());
+				goto cleanup;
+			}
+	}
+
+#if defined(REPORT_APPEND_STATS)
+	end = RDTSC();
+
+	cycles = end - start;
+	secs = (cycles / cycles_per_sec);
+
+	INFO("Append R took %llu cycles (%f sec)\n", cycles, secs);
+#endif
+
+//// 1 THREAD SERIEAL
+
 	// Sort: 1) bitonic or 2) quick
 	/* Which field to sort? */
 	int field;
@@ -1510,6 +1514,7 @@ int merge_and_sort_and_write(data_base_t *db,
 #if defined(REPORT_SORT_STATS)
 	start = RDTSC();
 #endif
+	// Refer to parallelization and update - column_sort_table_parallel();
 
 	ret = bitonic_sort_table(db, append_table, field, &s_table); 
 	//ret = quick_sort_table(db, append_table, field, &s_table); 
@@ -1560,6 +1565,13 @@ cleanup:
 	if (row_right)
 		free(row_right); 
 
+#if defined(REPORT_3P_APPEND_SORT_JOIN_WRITE_STATS)
+	end = RDTSC();
+	cycles = end - start;
+	secs = (cycles / cycles_per_sec);
+
+	INFO("3p, append, sort, join and write sorted table took %llu cycles (%f sec)\n", cycles, secs);
+#endif
 	return ret; 
 }
 
