@@ -16,12 +16,17 @@ void *get_element(table_t *tbl, int row_num, row_t *row_buf, int column)
 	int ret;
 	void *element;
 
-	ret = read_row(tbl, row_num, row_buf);
+	if(tbl->pinned_blocks) {
+		data_block_t *b_i, *b_j;
+		get_pinned_row(tbl, row_num, &b_i, &row_buf);
+	} else {
+		ret = read_row(tbl, row_num, row_buf);
 
-	if(ret) {
-		ERR("failed to read row %d of table %s\n",
-			row_num, tbl->name.c_str());
-		return NULL;
+		if(ret) {
+			ERR("failed to read row %d of table %s\n",
+				row_num, tbl->name.c_str());
+			return NULL;
+		}
 	}
 
 	element = get_column(&tbl->sc, column, row_buf);
@@ -73,3 +78,20 @@ exit:
 	return ret;
 }
 
+// INLINE procedure exchange() : pair swap
+int exchange(table_t *tbl, int i, int j, row_t *row_i, row_t *row_j, int tid) {
+	row_t *row_tmp;
+	row_t row_tmp_stack;
+	row_tmp = &row_tmp_stack;
+
+	memcpy(row_tmp, row_i, row_size(tbl));
+
+	if(tbl->pinned_blocks) {
+		memcpy(row_i, row_j, row_size(tbl));
+		memcpy(row_j, row_tmp, row_size(tbl));
+	} else {
+		write_row_dbg(tbl, row_j, i);
+		write_row_dbg(tbl, row_tmp, j);
+	}
+	return 0;
+}

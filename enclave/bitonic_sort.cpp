@@ -17,24 +17,6 @@ extern thread_local int thread_id;
 const int ASCENDING  = 1;
 const int DESCENDING = 0;
 
-/** INLINE procedure exchange() : pair swap **/
-inline int exchange(table_t *tbl, int i, int j, row_t *row_i, row_t *row_j, int tid) {
-	row_t *row_tmp;
-	row_t row_tmp_stack;
-	row_tmp = &row_tmp_stack;
-
-	memcpy(row_tmp, row_i, row_size(tbl));
-
-	if(tbl->pinned_blocks) {
-		memcpy(row_i, row_j, row_size(tbl));
-		memcpy(row_j, row_tmp, row_size(tbl));
-	} else {
-		write_row_dbg(tbl, row_j, i);
-		write_row_dbg(tbl, row_tmp, j);
-	}
-	return 0;
-}
-
 /** procedure compare() 
    The parameter dir indicates the sorting direction, ASCENDING 
    or DESCENDING; if (a[i] > a[j]) agrees with the direction, 
