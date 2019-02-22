@@ -13,7 +13,8 @@
 
 using namespace std;
 #define OCALL_TEST_LENGTH 10000
-int NUM_OF_ROWS = 360000;
+#define RANKINGS_TABLE_SIZE	(360000)
+#define UVISITS_TABLE_SIZE	(350000)
 
 void column_sort_table_parallel(sgx_enclave_id_t eid, int db_id, int table_id, int field, int num_threads);
 
@@ -205,9 +206,7 @@ int test_rankings(sgx_enclave_id_t eid) {
 	std::ifstream file("rankings.csv");
 
 	row[0] = 'a';
-	for(int i = 0; i < 360000; i++) { 
-	//for(int i = 0; i < 10000; i++) { 
-
+	for(int i = 0; i < RANKINGS_TABLE_SIZE; i++) {
 		memset(row, 'a', MAX_ROW_SIZE);
 		file.getline(line, MAX_ROW_SIZE); //get the field
 
@@ -285,9 +284,7 @@ int test_rankings(sgx_enclave_id_t eid) {
 	std::ifstream file2("uservisits.csv");
 
 	row[0] = 'a';
-	for(int i = 0; i < 350000; i++){//TODO temp really 350000
-	//for(int i = 0; i < 10000; i++){//TODO temp really 350000
-	
+	for(int i = 0; i < UVISITS_TABLE_SIZE; i++) {
 		memset(row, 'a', MAX_ROW_SIZE);
 		file2.getline(line, MAX_ROW_SIZE);//get the field
 
@@ -730,7 +727,7 @@ int test_quick_sort(sgx_enclave_id_t eid)
 	std::ifstream file("rankings.csv");
 
 	row[0] = 'a';
-	for(int i = 0; i < NUM_OF_ROWS; i++) {
+	for(int i = 0; i < RANKINGS_TABLE_SIZE; i++) {
 		memset(row, 'a', MAX_ROW_SIZE);
 		file.getline(line, MAX_ROW_SIZE); //get the field
 
@@ -809,7 +806,6 @@ int test_merge_sort_write(sgx_enclave_id_t eid)
 	sc.types[3] = INTEGER;
 	sc.row_data_size = sc.offsets[sc.num_fields - 1] + sc.sizes[sc.num_fields - 1];
 
-	//row = (uint8_t*)malloc(sc.row_size);
 	row = (uint8_t*)malloc(MAX_ROW_SIZE);
 
 	sgx_ret = ecall_create_db(eid, &ret, db_name.c_str(), db_name.length(), &db_id);
@@ -827,9 +823,7 @@ int test_merge_sort_write(sgx_enclave_id_t eid)
 	std::ifstream file("rankings.csv");
 
 	row[0] = 'a';
-	for(int i = 0; i < 360000; i++) { 
-	//for(int i = 0; i < 10000; i++) { 
-
+	for(int i = 0; i < RANKINGS_TABLE_SIZE; i++) {
 		memset(row, 'a', MAX_ROW_SIZE);
 		file.getline(line, MAX_ROW_SIZE); //get the field
 
@@ -907,9 +901,7 @@ int test_merge_sort_write(sgx_enclave_id_t eid)
 	std::ifstream file2("uservisits.csv");
 
 	row[0] = 'a';
-	for(int i = 0; i < 350000; i++){//TODO temp really 350000
-	//for(int i = 0; i < 10000; i++){//TODO temp really 350000
-	
+	for(int i = 0; i < UVISITS_TABLE_SIZE; i++) {
 		memset(row, 'a', MAX_ROW_SIZE);
 		file2.getline(line, MAX_ROW_SIZE);//get the field
 
