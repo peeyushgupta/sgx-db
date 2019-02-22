@@ -966,7 +966,7 @@ int test_merge_sort_write(sgx_enclave_id_t eid)
 		start = RDTSC_START();
 		auto num_threads = 2u;
 
-		ret = ecall_merge_and_sort_and_write(db_id,
+		ecall_merge_and_sort_and_write(eid, &ret, db_id,
 			rankings_table_id,
 			ptr_project_columns_left,
 			num_project_columns_left,
