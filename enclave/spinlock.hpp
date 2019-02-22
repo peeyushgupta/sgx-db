@@ -19,21 +19,10 @@ void initlock(struct spinlock *lk, std::string name);
 void acquire(struct spinlock *lk);
 void release(struct spinlock *lk);
 
-// Barrier 
-typedef struct barrier {
-	volatile unsigned int count;  // How many threads arrived at the barrier
-	volatile unsigned int seen;   // Number of threads seen the count value
-} barrier_t ;
-
-void barrier_init(volatile barrier_t *b);
-void barrier_wait(volatile barrier_t *b, unsigned int num_threads);
-void barrier_reset(volatile barrier_t *b, unsigned int num_threads); 
-void barrier_dump(volatile barrier_t *b, int tid);
-
 typedef struct {
 	volatile unsigned int count;  // How many threads arrived at the barrier
 	volatile unsigned int global_sense;
-} std_barrier_t;
+} barrier_t;
 
-void std_barrier_init(std_barrier_t *b);
-void std_barrier_wait(std_barrier_t *b, volatile unsigned int *local_sense, unsigned int tid, unsigned int num_threads);
+void barrier_init(barrier_t *b);
+void barrier_wait(barrier_t *b, volatile unsigned int *local_sense, unsigned int tid, unsigned int num_threads);

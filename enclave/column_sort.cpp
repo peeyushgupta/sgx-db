@@ -205,11 +205,7 @@ int compare_tables(table_t *left, table_t *right) {
 	return compare_tables(left, right, 0, 1);
 }
 
-
-barrier_t b1 = {.count = 0, .seen = 0}; 
-barrier_t b2 = {.count = 0, .seen = 0}; 
-
-std_barrier_t column_barrier = {.count = 0, .global_sense = 0};
+barrier_t column_barrier = {.count = 0, .global_sense = 0};
 thread_local volatile unsigned int column_lsense = 0;
 
 
@@ -400,18 +396,7 @@ int column_sort_table_parallel(data_base_t *db, table_t *table, int column, int 
 		}
 #endif
 	}
-#if defined(REUSABLE_BARRIERS)
-	std_barrier_wait(&column_barrier, &column_lsense, tid, num_threads);
-#else
-	// wait here until tid=0 sets up 's' value
-	barrier_wait(&b1, num_threads);
-	if(tid == 0)
-		barrier_reset(&b1, num_threads);
-
-	barrier_wait(&b2, num_threads);
-	if(tid == 0)
-		barrier_reset(&b2, num_threads);
-#endif
+	barrier_wait(&column_barrier, &column_lsense, tid, num_threads);
 
 #if defined(REPORT_COLUMNSORT_STATS)
 	start = RDTSC(); 
@@ -424,26 +409,13 @@ int column_sort_table_parallel(data_base_t *db, table_t *table, int column, int 
 			pin_table(s_tables[i]); 
 		}
 #endif
-#if defined(REUSABLE_BARRIERS)
-		std_barrier_wait(&column_barrier, &column_lsense, tid, num_threads);
-#else
-		barrier_wait(&b1, num_threads);
-		if(tid == 0) 
-			barrier_reset(&b1, num_threads); 
-#endif
+		barrier_wait(&column_barrier, &column_lsense, tid, num_threads);
 
 #if !defined(SKIP_BITONIC)
 		ret = bitonic_sort_table_parallel(s_tables[i], column, tid, num_threads);
 #endif
 
-#if defined(REUSABLE_BARRIERS)
-		std_barrier_wait(&column_barrier, &column_lsense, tid, num_threads);
-#else
-		barrier_wait(&b2, num_threads); 	
-		if(tid == 0) {
-			barrier_reset(&b2, num_threads); 
-		}
-#endif
+		barrier_wait(&column_barrier, &column_lsense, tid, num_threads);
 
 		if (tid == 0) {
 #if defined(PIN_TABLE)
@@ -482,13 +454,8 @@ int column_sort_table_parallel(data_base_t *db, table_t *table, int column, int 
 	/* Each thread takes an s table and writes it into an st table */
 	
 	/* Just in case tid==0 is still unpining table s_tables, wait for it */
-#if defined(REUSABLE_BARRIERS)
-	std_barrier_wait(&column_barrier, &column_lsense, tid, num_threads);
-#else
-	barrier_wait(&b1, num_threads);
-	if(tid == 0) 
-		barrier_reset(&b1, num_threads); 
-#endif
+	barrier_wait(&column_barrier, &column_lsense, tid, num_threads);
+
 	/* Transpose s column tables into s transposed tables  */
 	for (unsigned int i = 0 + tid; i < s; i += num_threads) {
 
@@ -536,13 +503,8 @@ int column_sort_table_parallel(data_base_t *db, table_t *table, int column, int 
 #endif
 		}
 	}
-#if defined(REUSABLE_BARRIERS)
-	std_barrier_wait(&column_barrier, &column_lsense, tid, num_threads);
-#else
-	barrier_wait(&b2, num_threads); 	
-	if(tid == 0) 
-		barrier_reset(&b2, num_threads); 
-#endif
+
+	barrier_wait(&column_barrier, &column_lsense, tid, num_threads);
 
 	if (tid == 0) {
 #if defined(REPORT_COLUMNSORT_STATS)
@@ -578,14 +540,8 @@ int column_sort_table_parallel(data_base_t *db, table_t *table, int column, int 
 		}
 #endif
 
-#if defined(REUSABLE_BARRIERS)
-		std_barrier_wait(&column_barrier, &column_lsense, tid, num_threads);
-#else
-		barrier_wait(&b1, num_threads);
-		if(tid == 0) { 
-			barrier_reset(&b1, num_threads);
-		}
-#endif
+		barrier_wait(&column_barrier, &column_lsense, tid, num_threads);
+
 		if (tid == 0) {
 			// Clean s tables so we can do insert_row again
 			for (unsigned int i = 0; i < s; i++) {
@@ -596,14 +552,9 @@ int column_sort_table_parallel(data_base_t *db, table_t *table, int column, int 
 #if !defined(SKIP_BITONIC)
 		ret = bitonic_sort_table_parallel(st_tables[i], column, tid, num_threads);
 #endif
-#if defined(REUSABLE_BARRIERS)
-		std_barrier_wait(&column_barrier, &column_lsense, tid, num_threads);
-#else
-		barrier_wait(&b2, num_threads); 	
-		if(tid == 0) { 
-			barrier_reset(&b2, num_threads);
-}
-#endif
+
+		barrier_wait(&column_barrier, &column_lsense, tid, num_threads);
+
 		if (tid == 0) {
 #if defined(PIN_TABLE)
 			unpin_table_dirty(st_tables[i]);
@@ -708,24 +659,11 @@ int column_sort_table_parallel(data_base_t *db, table_t *table, int column, int 
 			pin_table(s_tables[i]); 
 		}
 #endif
-#if defined(REUSABLE_BARRIERS)
-		std_barrier_wait(&column_barrier, &column_lsense, tid, num_threads);
-#else
-		barrier_wait(&b1, num_threads);
-		if(tid == 0) 
-			barrier_reset(&b1, num_threads); 
-#endif
+		barrier_wait(&column_barrier, &column_lsense, tid, num_threads);
 #if !defined(SKIP_BITONIC)
 		ret = bitonic_sort_table_parallel(s_tables[i], column, tid, num_threads);
 #endif
-#if defined(REUSABLE_BARRIERS)
-		std_barrier_wait(&column_barrier, &column_lsense, tid, num_threads);
-#else
-		barrier_wait(&b2, num_threads); 	
-		if(tid == 0) {
-			barrier_reset(&b2, num_threads); 
-		}
-#endif
+		barrier_wait(&column_barrier, &column_lsense, tid, num_threads);
 		if (tid == 0) {
 #if defined(PIN_TABLE)
 			unpin_table_dirty(s_tables[i]); 
@@ -841,24 +779,13 @@ int column_sort_table_parallel(data_base_t *db, table_t *table, int column, int 
 			pin_table(st_tables[i]); 
 		}
 #endif
-#if defined(REUSABLE_BARRIERS)
-		std_barrier_wait(&column_barrier, &column_lsense, tid, num_threads);
-#else
-		barrier_wait(&b1, num_threads);
-		if(tid == 0) 
-			barrier_reset(&b1, num_threads); 
-#endif
+		barrier_wait(&column_barrier, &column_lsense, tid, num_threads);
+
 #if !defined(SKIP_BITONIC)
 		ret = bitonic_sort_table_parallel(st_tables[i], column, tid, num_threads);
 #endif		
-#if defined(REUSABLE_BARRIERS)
-		std_barrier_wait(&column_barrier, &column_lsense, tid, num_threads);
-#else
-		barrier_wait(&b2, num_threads); 	
-		if(tid == 0) {
-			barrier_reset(&b2, num_threads);
-		}
-#endif
+		barrier_wait(&column_barrier, &column_lsense, tid, num_threads);
+
 		if (tid == 0) {
 #if defined(PIN_TABLE)
 			unpin_table_dirty(st_tables[i]);

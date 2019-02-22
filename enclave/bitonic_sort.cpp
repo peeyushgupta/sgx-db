@@ -161,18 +161,7 @@ int bitonicSplit(table_t *tbl, int start_i, int start_j, int count, int column, 
 	return 0;
 }
 
-// XXX: Is there a better way to implement reusable barriers?
-//std::atomic_uint stage1, stage2[32], stage3[8];
-barrier_t stage0 = {.count = 0, .seen = 0};
-barrier_t stage1 = {.count = 0, .seen = 0};
-barrier_t stage2a = {.count = 0, .seen = 0};
-barrier_t stage2b = {.count = 0, .seen = 0};
-barrier_t stage3a = {.count = 0, .seen = 0};
-barrier_t stage3b = {.count = 0, .seen = 0};
-barrier_t stage4a = {.count = 0, .seen = 0};
-barrier_t stage4b = {.count = 0, .seen = 0};
-
-std_barrier_t bitonic_barrier = { .count = 0, .global_sense = 0 };
+barrier_t bitonic_barrier = { .count = 0, .global_sense = 0 };
 thread_local volatile unsigned int bitonic_lsense = 0;
 
 int bitonic_sort_table_parallel(table_t *table, int column, int tid, int num_threads) {
@@ -192,27 +181,13 @@ int bitonic_sort_table_parallel(table_t *table, int column, int tid, int num_thr
 		pin_table(table);
 #endif
 
-#if defined(REUSABLE_BARRIERS)
-	std_barrier_wait(&bitonic_barrier, &bitonic_lsense, tid, num_threads);
-#else
-	barrier_wait(&stage0, num_threads);
-
-	if(tid == 0)
-		barrier_reset(&stage0, num_threads);
-#endif
-
+	barrier_wait(&bitonic_barrier, &bitonic_lsense, tid, num_threads);
 
 	// stage 1: the whole data is split into shards for num_threads threads
 	recBitonicSort(table, tid == 0 ? 0 : (tid * N) / num_threads, (N / num_threads),
 			column, (tid % 2 == 0) ? ASCENDING : DESCENDING, tid);
 
-#if defined(REUSABLE_BARRIERS)
-	std_barrier_wait(&bitonic_barrier, &bitonic_lsense, tid, num_threads);
-#else
-	barrier_wait(&stage1, num_threads);
-	if (tid == 0)
-		barrier_reset(&stage1, num_threads); 
-#endif
+	barrier_wait(&bitonic_barrier, &bitonic_lsense, tid, num_threads);
 
 	// num_stages: Number of stages of processing after stage 1 until num_threads
 	// independent bitonic sequences are split. After that the last stage is to
@@ -244,17 +219,8 @@ int bitonic_sort_table_parallel(table_t *table, int column, int tid, int num_thr
 			// when we do bitonic split, num_parts is doubled
 			num_parts *= 2;
 
-#if defined(REUSABLE_BARRIERS)
-			std_barrier_wait(&bitonic_barrier, &bitonic_lsense, tid, num_threads);
-#else
-			barrier_wait(&stage2a, num_threads);
-			if (tid == 0)
-				barrier_reset(&stage2a, num_threads); 
+			barrier_wait(&bitonic_barrier, &bitonic_lsense, tid, num_threads);
 
-			barrier_wait(&stage2b, num_threads);
-			if (tid == 0)
-				barrier_reset(&stage2b, num_threads); 
-#endif
 			++j;
 		} while ((num_parts >> 1) != num_threads);
 
@@ -264,17 +230,7 @@ int bitonic_sort_table_parallel(table_t *table, int column, int tid, int num_thr
 		printf("[%d] return after recursive sort num_parts %d\n", tid, num_parts);
 #endif
 
-#if defined(REUSABLE_BARRIERS)
-		std_barrier_wait(&bitonic_barrier, &bitonic_lsense, tid, num_threads);
-#else
-		barrier_wait(&stage3a, num_threads);
-		if (tid == 0)
-			barrier_reset(&stage3a, num_threads); 
-
-		barrier_wait(&stage3b, num_threads);
-		if (tid == 0)
-			barrier_reset(&stage3b, num_threads); 
-#endif
+		barrier_wait(&bitonic_barrier, &bitonic_lsense, tid, num_threads);
 
 		// after every round of recursive sort, num_parts will reduce by this factor
 		num_parts >>= (i + 2);
@@ -288,17 +244,7 @@ int bitonic_sort_table_parallel(table_t *table, int column, int tid, int num_thr
 	recBitonicSort(table, tid == 0 ? 0 : (tid * N) / num_threads, (N / num_threads),
 		column, ASCENDING, tid);
 
-#if defined(REUSABLE_BARRIERS)
-	std_barrier_wait(&bitonic_barrier, &bitonic_lsense, tid, num_threads);
-#else
-	barrier_wait(&stage4a, num_threads);
-	if (tid == 0)
-		barrier_reset(&stage4a, num_threads); 
-
-	barrier_wait(&stage4b, num_threads);
-	if (tid == 0)
-		barrier_reset(&stage4b, num_threads); 
-#endif
+	barrier_wait(&bitonic_barrier, &bitonic_lsense, tid, num_threads);
 
 #if defined(PIN_TABLE_BITONIC)
 	// pin table

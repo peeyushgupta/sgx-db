@@ -90,40 +90,15 @@ int holding(struct spinlock *lock)
 }
 
 #endif /* DEBUG_SPINLOCKS */
-void barrier_init(volatile barrier_t *b) {
-	b->count = 0; 
-	b->seen = 0; 
-	return;
-}
 
-void barrier_wait(volatile barrier_t *b, unsigned int num_threads) {
-	__sync_fetch_and_add(&b->count, 1);
-	while (b->count != num_threads)
-		;
-	__sync_fetch_and_add(&b->seen, 1); 
-	return;
-}
-
-void barrier_reset(volatile barrier_t *b, unsigned int num_threads) {
-	while (b->seen != num_threads)
-		;
-	b->count = 0; 
-	b->seen = 0; 
-	return;
-}
-
-void barrier_dump(volatile barrier_t *b, int tid) {
-	ERR("from tid=%d: b:%p | b->count %d | b->seen %d\n", tid, b, b->count, b->seen);
-}
-
-void std_barrier_init(std_barrier_t *b) {
+void barrier_init(barrier_t *b) {
 	b->count = 0;
 	b->global_sense = 0;
 	return;
 }
 
 #ifdef NDEBUG	// if NDEBUG is defined, use release version
-void std_barrier_wait(std_barrier_t *b, volatile unsigned int *local_sense, unsigned int tid, unsigned int num_threads) {
+void barrier_wait(barrier_t *b, volatile unsigned int *local_sense, unsigned int tid, unsigned int num_threads) {
 	// flip local_sense
 	*local_sense = !(*local_sense);
 
@@ -140,7 +115,7 @@ void std_barrier_wait(std_barrier_t *b, volatile unsigned int *local_sense, unsi
 	return;
 }
 #else
-void std_barrier_wait(std_barrier_t *b, volatile unsigned int *local_sense, unsigned int tid, unsigned int num_threads) {
+void barrier_wait(barrier_t *b, volatile unsigned int *local_sense, unsigned int tid, unsigned int num_threads) {
 	// flip local_sense
 	*local_sense = !(*local_sense);
 	DBG("%s, tid %d , local_sense %d @ %p | global_sense %d | num_threads"
