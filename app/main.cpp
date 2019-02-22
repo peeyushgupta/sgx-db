@@ -38,6 +38,7 @@ int main(){
 #endif
 #if defined(TEST_BARRIERS)
 	// 8 threads, 50 iterations
+	DBG("Testing barriers\n");
 	test_barriers(eid, 8, 50);
 #endif
 #if defined(OCALL_ECALL_TESTS)

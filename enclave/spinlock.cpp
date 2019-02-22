@@ -115,3 +115,57 @@ void barrier_reset(volatile barrier_t *b, unsigned int num_threads) {
 void barrier_dump(volatile barrier_t *b, int tid) {
 	ERR("from tid=%d: b:%p | b->count %d | b->seen %d\n", tid, b, b->count, b->seen);
 }
+
+void std_barrier_init(std_barrier_t *b) {
+	b->count = 0;
+	b->global_sense = 0;
+	return;
+}
+
+#ifdef NDEBUG	// if NDEBUG is defined, use release version
+void std_barrier_wait(std_barrier_t *b, volatile unsigned int *local_sense, unsigned int tid, unsigned int num_threads) {
+	// flip local_sense
+	*local_sense = !(*local_sense);
+
+	// XXX: add and fetch
+	// equivalent to atomic ++b->count == num_threads
+	if (__sync_add_and_fetch(&b->count, 1) == num_threads) {
+		// reset the barrier
+		b->count = 0;
+		b->global_sense = *local_sense;
+	} else {
+		// Wait until global_sense is equal to local_sense of the waiting thread
+		while (b->global_sense != *local_sense) ;
+	}
+	return;
+}
+#else
+void std_barrier_wait(std_barrier_t *b, volatile unsigned int *local_sense, unsigned int tid, unsigned int num_threads) {
+	// flip local_sense
+	*local_sense = !(*local_sense);
+	DBG("%s, tid %d , local_sense %d @ %p | global_sense %d | num_threads"
+			" %d\n", __func__, tid, *local_sense, local_sense,
+			b->global_sense, num_threads);
+
+	// XXX: add and fetch
+	// equivalent to atomic ++b->count == num_threads
+	if (__sync_add_and_fetch(&b->count, 1) == num_threads) {
+		// reset the barrier
+		b->count = 0;
+		b->global_sense = *local_sense;
+
+		DBG("%s, tid %d resetting count = %d | global_sense %d\n",
+				__func__, tid, b->count, b->global_sense);
+
+	} else {
+		DBG("%s, tid %d waiting at global_sense %d | local_sense %d\n",
+				__func__, tid, b->global_sense, *local_sense);
+		// Wait until global_sense is equal to local_sense of the waiting thread
+		while (b->global_sense != *local_sense) ;
+
+		DBG("%s, tid %d leaves barrier global_sense %d | local_sense %d\n",
+				__func__, tid, b->global_sense,	*local_sense);
+	}
+	return;
+}
+#endif

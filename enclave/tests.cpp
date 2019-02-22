@@ -62,9 +62,15 @@ int ecall_spinlock_inc(unsigned long count) {
 barrier_t _b1 = {0};
 barrier_t _b2 = {0};
 
+std_barrier_t b;
+thread_local volatile unsigned int lsense = 0;
+
 int ecall_barrier_test(unsigned long count, int num_threads, int tid) {
 
 	for (auto i = 0u; i < count; i++) {
+#if defined(REUSABLE_BARRIERS)
+		std_barrier_wait(&b, &lsense, tid, num_threads);
+#else
 		barrier_wait(&_b1, num_threads);
 		if(tid == 0)
 			barrier_reset(&_b1, num_threads);
@@ -72,6 +78,7 @@ int ecall_barrier_test(unsigned long count, int num_threads, int tid) {
 		barrier_wait(&_b2, num_threads);
 		if(tid == 0)
 			barrier_reset(&_b2, num_threads);
+#endif
 	}
 
 }

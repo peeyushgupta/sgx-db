@@ -172,10 +172,13 @@ barrier_t stage3b = {.count = 0, .seen = 0};
 barrier_t stage4a = {.count = 0, .seen = 0};
 barrier_t stage4b = {.count = 0, .seen = 0};
 
+std_barrier_t bitonic_barrier = { .count = 0, .global_sense = 0 };
+thread_local volatile unsigned int bitonic_lsense = 0;
 
 int bitonic_sort_table_parallel(table_t *table, int column, int tid, int num_threads) {
 
 	auto N = table->num_rows;
+
 	assert (((N & (N - 1)) == 0));
 	// printf("%s, num_rows %d | tid = %d\n", __func__, table->num_rows, tid);
 
@@ -188,22 +191,28 @@ int bitonic_sort_table_parallel(table_t *table, int column, int tid, int num_thr
 	if (tid == 0)
 		pin_table(table);
 #endif
+
+#if defined(REUSABLE_BARRIERS)
+	std_barrier_wait(&bitonic_barrier, &bitonic_lsense, tid, num_threads);
+#else
 	barrier_wait(&stage0, num_threads);
 
 	if(tid == 0)
 		barrier_reset(&stage0, num_threads);
+#endif
+
 
 	// stage 1: the whole data is split into shards for num_threads threads
 	recBitonicSort(table, tid == 0 ? 0 : (tid * N) / num_threads, (N / num_threads),
 			column, (tid % 2 == 0) ? ASCENDING : DESCENDING, tid);
 
-
-	//stage1.fetch_add(1, std::memory_order_seq_cst);
-	//while (stage1 != num_threads) ;
-
+#if defined(REUSABLE_BARRIERS)
+	std_barrier_wait(&bitonic_barrier, &bitonic_lsense, tid, num_threads);
+#else
 	barrier_wait(&stage1, num_threads);
 	if (tid == 0)
 		barrier_reset(&stage1, num_threads); 
+#endif
 
 	// num_stages: Number of stages of processing after stage 1 until num_threads
 	// independent bitonic sequences are split. After that the last stage is to
@@ -215,8 +224,6 @@ int bitonic_sort_table_parallel(table_t *table, int column, int tid, int num_thr
 
 		// loop until we have num_threads independent bitonic sequences to work on
 		do {
-			// Injective function to get unique idx into our reusable barrier array
-			auto idx = (2*i) + (3*j);
 			auto sets = num_parts >> 1;
 			auto threads_per_set = num_threads / sets;
 			auto num_sets_passed =
@@ -236,9 +243,10 @@ int bitonic_sort_table_parallel(table_t *table, int column, int tid, int num_thr
 
 			// when we do bitonic split, num_parts is doubled
 			num_parts *= 2;
-			//stage2[idx]++;
-			// barrier
-			//while (stage2[idx] != num_threads) ;
+
+#if defined(REUSABLE_BARRIERS)
+			std_barrier_wait(&bitonic_barrier, &bitonic_lsense, tid, num_threads);
+#else
 			barrier_wait(&stage2a, num_threads);
 			if (tid == 0)
 				barrier_reset(&stage2a, num_threads); 
@@ -246,7 +254,7 @@ int bitonic_sort_table_parallel(table_t *table, int column, int tid, int num_thr
 			barrier_wait(&stage2b, num_threads);
 			if (tid == 0)
 				barrier_reset(&stage2b, num_threads); 
-
+#endif
 			++j;
 		} while ((num_parts >> 1) != num_threads);
 
@@ -256,9 +264,9 @@ int bitonic_sort_table_parallel(table_t *table, int column, int tid, int num_thr
 		printf("[%d] return after recursive sort num_parts %d\n", tid, num_parts);
 #endif
 
-		//++stage3[i];
-		// synchronize all threads
-		//while (stage3[i] != num_threads) ;
+#if defined(REUSABLE_BARRIERS)
+		std_barrier_wait(&bitonic_barrier, &bitonic_lsense, tid, num_threads);
+#else
 		barrier_wait(&stage3a, num_threads);
 		if (tid == 0)
 			barrier_reset(&stage3a, num_threads); 
@@ -266,7 +274,7 @@ int bitonic_sort_table_parallel(table_t *table, int column, int tid, int num_thr
 		barrier_wait(&stage3b, num_threads);
 		if (tid == 0)
 			barrier_reset(&stage3b, num_threads); 
-
+#endif
 
 		// after every round of recursive sort, num_parts will reduce by this factor
 		num_parts >>= (i + 2);
@@ -280,6 +288,9 @@ int bitonic_sort_table_parallel(table_t *table, int column, int tid, int num_thr
 	recBitonicSort(table, tid == 0 ? 0 : (tid * N) / num_threads, (N / num_threads),
 		column, ASCENDING, tid);
 
+#if defined(REUSABLE_BARRIERS)
+	std_barrier_wait(&bitonic_barrier, &bitonic_lsense, tid, num_threads);
+#else
 	barrier_wait(&stage4a, num_threads);
 	if (tid == 0)
 		barrier_reset(&stage4a, num_threads); 
@@ -287,6 +298,7 @@ int bitonic_sort_table_parallel(table_t *table, int column, int tid, int num_thr
 	barrier_wait(&stage4b, num_threads);
 	if (tid == 0)
 		barrier_reset(&stage4b, num_threads); 
+#endif
 
 #if defined(PIN_TABLE_BITONIC)
 	// pin table
