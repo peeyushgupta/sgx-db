@@ -51,14 +51,14 @@ enclave {
 
 		public int ecall_merge_and_sort_and_write(int db_id, 
 			int left_table_id, 
-			[in] int *project_columns_left, 
+			[user_check] int *project_columns_left,
 			int num_project_columns_left,
-			[in] int *promote_columns_left,
+			[user_check] int *promote_columns_left,
 			int num_pad_bytes_left,
-			int right_table_id, 
-			[in] int *project_columns_right, 
+			int right_table_id,
+			[user_check] int *project_columns_right,
 			int num_project_columns_right,
-			[in] int *promote_columns_right,
+			[user_check] int *promote_columns_right,
 			int num_pad_bytes_right,
 			[out] int *write_table_id);
 

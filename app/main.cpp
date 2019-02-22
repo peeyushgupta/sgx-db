@@ -65,6 +65,8 @@ int main(){
 	   rankings and udata tables */
 	test_rankings(eid);
 	
+	test_merge_sort_write(eid);
+
 	/* Destroy the enclave */
 	sgx_destroy_enclave(eid);
  

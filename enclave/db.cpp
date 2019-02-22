@@ -1231,6 +1231,14 @@ int project_promote_pad_table(
         return ret;
     }
 
+    row_old = (row_t*) malloc(row_size(tbl));
+    if(!row_old)
+	    return -ENOMEM;
+
+    row_new = (row_t*)malloc(row_size(tbl));
+    if(!row_new)
+	    return -ENOMEM;
+
     for (unsigned int i = 0; i < tbl->num_rows; i++) {
         // Read original row
         ret = read_row(tbl, i, row_old);
@@ -1291,7 +1299,7 @@ int ecall_merge_and_sort_and_write(int db_id,
 	row_t *row_left = NULL, *row_right = NULL, *join_row = NULL;
 	schema_t append_sc;
 	std::string append_table_name;  
-	int *append_table_id;
+	int append_table_id;
 
 	unsigned long long start, end;
 	unsigned long long cycles;
@@ -1377,7 +1385,7 @@ printf("Starting 3P...\n");
 		return ret; 
 	}
 
-	*append_table_id = append_table->id; 
+	append_table_id = append_table->id;
 
 	DBG("Created append table %s, id:%d\n", append_table_name.c_str(), append_table_id); 
 
@@ -1485,7 +1493,7 @@ printf("Starting 3P...\n");
 #endif	
 
 	// Join and write sorted table
-	ret = join_and_write_sorted_table( db, s_table, &c, write_table_id );
+	ret = join_and_write_sorted_table( db, append_table, &c, write_table_id );
 	if(ret) {
 			ERR("failed to join and write sorted table %s\n",
 				s_table->name.c_str());
@@ -1561,15 +1569,15 @@ int join_and_write_sorted_table(data_base_t *db, table_t *tbl, join_condition_t 
 
 	DBG("Created join table %s, id:%d\n", join_table_name.c_str(), join_table_id); 
 	
-	join_row = (row_t *) malloc(row_size(tbl_left) + row_size(tbl_right) - row_header_size());
+	join_row = (row_t *) malloc(row_size(tbl_left) + row_size(tbl_right));// - row_header_size());
 	if(!join_row)
 		return -ENOMEM;
 
-	row_left = (row_t *) malloc(row_size(tbl_left));
+	row_left = (row_t *) malloc(row_size(tbl_left) + row_size(tbl_right)); //- row_header_size()); //malloc(row_size(tbl_left));
 	if(!row_left)
 		return -ENOMEM;
 
-	row_right = (row_t *) malloc(row_size(tbl_right));
+	row_right = (row_t *) malloc(row_size(tbl_left) + row_size(tbl_right)); // - row_header_size()); //malloc(row_size(tbl_right));
 	if(!row_right)
 		return -ENOMEM;
 
