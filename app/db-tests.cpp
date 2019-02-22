@@ -792,7 +792,6 @@ int test_merge_sort_write(sgx_enclave_id_t eid)
 	char line[MAX_ROW_SIZE]; 
 	char data[MAX_ROW_SIZE];
 	uint8_t *row;
-	int *write_table_id;
 	sgx_status_t sgx_ret = SGX_ERROR_UNEXPECTED;
 
 	sc.num_fields = 4;
@@ -942,41 +941,57 @@ int test_merge_sort_write(sgx_enclave_id_t eid)
 	printf("created uservisits table with ID:%d | table_id:%d\n",
 			db_id, udata_table_id);
 
-	/* LINKING ERROR
-	if (!(db = get_db(db_id)))
-		return -1;
-	*/
 	int project_columns_left[3] = {0,1,2};
+	int* ptr_project_columns_left = (int*)project_columns_left;
 	int num_project_columns_left = 3;
 	int promote_columns_left[1] = {0};
+	int* ptr_promote_columns_left = (int*)promote_columns_left;
 	// unsigned long -> int conversion
 	int num_pad_bytes_left = max(row_size(&sc),row_size(&sc_udata))-row_size(&sc);
 
 	int project_columns_right[10] = {0,1,2,3,4,5,6,7,8,9};
+	int* ptr_project_columns_right = (int*)project_columns_right;
 	int num_project_columns_right = 10;
 	int promote_columns_right[1] = {1};
+	int* ptr_promote_columns_right = (int*)promote_columns_right;
 	// unsigned long -> int conversion
 	int num_pad_bytes_right = max(row_size(&sc),row_size(&sc_udata))-row_size(&sc_udata);
 
+#define PRINT_APPEND_WRITE_TABLE
+#define	CREATE_APPEND_TABLE
 /// Create multiple threads
+	{
+		int	write_table_id;
+		unsigned long long start, end;
+		start = RDTSC_START();
+		auto num_threads = 2u;
 
-	table_t* left_table = db->tables[rankings_table_id];
-	table_t* right_table = db->tables[udata_table_id];
+		ret = ecall_merge_and_sort_and_write(db_id,
+			rankings_table_id,
+			ptr_project_columns_left,
+			num_project_columns_left,
+			ptr_promote_columns_left,
+			num_pad_bytes_left,
+			udata_table_id,
+			ptr_project_columns_right,
+			num_project_columns_right,
+			ptr_promote_columns_right,
+			num_pad_bytes_right,
+			&write_table_id);
 
-	/* LINKING ERROR
-	ret = merge_and_sort_and_write(db,
-		left_table,
-		project_columns_left,
-		num_project_columns_left,
-		promote_columns_left,
-		(int)num_pad_bytes_left,
-		right_table,
-		project_columns_right,
-		num_project_columns_right,
-		promote_columns_right,
-		(int)num_pad_bytes_right,
-		write_table_id);
-	*/
+		//merge_and_sort_and_write_parallel(eid, db_id, table_id, 0, num_threads);
+#ifdef CREATE_APPEND_TABLE
+		ecall_flush_table(eid, &ret, db_id, write_table_id);
+#endif
+
+		end = RDTSCP();
+		printf("merge sort write table (in-place) + flushing took %llu cycles\n", end - start);
+
+#ifdef PRINT_APPEND_WRITE_TABLE
+		ecall_print_table_dbg(eid, &ret, db_id, write_table_id, 0, 16);
+#endif
+	}
+	
 	return 0;	
 }
 

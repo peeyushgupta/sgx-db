@@ -12,3 +12,4 @@ int test_bitonic_sort(sgx_enclave_id_t eid);
 int test_column_sort(sgx_enclave_id_t eid);
 void test_barriers(sgx_enclave_id_t eid, int num_threads, unsigned long count);
 int test_quick_sort(sgx_enclave_id_t eid);
+int test_merge_sort_write(sgx_enclave_id_t eid);

@@ -1189,9 +1189,9 @@ int project_row(row_t *old_row, schema_t *sc, row_t *new_row) {
 int project_promote_pad_table(
     data_base_t *db, 
     table_t *tbl, 
-    int project_columns [], 
+    int *project_columns, 
     int num_project_columns,
-    int promote_columns [],
+    int *promote_columns,
     int num_pad_bytes,
     table_t **p3_tbl    
 )
@@ -1271,16 +1271,16 @@ cleanup:
 } 
 
 /* Number of parameters -- needs improvement */
-int merge_and_sort_and_write(data_base_t *db, 
-		table_t *tbl_left, 
-		int project_columns_left [], 
+int ecall_merge_and_sort_and_write(int db_id, 
+		int left_table_id, 
+		int *project_columns_left, 
 		int num_project_columns_left,
-		int promote_columns_left [],
+		int *promote_columns_left,
 		int num_pad_bytes_left,
-		table_t *tbl_right, 
-		int project_columns_right [], 
+		int right_table_id, 
+		int *project_columns_right, 
 		int num_project_columns_right,
-		int promote_columns_right [],
+		int *promote_columns_right,
 		int num_pad_bytes_right,
 		int *write_table_id)
 {
@@ -1296,6 +1296,13 @@ int merge_and_sort_and_write(data_base_t *db,
 	unsigned long long start, end;
 	unsigned long long cycles;
 	double secs;
+
+	data_base_t *db;
+	if (!(db = get_db(db_id)))
+		return -1;
+	
+	table_t* tbl_left = db->tables[left_table_id];
+	table_t* tbl_right = db->tables[right_table_id];
 
 #if defined(REPORT_3P_APPEND_SORT_JOIN_WRITE_STATS)
 	start = RDTSC();

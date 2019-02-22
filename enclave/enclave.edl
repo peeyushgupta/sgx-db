@@ -49,6 +49,19 @@ enclave {
 		public int ecall_quicksort_table(int db_id, int table_id, int field, [out] int *sorted_id);
 		public int ecall_quicksort_table_parallel(int db_id, int table_id, int field, int tid, int num_threads);
 
+		public int ecall_merge_and_sort_and_write(int db_id, 
+			int left_table_id, 
+			[in] int *project_columns_left, 
+			int num_project_columns_left,
+			[in] int *promote_columns_left,
+			int num_pad_bytes_left,
+			int right_table_id, 
+			[in] int *project_columns_right, 
+			int num_project_columns_right,
+			[in] int *promote_columns_right,
+			int num_pad_bytes_right,
+			[out] int *write_table_id);
+
 		/* Various tests */
 		public int ecall_spinlock_inc(unsigned long count);
 		public int ecall_scan_table_dbg(int db_id, int table_id);

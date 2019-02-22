@@ -193,19 +193,6 @@ int project_promote_pad_table(
 
 int print_table_dbg(table_t *table, int start, int end);
 
-int merge_and_sort_and_write(data_base_t *db, 
-		table_t *tbl_left, 
-		int project_columns_left [], 
-		int num_project_columns_left,
-		int promote_columns_left [],
-		int num_pad_bytes_left,
-		table_t *tbl_right, 
-		int project_columns_right [], 
-		int num_project_columns_right,
-		int promote_columns_right [],
-		int num_pad_bytes_right,
-		int* write_table_id);
-
 int join_and_write_sorted_table(data_base_t *db, table_t *tbl, join_condition_t *c, int *join_table_id);
 
 void *aligned_malloc(size_t size, size_t alignment);
@@ -225,5 +212,17 @@ int ecall_insert_row_dbg(int db_id, int table_id, void *row);
 int ecall_flush_table(int db_id, int table_id);
 int ecall_join(int db_id, join_condition_t *c, int *join_tbl_id);
 int ecall_quicksort_table(int db_id, int table_id, int field, int *sorted_id);
+int ecall_merge_and_sort_and_write(int db_id, 
+		int left_table_id, 
+		int *project_columns_left, 
+		int num_project_columns_left,
+		int *promote_columns_left,
+		int num_pad_bytes_left,
+		int right_table_id, 
+		int *project_columns_right, 
+		int num_project_columns_right,
+		int *promote_columns_right,
+		int num_pad_bytes_right,
+		int *write_table_id);
 #endif
 
