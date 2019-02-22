@@ -1312,24 +1312,7 @@ int ecall_merge_and_sort_and_write(int db_id,
 	if (! tbl_left || ! tbl_right)
 		return -3; 
 
-	append_table_name = "append:" + tbl_left->name + tbl_right->name; 
-
-	/* Is this the right way to create a schema to append two tables? */
-	ret = join_schema(&append_sc, &tbl_left->sc, &tbl_right->sc); 
-	if (ret) {
-		ERR("create table error:%d\n", ret);
-		return ret; 
-	}
-
-	ret = create_table(db, append_table_name, &append_sc, &append_table);
-	if (ret) {
-		ERR("create table:%d\n", ret);
-		return ret; 
-	}
-
-	*append_table_id = append_table->id; 
-
-	DBG("Created append table %s, id:%d\n", append_table_name.c_str(), append_table_id); 
+printf("Starting 3P...\n");
 
 	/* Project promote pad R */
 #if defined(REPORT_3P_STATS)
@@ -1379,6 +1362,25 @@ int ecall_merge_and_sort_and_write(int db_id,
 		return -6;
 	
 	/* Append R and S */
+	append_table_name = "append:" + tbl_left->name + tbl_right->name; 
+
+	/* Is this the right way to create a schema to append two tables? */
+	ret = join_schema(&append_sc, &tbl_left->sc, &tbl_right->sc); 
+	if (ret) {
+		ERR("create table error:%d\n", ret);
+		return ret; 
+	}
+
+	ret = create_table(db, append_table_name, &append_sc, &append_table);
+	if (ret) {
+		ERR("create table:%d\n", ret);
+		return ret; 
+	}
+
+	*append_table_id = append_table->id; 
+
+	DBG("Created append table %s, id:%d\n", append_table_name.c_str(), append_table_id); 
+
 	// READ S first then R 
 #if defined(REPORT_APPEND_STATS)
 	start = RDTSC();

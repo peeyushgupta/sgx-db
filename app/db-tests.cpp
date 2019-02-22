@@ -957,6 +957,8 @@ int test_merge_sort_write(sgx_enclave_id_t eid)
 	// unsigned long -> int conversion
 	int num_pad_bytes_right = max(row_size(&sc),row_size(&sc_udata))-row_size(&sc_udata);
 
+	printf("set up input for the algorithm\n");
+
 #define PRINT_APPEND_WRITE_TABLE
 #define	CREATE_APPEND_TABLE
 /// Create multiple threads
