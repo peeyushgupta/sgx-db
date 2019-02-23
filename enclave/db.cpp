@@ -491,16 +491,25 @@ bool compare_rows(schema_t *sc, int column, row_t *row_l, row_t *row_r) {
 /* XXX: accidentally ended up writing the same function twice */
 
 bool cmp_row(table_t *tbl_left, row_t *row_left, int field_left, table_t *tbl_right, row_t *row_right, int field_right) {
-
+	/*
+	DBG("field left (%d), left type (%d), field right (%d), right type (%d)\n",
+	field_left, tbl_left->sc.types[field_left], 
+	field_right, tbl_right->sc.types[field_right]);
+	*/
 	if(tbl_left->sc.types[field_left] != tbl_right->sc.types[field_right])
 		return false;
+
 	switch (tbl_left->sc.types[field_left]) {
-	case BOOLEAN: 
+	case BOOLEAN: {
 		return (*((bool*)get_column(&tbl_left->sc, field_left, row_left)) 
 			== *((bool*)get_column(&tbl_right->sc, field_right, row_right))); 
-	case INTEGER: 
+	}
+	case INTEGER: {
+		INFO("left value (%d), right value (%d)\n", *((int*)get_column(&tbl_left->sc, field_left, row_left)), *((int*)get_column(&tbl_right->sc, field_right, row_right)));
+		
 		return (*((int*)get_column(&tbl_left->sc, field_left, row_left)) 
 			== *((int*)get_column(&tbl_right->sc, field_right, row_right))); 
+	}
 	case TINYTEXT: {
 		char *left = (char*)get_column(&tbl_left->sc, field_left, row_left); 
 		char *right = (char*)get_column(&tbl_right->sc, field_right, row_right);
@@ -692,8 +701,8 @@ int ecall_join(int db_id, join_condition_t *c, int *join_table_id) {
 			}
 
 			for(unsigned int k = 0; k < c->num_conditions; k++) {
-				DBG_ON(JOIN_VERBOSE, "comparing (i:%d, j:%d, k:%d\n", i, j, k); 
-
+				// DBG_ON(JOIN_VERBOSE, "comparing (i:%d, j:%d, k:%d\n", i, j, k); 
+				// DBG("comparing (i:%d, j:%d, k:%d\n", i, j, k); 
 				eq = cmp_row(tbl_left, row_left, c->fields_left[k], tbl_right, row_right, c->fields_right[k]);
 				if (!eq) {
 					equal = eq; 
@@ -702,9 +711,15 @@ int ecall_join(int db_id, join_condition_t *c, int *join_table_id) {
 			}
 
 			if (equal) { 
-				DBG_ON(JOIN_VERBOSE, "joining (i:%d, j:%d)\n", i, j); 
+				INFO("value is equal: joining (i:%d, j:%d)\n", i, j); 
+				//DBG_ON(JOIN_VERBOSE, "joining (i:%d, j:%d)\n", i, j); 
 
-				ret = join_rows(join_row, join_sc.row_data_size, row_left, tbl_left->sc.row_data_size, row_right, tbl_right->sc.row_data_size); 
+				DBG("size of join row data size: %d, right row size: %d, left row data size\n", join_sc.row_data_size, 
+					tbl_left->sc.row_data_size, tbl_right->sc.row_data_size); 
+
+				ret = join_rows(join_row, join_sc.row_data_size, 
+					row_left, tbl_left->sc.row_data_size, 
+					row_right, tbl_right->sc.row_data_size); 
 				if(ret) {
 					ERR("failed to produce a joined row %d of table %s with row %d of table %s\n",
 						i, tbl_left->name.c_str(), j, tbl_right->name.c_str());
@@ -1320,15 +1335,12 @@ int ecall_merge_and_sort_and_write(int db_id,
 	if (! tbl_left || ! tbl_right)
 		return -3; 
 
-printf("Starting 3P...\n");
-
 	/* Project promote pad R */
 #if defined(REPORT_3P_STATS)
 	start = RDTSC();
 #endif
 
-	ret = project_promote_pad_table( db, tbl_left, project_columns_left, num_project_columns_left, 
-		promote_columns_left, num_pad_bytes_left, &p3_tbl_left);
+	ret = project_promote_pad_table( db, tbl_left, project_columns_left, num_project_columns_left, promote_columns_left, num_pad_bytes_left, &p3_tbl_left);
 
 #if defined(REPORT_3P_STATS)
 	end = RDTSC();
@@ -1336,7 +1348,7 @@ printf("Starting 3P...\n");
 	cycles = end - start;
 	secs = (cycles / cycles_per_sec);
 
-	INFO("Project Promote Pad R took %llu cycles (%f sec)\n", cycles, secs);
+	INFO(" Project Promote Pad R took %llu cycles (%f sec)\n", cycles, secs);
 #endif
 
 	/* Project promote pad S */
@@ -1344,8 +1356,7 @@ printf("Starting 3P...\n");
 	start = RDTSC();
 #endif
 
-	ret = project_promote_pad_table( db, tbl_right, project_columns_right, num_project_columns_right, 
-		promote_columns_right, num_pad_bytes_right, &p3_tbl_right);
+	ret = project_promote_pad_table( db, tbl_right, project_columns_right, 		 		num_project_columns_right, promote_columns_right, num_pad_bytes_right, &p3_tbl_right);
 
 #if defined(REPORT_3P_STATS)
 	end = RDTSC();
@@ -1353,7 +1364,7 @@ printf("Starting 3P...\n");
 	cycles = end - start;
 	secs = (cycles / cycles_per_sec);
 
-	INFO("Project Promote Pad S took %llu cycles (%f sec)\n", cycles, secs);
+	INFO(" Project Promote Pad S took %llu cycles (%f sec)\n", cycles, secs);
 #endif
 
 	row_left = (row_t *) malloc(row_size(p3_tbl_left));
@@ -1387,7 +1398,7 @@ printf("Starting 3P...\n");
 
 	append_table_id = append_table->id;
 
-	DBG("Created append table %s, id:%d\n", append_table_name.c_str(), append_table_id); 
+	DBG(" Created append table %s, id:%d\n", append_table_name.c_str(), append_table_id); 
 
 	// READ S first then R 
 #if defined(REPORT_APPEND_STATS)
@@ -1420,7 +1431,7 @@ printf("Starting 3P...\n");
 	cycles = end - start;
 	secs = (cycles / cycles_per_sec);
 
-	INFO("Append S took %llu cycles (%f sec)\n", cycles, secs);
+	INFO(" Append S took %llu cycles (%f sec)\n", cycles, secs);
 #endif
 
 	// Read R row and append
@@ -1452,7 +1463,7 @@ printf("Starting 3P...\n");
 	cycles = end - start;
 	secs = (cycles / cycles_per_sec);
 
-	INFO("Append R took %llu cycles (%f sec)\n", cycles, secs);
+	INFO(" Append R took %llu cycles (%f sec)\n", cycles, secs);
 #endif
 
 //// 1 THREAD SERIEAL
@@ -1480,7 +1491,7 @@ printf("Starting 3P...\n");
 	cycles = end - start;
 	secs = (cycles / cycles_per_sec);
 
-	INFO("bitonic sork took %llu cycles (%f sec)\n", cycles, secs);
+	INFO(" Bitonic sork took %llu cycles (%f sec)\n", cycles, secs);
 #endif
 
 	/* Later remove join condition - each row has the info where it came from */
@@ -1505,7 +1516,7 @@ printf("Starting 3P...\n");
 	cycles = end - start;
 	secs = (cycles / cycles_per_sec);
 
-	INFO("join and write sorted table took %llu cycles (%f sec)\n", cycles, secs);
+	INFO(" Join and write sorted table took %llu cycles (%f sec)\n", cycles, secs);
 #endif
 	ret = 0;
 
@@ -1521,7 +1532,7 @@ cleanup:
 	cycles = end - start;
 	secs = (cycles / cycles_per_sec);
 
-	INFO("3p, append, sort, join and write sorted table took %llu cycles (%f sec)\n", cycles, secs);
+	INFO(" 3p, append, sort, join and write sorted table took %llu cycles (%f sec)\n", cycles, secs);
 #endif
 	return ret; 
 }
@@ -1569,18 +1580,17 @@ int join_and_write_sorted_table(data_base_t *db, table_t *tbl, join_condition_t 
 
 	DBG("Created join table %s, id:%d\n", join_table_name.c_str(), join_table_id); 
 	
-	join_row = (row_t *) malloc(row_size(tbl_left) + row_size(tbl_right));// - row_header_size());
+	join_row = (row_t *) malloc(std::max(row_size(tbl_left),row_size(tbl_right)));// - row_header_size());
 	if(!join_row)
 		return -ENOMEM;
 
-	row_left = (row_t *) malloc(row_size(tbl_left) + row_size(tbl_right)); //- row_header_size()); //malloc(row_size(tbl_left));
+	row_left = (row_t *) malloc(std::max(row_size(tbl_left),row_size(tbl_right))); //- row_header_size()); //malloc(row_size(tbl_left));
 	if(!row_left)
 		return -ENOMEM;
 
-	row_right = (row_t *) malloc(row_size(tbl_left) + row_size(tbl_right)); // - row_header_size()); //malloc(row_size(tbl_right));
+	row_right = (row_t *) malloc(std::max(row_size(tbl_left),row_size(tbl_right))); // - row_header_size()); //malloc(row_size(tbl_right));
 	if(!row_right)
 		return -ENOMEM;
-
 
 	for (unsigned long i = 0; i < tbl->num_rows; i ++) {
 
@@ -1620,10 +1630,14 @@ int join_and_write_sorted_table(data_base_t *db, table_t *tbl, join_condition_t 
 			}
 			else {
 				// Else if left_row and right_row came from different table, perform real join
+				/*
+				DBG("left row came from (%d), right row came from (%d)\n", row_left->header.from, row_right->header.from);
+				*/
 
 				// compare left and right
 				for(unsigned int k = 0; k < c->num_conditions; k++) {
-					DBG_ON(JOIN_VERBOSE, "comparing (i:%d, j:%d, k:%d\n", i, j, k); 
+					//DBG_ON(JOIN_VERBOSE, "comparing (i:%d, j:%d, k:%d\n", i, j, k); 
+					//DBG("comparing (i:%d, j:%d, k:%d\n", i, j, k);
 
 					/* How do we know whether the row came from which table? */
 					eq = cmp_row(tbl_left, row_left, c->fields_left[k], tbl_right, row_right, c->fields_right[k]);
@@ -1649,7 +1663,11 @@ int join_and_write_sorted_table(data_base_t *db, table_t *tbl, join_condition_t 
 							i, tbl_left->name.c_str(), j, tbl_right->name.c_str());
 						goto cleanup;
 					}
+				} else
+				{
+					DBG("not equal (%d)\n");
 				}
+				
 			}	// if left_row and right_row came from different table, perform real join
 		}
 	}
