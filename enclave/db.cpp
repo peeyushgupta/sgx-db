@@ -21,6 +21,7 @@
 #include <cerrno>
 
 #include "bitonic_sort.hpp"
+#include "column_sort.hpp"
 //#define FILE_READ_SIZE (1 << 12)
 
 #define FILE_READ_SIZE DATA_BLOCK_SIZE
@@ -1477,8 +1478,8 @@ int ecall_merge_and_sort_and_write(int db_id,
 	start = RDTSC();
 #endif
 	// Refer to parallelization and update - column_sort_table_parallel();
-
-	ret = bitonic_sort_table(db, append_table, field, &s_table); 
+	ret = column_sort_table(db, append_table, field);
+	//ret = bitonic_sort_table(db, append_table, field, &s_table);
 	//ret = quick_sort_table(db, append_table, field, &s_table); 
 	if(ret) {
 			ERR("failed to bitonic sort table %s\n",
@@ -1491,7 +1492,7 @@ int ecall_merge_and_sort_and_write(int db_id,
 	cycles = end - start;
 	secs = (cycles / cycles_per_sec);
 
-	INFO(" Bitonic sork took %llu cycles (%f sec)\n", cycles, secs);
+	INFO("Sorting merged table took %llu cycles (%f sec)\n", cycles, secs);
 #endif
 
 	/* Later remove join condition - each row has the info where it came from */
