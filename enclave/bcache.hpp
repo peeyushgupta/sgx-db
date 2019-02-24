@@ -10,7 +10,7 @@
 //#define DATA_BLOCK_SIZE (1 << 20) /* 1 MB  */
 //#define DATA_BLOCK_SIZE (1*(1 << 20)) /* X MB  */
 
-#define DATA_BLKS_PER_DB 256 /* data blocks per DB */
+#define DATA_BLKS_PER_DB 512 /* data blocks per DB */
 //#define DATA_BLKS_PER_DB 7 /* data blocks per DB */
 
 
