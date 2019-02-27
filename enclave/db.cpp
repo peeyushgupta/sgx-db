@@ -492,11 +492,12 @@ bool compare_rows(schema_t *sc, int column, row_t *row_l, row_t *row_r) {
 /* XXX: accidentally ended up writing the same function twice */
 
 bool cmp_row(table_t *tbl_left, row_t *row_left, int field_left, table_t *tbl_right, row_t *row_right, int field_right) {
-	/*
-	DBG("field left (%d), left type (%d), field right (%d), right type (%d)\n",
+	
+	/*DBG("field left (%d), left type (%d), field right (%d), right type (%d)\n",
 	field_left, tbl_left->sc.types[field_left], 
 	field_right, tbl_right->sc.types[field_right]);
 	*/
+	
 	if(tbl_left->sc.types[field_left] != tbl_right->sc.types[field_right])
 		return false;
 
@@ -506,8 +507,6 @@ bool cmp_row(table_t *tbl_left, row_t *row_left, int field_left, table_t *tbl_ri
 			== *((bool*)get_column(&tbl_right->sc, field_right, row_right))); 
 	}
 	case INTEGER: {
-		INFO("left value (%d), right value (%d)\n", *((int*)get_column(&tbl_left->sc, field_left, row_left)), *((int*)get_column(&tbl_right->sc, field_right, row_right)));
-		
 		return (*((int*)get_column(&tbl_left->sc, field_left, row_left)) 
 			== *((int*)get_column(&tbl_right->sc, field_right, row_right))); 
 	}
@@ -1380,6 +1379,9 @@ int ecall_merge_and_sort_and_write(int db_id,
 	// Is this validation enough before appending?
 	if( row_size(p3_tbl_left) != row_size(p3_tbl_right) )
 		return -6;
+
+	INFO(" Size of the left table AFTER 3P %d\n", p3_tbl_left->num_rows);
+	INFO(" Size of the right table AFTER 3P %d\n", p3_tbl_right->num_rows);
 	
 	/* Append R and S */
 	append_table_name = "append:" + tbl_left->name + tbl_right->name; 
@@ -1450,12 +1452,12 @@ int ecall_merge_and_sort_and_write(int db_id,
 		}
 
 		/* Add left row to the append table */
-			ret = insert_row_dbg(append_table, row_left);
-			if(ret) {
-				ERR("failed to append row %d of table %s to %s table\n",
-					i, tbl_left->name.c_str(), append_table->name.c_str());
-				goto cleanup;
-			}
+		ret = insert_row_dbg(append_table, row_left);
+		if(ret) {
+			ERR("failed to append row %d of table %s to %s table\n",
+				i, tbl_left->name.c_str(), append_table->name.c_str());
+			goto cleanup;
+		}
 	}
 
 #if defined(REPORT_APPEND_STATS)
@@ -1468,6 +1470,8 @@ int ecall_merge_and_sort_and_write(int db_id,
 #endif
 
 //// 1 THREAD SERIEAL
+
+	INFO(" Size of the table BEFORE sorting table %d", append_table->num_rows);
 
 	// Sort: 1) bitonic or 2) quick
 	/* Which field to sort? */
@@ -1482,9 +1486,9 @@ int ecall_merge_and_sort_and_write(int db_id,
 	//ret = bitonic_sort_table(db, append_table, field, &s_table);
 	//ret = quick_sort_table(db, append_table, field, &s_table); 
 	if(ret) {
-			ERR("failed to bitonic sort table %s\n",
-				append_table->name.c_str());
-			goto cleanup;
+		ERR("failed to bitonic sort table %s\n",
+			append_table->name.c_str());
+		goto cleanup;
 	}
 
 #if defined(REPORT_SORT_STATS)
@@ -1492,7 +1496,7 @@ int ecall_merge_and_sort_and_write(int db_id,
 	cycles = end - start;
 	secs = (cycles / cycles_per_sec);
 
-	INFO("Sorting merged table took %llu cycles (%f sec)\n", cycles, secs);
+	INFO(" Sorting merged table took %llu cycles (%f sec)\n", cycles, secs);
 #endif
 
 	/* Later remove join condition - each row has the info where it came from */
@@ -1504,13 +1508,22 @@ int ecall_merge_and_sort_and_write(int db_id,
 	start = RDTSC();
 #endif	
 
+	INFO(" Size of the table BEFORE writing sorted table %d\n", append_table->num_rows);
+
+	append_table->num_rows = tbl_left->num_rows + tbl_right->num_rows;
+
+	int max_joinability;
+	max_joinability = 22;
+
 	// Join and write sorted table
-	ret = join_and_write_sorted_table( db, append_table, &c, write_table_id );
+	ret = join_and_write_sorted_table( db, append_table, max_joinability, &c, write_table_id );
 	if(ret) {
-			ERR("failed to join and write sorted table %s\n",
-				s_table->name.c_str());
-			goto cleanup;
+		ERR("failed to join and write sorted table %s\n",
+			append_table->name.c_str());
+		goto cleanup;
 	}
+
+	INFO(" Finished appended table writing \n");
 	
 #if defined(REPORT_JOIN_WRITE_STATS)
 	end = RDTSC();
@@ -1539,7 +1552,7 @@ cleanup:
 }
 
 /* Later replace db_id with db */
-int join_and_write_sorted_table(data_base_t *db, table_t *tbl, join_condition_t *c, int *join_table_id)
+int join_and_write_sorted_table(data_base_t *db, table_t *tbl, int max_joinability, join_condition_t *c, int *join_table_id)
 {
 	auto N = tbl->num_rows;
 	assert (((N & (N - 1)) == 0));
@@ -1579,7 +1592,7 @@ int join_and_write_sorted_table(data_base_t *db, table_t *tbl, join_condition_t 
 
 	*join_table_id = join_table->id; 
 
-	DBG("Created join table %s, id:%d\n", join_table_name.c_str(), join_table_id); 
+	DBG("Created join table %s, id:%d\n", join_table_name.c_str(), *join_table_id); 
 	
 	join_row = (row_t *) malloc(std::max(row_size(tbl_left),row_size(tbl_right)));// - row_header_size());
 	if(!join_row)
@@ -1593,7 +1606,23 @@ int join_and_write_sorted_table(data_base_t *db, table_t *tbl, join_condition_t 
 	if(!row_right)
 		return -ENOMEM;
 
-	for (unsigned long i = 0; i < tbl->num_rows; i ++) {
+	unsigned int size = tbl->num_rows;
+	unsigned int joinability = max_joinability;
+	
+	for (int i = 0; i < size; i ++) {
+
+		// DBG("Iteration (%d)\n", i);
+		if( i >= size )
+			break;
+
+		unsigned int starting = i + 1;
+		//DBG("starting (%d), ending (%d)\n", starting, i + joinability + 1);
+		
+		if( starting >= size )
+		{
+			//DBG("R starting (%d) >= size (%d)\n", starting, size);
+			break;
+		}
 
 		// Read left row
 		ret = read_row(tbl, i, row_left);
@@ -1604,7 +1633,14 @@ int join_and_write_sorted_table(data_base_t *db, table_t *tbl, join_condition_t 
 		}
 
 		// Read right row
-		for (unsigned long j = i+1; j < tbl->num_rows; j ++) {
+		for ( int j = starting; j < i + joinability + 1; j ++ ) {
+
+			// Don't go over the size of append table
+			if( j >= size )
+			{
+				//DBG("S starting (%d) >= size (%d)\n", j, size);
+				break;
+			}
 
 			bool equal = true;
 			bool eq;
@@ -1612,7 +1648,7 @@ int join_and_write_sorted_table(data_base_t *db, table_t *tbl, join_condition_t 
 			ret = read_row(tbl, j, row_right);
 			if(ret) {
 				ERR("failed to read row %d of table %s\n",
-					i, tbl_right->name.c_str());
+					j, tbl_right->name.c_str());
 				goto cleanup;
 			}
 
@@ -1620,7 +1656,7 @@ int join_and_write_sorted_table(data_base_t *db, table_t *tbl, join_condition_t 
 			if( row_left->header.from == row_right->header.from )
 			{
 				join_row->header.fake = true; 
-			
+
 				// Add a fake row to the join table
 				ret = insert_row_dbg(join_table, join_row);
 				if(ret) {
@@ -1637,8 +1673,8 @@ int join_and_write_sorted_table(data_base_t *db, table_t *tbl, join_condition_t 
 
 				// compare left and right
 				for(unsigned int k = 0; k < c->num_conditions; k++) {
-					//DBG_ON(JOIN_VERBOSE, "comparing (i:%d, j:%d, k:%d\n", i, j, k); 
-					//DBG("comparing (i:%d, j:%d, k:%d\n", i, j, k);
+					// DBG_ON(JOIN_VERBOSE, "comparing (i:%d, j:%d, k:%d\n", i, j, k); 
+					// DBG("comparing (i:%d, j:%d, k:%d\n", i, j, k);
 
 					/* How do we know whether the row came from which table? */
 					eq = cmp_row(tbl_left, row_left, c->fields_left[k], tbl_right, row_right, c->fields_right[k]);
@@ -1648,7 +1684,8 @@ int join_and_write_sorted_table(data_base_t *db, table_t *tbl, join_condition_t 
 				}
 
 				if (equal) { 
-					DBG_ON(JOIN_VERBOSE, "joining (i:%d, j:%d)\n", i, j); 
+					// DBG_ON(JOIN_VERBOSE, "joining (i:%d, j:%d)\n", i, j); 
+					//DBG("joining (i:%d, j:%d)\n", i, j); 
 
 					ret = join_rows(join_row, join_sc.row_data_size, row_left, tbl_left->sc.row_data_size, row_right, tbl_right->sc.row_data_size); 
 					if(ret) {
@@ -1664,17 +1701,16 @@ int join_and_write_sorted_table(data_base_t *db, table_t *tbl, join_condition_t 
 							i, tbl_left->name.c_str(), j, tbl_right->name.c_str());
 						goto cleanup;
 					}
-				} else
-				{
-					DBG("not equal (%d)\n");
-				}
+				} 
 				
 			}	// if left_row and right_row came from different table, perform real join
+
 		}
+
+		bflush(join_table); 	
 	}
 
-	bflush(join_table); 
-
+	INFO(" Finished writing the table\n");
 	ret = 0;
 
 cleanup: 
