@@ -1208,13 +1208,14 @@ int project_promote_pad_table(
     int num_project_columns,
     int *promote_columns,
     int num_pad_bytes,
-    table_t **p3_tbl    
+    table_t **p3_tbl,
+    schema_t *p3_schema
 )
 {
     int ret;
     std::string p3_tbl_name;
     schema_t project_sc, project_promote_sc, project_promote_pad_sc;
-    row_t *row_old, *row_new;
+    row_t *row_old, *row_new, *row_new2;
     p3_tbl_name = "p3:" + tbl->name;
 
     ret = project_schema(&tbl->sc, 
@@ -1250,8 +1251,12 @@ int project_promote_pad_table(
     if(!row_old)
 	    return -ENOMEM;
 
-    row_new = (row_t*)malloc(row_size(tbl));
+    row_new = (row_t*)malloc(row_size(*p3_tbl));
     if(!row_new)
+	    return -ENOMEM;
+
+    row_new2 = (row_t*)malloc(row_size(*p3_tbl));
+    if(!row_new2)
 	    return -ENOMEM;
 
     for (unsigned int i = 0; i < tbl->num_rows; i++) {
@@ -1270,8 +1275,14 @@ int project_promote_pad_table(
             goto cleanup;
         }
 
+	ret = promote_row(row_new, &project_promote_pad_sc, promote_columns[0], row_new2);
+        if(ret) {
+            ERR("project_row failed on row %d of table %s\n", i, tbl->name.c_str());
+            goto cleanup;
+        }
+
         // Add row to table
-        ret = insert_row_dbg(*p3_tbl, row_new);
+        ret = insert_row_dbg(*p3_tbl, row_new2);
         if(ret) {
             ERR("insert_row_db failed on row %d of table %s\n", i,
                 (*p3_tbl)->name.c_str());
@@ -1280,6 +1291,7 @@ int project_promote_pad_table(
     }
 
     bflush(*p3_tbl);
+    *p3_schema = project_promote_pad_sc;
     ret = 0;
 
 cleanup:
@@ -1288,6 +1300,9 @@ cleanup:
 
     if (row_new)
         free(row_new);
+
+    if (row_new2)
+	free(row_new2);
 
     return ret;
     
@@ -1312,7 +1327,7 @@ int ecall_merge_and_sort_and_write(int db_id,
 
 	table_t *p3_tbl_left, *p3_tbl_right, *append_table, *s_table;
 	row_t *row_left = NULL, *row_right = NULL, *join_row = NULL;
-	schema_t append_sc;
+	schema_t append_sc, p3_left_schema, p3_right_schema;
 	std::string append_table_name;  
 	int append_table_id;
 
@@ -1339,8 +1354,9 @@ int ecall_merge_and_sort_and_write(int db_id,
 #if defined(REPORT_3P_STATS)
 	start = RDTSC();
 #endif
-
-	ret = project_promote_pad_table( db, tbl_left, project_columns_left, num_project_columns_left, promote_columns_left, num_pad_bytes_left, &p3_tbl_left);
+	ret = project_promote_pad_table(db, tbl_left, project_columns_left,
+			num_project_columns_left, promote_columns_left,
+			num_pad_bytes_left, &p3_tbl_left, &p3_left_schema);
 
 #if defined(REPORT_3P_STATS)
 	end = RDTSC();
@@ -1356,7 +1372,9 @@ int ecall_merge_and_sort_and_write(int db_id,
 	start = RDTSC();
 #endif
 
-	ret = project_promote_pad_table( db, tbl_right, project_columns_right, 		 		num_project_columns_right, promote_columns_right, num_pad_bytes_right, &p3_tbl_right);
+	ret = project_promote_pad_table(db, tbl_right, project_columns_right,
+			num_project_columns_right, promote_columns_right,
+			num_pad_bytes_right, &p3_tbl_right, &p3_right_schema);
 
 #if defined(REPORT_3P_STATS)
 	end = RDTSC();
@@ -1380,14 +1398,14 @@ int ecall_merge_and_sort_and_write(int db_id,
 	if( row_size(p3_tbl_left) != row_size(p3_tbl_right) )
 		return -6;
 
-	INFO(" Size of the left table AFTER 3P %d\n", p3_tbl_left->num_rows);
-	INFO(" Size of the right table AFTER 3P %d\n", p3_tbl_right->num_rows);
+	INFO(" Size of the left table AFTER 3P %d | row_size=%d\n", p3_tbl_left->num_rows, row_size(p3_tbl_left));
+	INFO(" Size of the right table AFTER 3P %d | row_size=%d\n", p3_tbl_right->num_rows, row_size(p3_tbl_right));
 	
 	/* Append R and S */
 	append_table_name = "append:" + tbl_left->name + tbl_right->name; 
 
 	/* Is this the right way to create a schema to append two tables? */
-	ret = join_schema(&append_sc, &tbl_left->sc, &tbl_right->sc); 
+	ret = join_schema(&append_sc, &p3_left_schema, &p3_right_schema);
 	if (ret) {
 		ERR("create table error:%d\n", ret);
 		return ret; 

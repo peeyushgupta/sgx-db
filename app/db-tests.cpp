@@ -933,10 +933,10 @@ int test_merge_sort_write(sgx_enclave_id_t eid)
 	printf("created uservisits table with ID:%d | table_id:%d\n",
 			db_id, udata_table_id);
 
-	int project_columns_left[3] = {0,1,2};
+	int project_columns_left[4] = {0,1,2,3};
 	int* ptr_project_columns_left = (int*)project_columns_left;
 	int num_project_columns_left = sizeof(project_columns_left)/sizeof(project_columns_left[0]);
-	int promote_columns_left[1] = {0};
+	int promote_columns_left[1] = {1};
 	int* ptr_promote_columns_left = (int*)promote_columns_left;
 	// unsigned long -> int conversion
 	int num_pad_bytes_left = max(row_size(&sc),row_size(&sc_udata))-row_size(&sc);
@@ -944,7 +944,7 @@ int test_merge_sort_write(sgx_enclave_id_t eid)
 	int project_columns_right[10] = {0,1,2,3,4,5,6,7,8,9};
 	int* ptr_project_columns_right = (int*)project_columns_right;
 	int num_project_columns_right = sizeof(project_columns_right)/sizeof(project_columns_right[0]);
-	int promote_columns_right[1] = {1};
+	int promote_columns_right[1] = {2};
 	int* ptr_promote_columns_right = (int*)promote_columns_right;
 	// unsigned long -> int conversion
 	int num_pad_bytes_right = max(row_size(&sc),row_size(&sc_udata))-row_size(&sc_udata);
