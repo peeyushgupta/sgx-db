@@ -550,6 +550,39 @@ int join_schema(schema_t *sc, schema_t *left, schema_t *right) {
 	return 0;
 }
 
+int join_schema_algo(schema_t *sc, schema_t *left, schema_t *right,
+	int *join_columns, 
+    int num_join_columns) {
+	
+	sc->num_fields = left->num_fields + right->num_fields;
+	if(sc->num_fields > MAX_COLS)
+		return -1; 
+
+	for(int i = 0; i < left->num_fields; i++) {
+		sc->offsets[i] = left->offsets[i];
+		sc->sizes[i] = left->sizes[i];
+		sc->types[i] = left->types[i];	
+	}
+
+	for(int i = 0; i < right->num_fields; i++) {
+
+		for(int j = 0; j < num_join_columns; j++){
+			// skip join column
+			if(join_columns[j] == i){
+				INFO("Skipping (%d)th column", j);
+				break;
+			}
+		
+			sc->offsets[i + left->num_fields] = left->row_data_size + right->offsets[i];
+			sc->sizes[i + left->num_fields] = right->sizes[i];
+			sc->types[i + left->num_fields] = right->types[i];	
+		}
+	}
+	sc->row_data_size = sc->offsets[sc->num_fields - 1] + sc->sizes[sc->num_fields - 1];
+
+	return 0;
+}
+
 /* Pin table in buffer cache  */
 int pin_table(table_t *table) {
 
@@ -1275,7 +1308,7 @@ int project_promote_pad_table(
             goto cleanup;
         }
 
-	ret = promote_row(row_new, &project_promote_pad_sc, promote_columns[0], row_new2);
+		ret = promote_row(row_new, &project_promote_pad_sc, promote_columns[0], row_new2);
         if(ret) {
             ERR("project_row failed on row %d of table %s\n", i, tbl->name.c_str());
             goto cleanup;
@@ -1367,6 +1400,8 @@ int ecall_merge_and_sort_and_write(int db_id,
 	INFO(" Project Promote Pad R took %llu cycles (%f sec)\n", cycles, secs);
 #endif
 
+	print_table_dbg(p3_tbl_left, 0, 10);
+
 	/* Project promote pad S */
 #if defined(REPORT_3P_STATS)
 	start = RDTSC();
@@ -1385,6 +1420,8 @@ int ecall_merge_and_sort_and_write(int db_id,
 	INFO(" Project Promote Pad S took %llu cycles (%f sec)\n", cycles, secs);
 #endif
 
+	print_table_dbg(p3_tbl_right, 0, 10);
+	
 	row_left = (row_t *) malloc(row_size(p3_tbl_left));
 	if(!row_left)
 		return -ENOMEM;
@@ -1404,8 +1441,13 @@ int ecall_merge_and_sort_and_write(int db_id,
 	/* Append R and S */
 	append_table_name = "append:" + tbl_left->name + tbl_right->name; 
 
+	// Already promoted
+	int join_columns_right[1] = {0};
+	int num_join_columns_right = 1;
+
 	/* Is this the right way to create a schema to append two tables? */
-	ret = join_schema(&append_sc, &p3_left_schema, &p3_right_schema);
+	ret = join_schema_algo(&append_sc, &p3_left_schema, &p3_right_schema, join_columns_right, 
+    		num_join_columns_right);
 	if (ret) {
 		ERR("create table error:%d\n", ret);
 		return ret; 
@@ -1427,13 +1469,13 @@ int ecall_merge_and_sort_and_write(int db_id,
 #endif
 
 	// Read S row and append	
-	for (unsigned int j = 0; j < tbl_right->num_rows; j ++) {
+	for (unsigned int j = 0; j < p3_tbl_right->num_rows; j ++) {
 
 		// Read right row
 		ret = read_row(p3_tbl_right, j, row_right);
 		if(ret) {
 			ERR("failed to read row %d of table %s\n",
-				j, tbl_right->name.c_str());
+				j, p3_tbl_right->name.c_str());
 			goto cleanup;
 		}
 
@@ -1441,11 +1483,13 @@ int ecall_merge_and_sort_and_write(int db_id,
 		ret = insert_row_dbg(append_table, row_right);
 		if(ret) {
 			ERR("failed to append row %d of table to %s table\n",
-				j, tbl_right->name.c_str(), append_table->name.c_str());
+				j, p3_tbl_right->name.c_str(), append_table->name.c_str());
 			goto cleanup;
 		}
 	}
 
+	print_table_dbg(append_table, 0, 10);
+	
 #if defined(REPORT_APPEND_STATS)
 	end = RDTSC();
 
@@ -1460,7 +1504,7 @@ int ecall_merge_and_sort_and_write(int db_id,
 	start = RDTSC();
 #endif
 
-	for(int i=0; i < tbl_left->num_rows; i ++)
+	for(int i=0; i < p3_tbl_left->num_rows; i ++)
 	{
 		ret = read_row(p3_tbl_left, i, row_left);
 		if(ret) {
@@ -1473,7 +1517,7 @@ int ecall_merge_and_sort_and_write(int db_id,
 		ret = insert_row_dbg(append_table, row_left);
 		if(ret) {
 			ERR("failed to append row %d of table %s to %s table\n",
-				i, tbl_left->name.c_str(), append_table->name.c_str());
+				i, p3_tbl_left->name.c_str(), append_table->name.c_str());
 			goto cleanup;
 		}
 	}
@@ -1521,6 +1565,7 @@ int ecall_merge_and_sort_and_write(int db_id,
 	join_condition_t c;
 	c.table_left = tbl_left->id;
 	c.table_right = tbl_right->id;
+	c.max_joinability = 10;
 
 #if defined(REPORT_JOIN_WRITE_STATS)
 	start = RDTSC();
@@ -1530,11 +1575,8 @@ int ecall_merge_and_sort_and_write(int db_id,
 
 	append_table->num_rows = tbl_left->num_rows + tbl_right->num_rows;
 
-	int max_joinability;
-	max_joinability = 22;
-
 	// Join and write sorted table
-	ret = join_and_write_sorted_table( db, append_table, max_joinability, &c, write_table_id );
+	ret = join_and_write_sorted_table( db, append_table, &c, write_table_id );
 	if(ret) {
 		ERR("failed to join and write sorted table %s\n",
 			append_table->name.c_str());
@@ -1570,7 +1612,7 @@ cleanup:
 }
 
 /* Later replace db_id with db */
-int join_and_write_sorted_table(data_base_t *db, table_t *tbl, int max_joinability, join_condition_t *c, int *join_table_id)
+int join_and_write_sorted_table(data_base_t *db, table_t *tbl, join_condition_t *c, int *join_table_id)
 {
 	auto N = tbl->num_rows;
 	assert (((N & (N - 1)) == 0));
@@ -1625,7 +1667,7 @@ int join_and_write_sorted_table(data_base_t *db, table_t *tbl, int max_joinabili
 		return -ENOMEM;
 
 	unsigned int size = tbl->num_rows;
-	unsigned int joinability = max_joinability;
+	unsigned int joinability = c->max_joinability;
 	
 	for (int i = 0; i < size; i ++) {
 

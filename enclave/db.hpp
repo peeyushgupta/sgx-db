@@ -112,6 +112,7 @@ struct join_condition {
 	unsigned int table_right; 
 	unsigned int fields_left[MAX_CONDITIONS];
 	unsigned int fields_right[MAX_CONDITIONS];
+	unsigned int max_joinability;
 	join_condition_t *next;  /* not supported at the moment */
 };
 
@@ -193,7 +194,7 @@ int project_promote_pad_table(
 
 int print_table_dbg(table_t *table, int start, int end);
 
-int join_and_write_sorted_table(data_base_t *db, table_t *tbl, int max_joinability, join_condition_t *c, int *join_table_id);
+int join_and_write_sorted_table(data_base_t *db, table_t *tbl, join_condition_t *c, int *join_table_id);
 
 void *aligned_malloc(size_t size, size_t alignment);
 void aligned_free(void *aligned_ptr);

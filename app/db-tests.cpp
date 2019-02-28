@@ -13,8 +13,8 @@
 
 using namespace std;
 #define OCALL_TEST_LENGTH 10000
-#define RANKINGS_TABLE_SIZE	(360000)
-#define UVISITS_TABLE_SIZE	(350000)
+#define RANKINGS_TABLE_SIZE	(10)
+#define UVISITS_TABLE_SIZE	(20)
 
 void column_sort_table_parallel(sgx_enclave_id_t eid, int db_id, int table_id, int field, int num_threads);
 
@@ -820,7 +820,7 @@ int test_merge_sort_write(sgx_enclave_id_t eid)
 		return ret; 
 	}
 
-	std::ifstream file("rankings.csv");
+	std::ifstream file("rankings_small.csv");
 
 	row[0] = 'a';
 	for(int i = 0; i < RANKINGS_TABLE_SIZE; i++) {
@@ -898,7 +898,7 @@ int test_merge_sort_write(sgx_enclave_id_t eid)
 		return ret; 
 	}
 
-	std::ifstream file2("uservisits.csv");
+	std::ifstream file2("uservisits_small.csv");
 
 	row[0] = 'a';
 	for(int i = 0; i < UVISITS_TABLE_SIZE; i++) {
