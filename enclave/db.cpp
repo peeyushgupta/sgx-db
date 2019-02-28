@@ -1563,8 +1563,8 @@ int ecall_merge_and_sort_and_write(int db_id,
 
 	/* Later remove join condition - each row has the info where it came from */
 	join_condition_t c;
-	c.table_left = tbl_left->id;
-	c.table_right = tbl_right->id;
+	c.table_left = p3_tbl_left->id;
+	c.table_right = p3_tbl_right->id;
 	c.max_joinability = 10;
 
 #if defined(REPORT_JOIN_WRITE_STATS)
@@ -1654,7 +1654,7 @@ int join_and_write_sorted_table(data_base_t *db, table_t *tbl, join_condition_t 
 
 	DBG("Created join table %s, id:%d\n", join_table_name.c_str(), *join_table_id); 
 	
-	join_row = (row_t *) malloc(std::max(row_size(tbl_left),row_size(tbl_right)));// - row_header_size());
+	join_row = (row_t *) malloc(row_size(tbl_left)+row_size(tbl_right));// - row_header_size());
 	if(!join_row)
 		return -ENOMEM;
 
@@ -1774,9 +1774,10 @@ int join_and_write_sorted_table(data_base_t *db, table_t *tbl, join_condition_t 
 	ret = 0;
 
 cleanup: 
+/*
 	if (join_row)
 		free(join_row); 
-	
+*/	
 	if (row_left)
 		free(row_left); 
 
