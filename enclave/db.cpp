@@ -554,7 +554,7 @@ int join_schema_algo(schema_t *sc, schema_t *left, schema_t *right,
 	int *join_columns, 
     int num_join_columns) {
 	
-	sc->num_fields = left->num_fields + right->num_fields;
+	sc->num_fields = left->num_fields + right->num_fields - num_join_columns;
 	if(sc->num_fields > MAX_COLS)
 		return -1; 
 
@@ -564,19 +564,29 @@ int join_schema_algo(schema_t *sc, schema_t *left, schema_t *right,
 		sc->types[i] = left->types[i];	
 	}
 
+	bool skip = false;
+	int counter = 0;
+
 	for(int i = 0; i < right->num_fields; i++) {
 
 		for(int j = 0; j < num_join_columns; j++){
 			// skip join column
 			if(join_columns[j] == i){
-				INFO("Skipping join (%d)th column", j);
-				break;
+				INFO("Skipping join (%d)th column\n", j);
+				skip = true;
 			}
-		
-			sc->offsets[i + left->num_fields] = left->row_data_size + right->offsets[i];
-			sc->sizes[i + left->num_fields] = right->sizes[i];
-			sc->types[i + left->num_fields] = right->types[i];	
 		}
+
+		if( !skip )
+		{
+			sc->offsets[counter + left->num_fields] = left->row_data_size + right->offsets[counter];
+			sc->sizes[counter + left->num_fields] = right->sizes[counter];
+			sc->types[counter + left->num_fields] = right->types[counter];
+			counter++;	
+		} 
+		else
+			skip = false;
+		
 	}
 	sc->row_data_size = sc->offsets[sc->num_fields - 1] + sc->sizes[sc->num_fields - 1];
 
@@ -629,12 +639,15 @@ int unpin_table_dirty(table_t *table) {
 	return 0; 
 }
 
-int join_rows(row_t *join_row, unsigned int join_row_data_size, row_t * row_left, unsigned int row_left_data_size, row_t * row_right, unsigned int row_right_data_size) {
+int join_rows(row_t *join_row, unsigned int join_row_data_size, row_t * row_left, unsigned int row_left_data_size, row_t * row_right, unsigned int row_right_data_size, unsigned int offset) {
 
+	/*
 	if(row_left_data_size + row_right_data_size > join_row_data_size)
 		return -1; 
+	*/
+	
 	memcpy(join_row, row_left, row_header_size() + row_left_data_size); 
-	memcpy((void*)((char*)join_row + row_header_size() + row_left_data_size), row_right->data, row_right_data_size);
+	memcpy((void*)((char*)join_row + row_header_size() + row_left_data_size), row_right->data + offset, 	row_right_data_size-offset);
 	return 0; 
 }; 
 
@@ -752,7 +765,7 @@ int ecall_join(int db_id, join_condition_t *c, int *join_table_id) {
 
 				ret = join_rows(join_row, join_sc.row_data_size, 
 					row_left, tbl_left->sc.row_data_size, 
-					row_right, tbl_right->sc.row_data_size); 
+					row_right, tbl_right->sc.row_data_size, 0); 
 				if(ret) {
 					ERR("failed to produce a joined row %d of table %s with row %d of table %s\n",
 						i, tbl_left->name.c_str(), j, tbl_right->name.c_str());
@@ -1042,6 +1055,13 @@ int ecall_insert_row_dbg(int db_id, int table_id, void *row_data) {
 	return ret; 
 }
 
+int print_schema(schema_t *sc)
+{
+	for(int i = 0;  i < sc->num_fields; i++) {
+		printf("%d offset: %d, size: %d, type: %d\n", i, sc->offsets[i], sc->sizes[i], sc->types[i]);
+    }
+}
+
 int print_row(schema_t *sc, row_t *row) {
 	bool first = true; 	
 	for(int i = 0;  i < sc->num_fields; i++) {
@@ -1052,7 +1072,7 @@ int print_row(schema_t *sc, row_t *row) {
 		}
 		switch(sc->types[i]) {
 		case BOOLEAN:
-			printf("%b", *(bool*)&row->data[sc->offsets[i]]);
+			
 			break;
 	
 		case CHARACTER: 
@@ -1362,7 +1382,7 @@ int ecall_merge_and_sort_and_write(int db_id,
 
 	table_t *p3_tbl_left, *p3_tbl_right, *append_table, *s_table;
 	row_t *row_left = NULL, *row_right = NULL, *join_row = NULL;
-	schema_t append_sc, p3_left_schema, p3_right_schema, p2_left_schema, p2_right_schema;
+	schema_t append_sc, join_sc, p3_left_schema, p3_right_schema, p2_left_schema, p2_right_schema;
 	std::string append_table_name;  
 	int append_table_id;
 
@@ -1376,6 +1396,9 @@ int ecall_merge_and_sort_and_write(int db_id,
 	
 	table_t* tbl_left = db->tables[left_table_id];
 	table_t* tbl_right = db->tables[right_table_id];
+
+	int join_columns_right[1] = {0};
+	int num_join_columns_right = 1;
 
 #if defined(REPORT_3P_APPEND_SORT_JOIN_WRITE_STATS)
 	start = RDTSC();
@@ -1424,11 +1447,11 @@ int ecall_merge_and_sort_and_write(int db_id,
 
 	print_table_dbg(p3_tbl_right, 0, 10);
 	
-	row_left = (row_t *) malloc(row_size(p3_tbl_left));
+	row_left = (row_t *) calloc(row_size(p3_tbl_left), 1);
 	if(!row_left)
 		return -ENOMEM;
 
-	row_right = (row_t *) malloc(row_size(p3_tbl_right));
+	row_right = (row_t *) calloc(row_size(p3_tbl_right), 1);
 	if(!row_right)
 		return -ENOMEM;
 
@@ -1443,13 +1466,8 @@ int ecall_merge_and_sort_and_write(int db_id,
 	/* Append R and S */
 	append_table_name = "append:" + tbl_left->name + tbl_right->name; 
 
-	// Already promoted
-	int join_columns_right[1] = {0};
-	int num_join_columns_right = 1;
-
 	/* Is this the right way to create a schema to append two tables? */
-	ret = join_schema_algo(&append_sc, &p2_left_schema, &p2_right_schema, join_columns_right, 
-    		num_join_columns_right);
+	ret = join_schema(&append_sc, &p3_left_schema, &p3_right_schema);
 	if (ret) {
 		ERR("create table error:%d\n", ret);
 		return ret; 
@@ -1464,42 +1482,6 @@ int ecall_merge_and_sort_and_write(int db_id,
 	append_table_id = append_table->id;
 
 	DBG(" Created append table %s, id:%d\n", append_table_name.c_str(), append_table_id); 
-
-	// READ S first then R 
-#if defined(REPORT_APPEND_STATS)
-	start = RDTSC();
-#endif
-
-	// Read S row and append	
-	for (unsigned int j = 0; j < p3_tbl_right->num_rows; j ++) {
-
-		// Read right row
-		ret = read_row(p3_tbl_right, j, row_right);
-		if(ret) {
-			ERR("failed to read row %d of table %s\n",
-				j, p3_tbl_right->name.c_str());
-			goto cleanup;
-		}
-
-		/* Add row to the append table */
-		ret = insert_row_dbg(append_table, row_right);
-		if(ret) {
-			ERR("failed to append row %d of table to %s table\n",
-				j, p3_tbl_right->name.c_str(), append_table->name.c_str());
-			goto cleanup;
-		}
-	}
-
-	print_table_dbg(append_table, 0, 10);
-	
-#if defined(REPORT_APPEND_STATS)
-	end = RDTSC();
-
-	cycles = end - start;
-	secs = (cycles / cycles_per_sec);
-
-	INFO(" Append S took %llu cycles (%f sec)\n", cycles, secs);
-#endif
 
 	// Read R row and append
 #if defined(REPORT_APPEND_STATS)
@@ -1533,6 +1515,42 @@ int ecall_merge_and_sort_and_write(int db_id,
 	INFO(" Append R took %llu cycles (%f sec)\n", cycles, secs);
 #endif
 
+	// READ S first then R 
+#if defined(REPORT_APPEND_STATS)
+	start = RDTSC();
+#endif
+
+	// Read S row and append	
+	for (unsigned int j = 0; j < p3_tbl_right->num_rows; j ++) {
+
+		// Read right row
+		ret = read_row(p3_tbl_right, j, row_right);
+		if(ret) {
+			ERR("failed to read row %d of table %s\n",
+				j, p3_tbl_right->name.c_str());
+			goto cleanup;
+		}
+
+		/* Add row to the append table */
+		ret = insert_row_dbg(append_table, row_right);
+		if(ret) {
+			ERR("failed to append row %d of table to %s table\n",
+				j, p3_tbl_right->name.c_str(), append_table->name.c_str());
+			goto cleanup;
+		}
+	}
+
+	print_table_dbg(append_table, 0, 29);
+	
+#if defined(REPORT_APPEND_STATS)
+	end = RDTSC();
+
+	cycles = end - start;
+	secs = (cycles / cycles_per_sec);
+
+	INFO(" Append S took %llu cycles (%f sec)\n", cycles, secs);
+#endif
+
 //// 1 THREAD SERIEAL
 
 	INFO(" Size of the table BEFORE sorting table %d", append_table->num_rows);
@@ -1554,6 +1572,8 @@ int ecall_merge_and_sort_and_write(int db_id,
 			append_table->name.c_str());
 		goto cleanup;
 	}
+
+	print_table_dbg(append_table, 0, 29);
 
 #if defined(REPORT_SORT_STATS)
 	end = RDTSC();
@@ -1577,8 +1597,18 @@ int ecall_merge_and_sort_and_write(int db_id,
 
 	append_table->num_rows = tbl_left->num_rows + tbl_right->num_rows;
 
+	/* Is this the right way to create a schema to append two tables? */
+	ret = join_schema_algo(&join_sc, &p2_left_schema, &p2_right_schema, join_columns_right, 
+    		num_join_columns_right);
+	if (ret) {
+		ERR("create table error:%d\n", ret);
+		return ret; 
+	}
+
+	print_schema(&join_sc);
+
 	// Join and write sorted table
-	ret = join_and_write_sorted_table( db, append_table, &c, write_table_id );
+	ret = join_and_write_sorted_table( db, append_table, &c, &join_sc, write_table_id );
 	if(ret) {
 		ERR("failed to join and write sorted table %s\n",
 			append_table->name.c_str());
@@ -1614,7 +1644,8 @@ cleanup:
 }
 
 /* Later replace db_id with db */
-int join_and_write_sorted_table(data_base_t *db, table_t *tbl, join_condition_t *c, int *join_table_id)
+int join_and_write_sorted_table(data_base_t *db, table_t *tbl, join_condition_t *c, 
+	schema_t* join_sc, int *join_table_id)
 {
 	auto N = tbl->num_rows;
 	assert (((N & (N - 1)) == 0));
@@ -1623,7 +1654,7 @@ int join_and_write_sorted_table(data_base_t *db, table_t *tbl, join_condition_t 
 	int ret;
 	table_t *tbl_left, *tbl_right, *join_table;
 	row_t *row_left = NULL, *row_right = NULL, *join_row = NULL;
-	schema_t join_sc;
+	//schema_t join_sc;
 	std::string join_table_name;  
 
 	if (!c)	
@@ -1640,13 +1671,7 @@ int join_and_write_sorted_table(data_base_t *db, table_t *tbl, join_condition_t 
 	/* To create a join table with combination of names */
 	join_table_name = "join:" + tbl_left->name + tbl_right->name; 
 
-	ret = join_schema(&join_sc, &tbl_left->sc, &tbl_right->sc); 
-	if (ret) {
-		ERR("join schema error:%d\n", ret);
-		return ret; 
-	}
-
-	ret = create_table(db, join_table_name, &join_sc, &join_table);
+	ret = create_table(db, join_table_name, join_sc, &join_table);
 	if (ret) {
 		ERR("create table:%d\n", ret);
 		return ret; 
@@ -1656,15 +1681,15 @@ int join_and_write_sorted_table(data_base_t *db, table_t *tbl, join_condition_t 
 
 	DBG("Created join table %s, id:%d\n", join_table_name.c_str(), *join_table_id); 
 	
-	join_row = (row_t *) malloc(row_size(tbl_left)+row_size(tbl_right));// - row_header_size());
+	join_row = (row_t *) calloc(row_size(tbl_left)+row_size(tbl_right), 1);// - row_header_size());
 	if(!join_row)
 		return -ENOMEM;
 
-	row_left = (row_t *) malloc(std::max(row_size(tbl_left),row_size(tbl_right))); //- row_header_size()); //malloc(row_size(tbl_left));
+	row_left = (row_t *) calloc(std::max(row_size(tbl_left),row_size(tbl_right)), 1); //- row_header_size()); //malloc(row_size(tbl_left));
 	if(!row_left)
 		return -ENOMEM;
 
-	row_right = (row_t *) malloc(std::max(row_size(tbl_left),row_size(tbl_right))); // - row_header_size()); //malloc(row_size(tbl_right));
+	row_right = (row_t *) calloc(std::max(row_size(tbl_left),row_size(tbl_right)), 1); // - row_header_size()); //malloc(row_size(tbl_right));
 	if(!row_right)
 		return -ENOMEM;
 
@@ -1749,7 +1774,9 @@ int join_and_write_sorted_table(data_base_t *db, table_t *tbl, join_condition_t 
 					// DBG_ON(JOIN_VERBOSE, "joining (i:%d, j:%d)\n", i, j); 
 					//DBG("joining (i:%d, j:%d)\n", i, j); 
 
-					ret = join_rows(join_row, join_sc.row_data_size, row_left, tbl_left->sc.row_data_size, row_right, tbl_right->sc.row_data_size); 
+					//DBG("Join schema row data size (%d)", join_sc->row_data_size);
+
+					ret = join_rows(join_row, join_sc->row_data_size, row_left, tbl_left->sc.row_data_size, row_right, tbl_right->sc.row_data_size, tbl_right->sc.offsets[1]); 
 					if(ret) {
 						ERR("failed to produce a joined row %d of table %s with row %d of table %s\n",
 							i, tbl_left->name.c_str(), j, tbl_right->name.c_str());
@@ -1772,6 +1799,8 @@ int join_and_write_sorted_table(data_base_t *db, table_t *tbl, join_condition_t 
 		bflush(join_table); 	
 	}
 
+	print_table_dbg(join_table, 0, 10);
+
 	INFO(" Finished writing the table\n");
 	ret = 0;
 
@@ -1779,13 +1808,13 @@ cleanup:
 /*
 	if (join_row)
 		free(join_row); 
-*/	
+
 	if (row_left)
 		free(row_left); 
 
 	if (row_right)
 		free(row_right); 
-
+*/
 	return ret; 
 
 }
