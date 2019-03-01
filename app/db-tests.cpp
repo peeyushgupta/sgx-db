@@ -791,19 +791,21 @@ int test_merge_sort_write(sgx_enclave_id_t eid)
 	uint8_t *row;
 	sgx_status_t sgx_ret = SGX_ERROR_UNEXPECTED;
 
-	sc.num_fields = 4;
+	sc.num_fields = 3;
+	/*
 	sc.offsets[0] = 0;
 	sc.sizes[0] = 1;
 	sc.types[0] = CHARACTER;
-	sc.offsets[1] = 1;
-	sc.sizes[1] = 255;
-	sc.types[1] = TINYTEXT;
-	sc.offsets[2] = 256;
+	*/
+	sc.offsets[0] = 1;
+	sc.sizes[0] = 255;
+	sc.types[0] = TINYTEXT;
+	sc.offsets[1] = 256;
+	sc.sizes[1] = 4;
+	sc.types[1] = INTEGER;
+	sc.offsets[2] = 260;
 	sc.sizes[2] = 4;
 	sc.types[2] = INTEGER;
-	sc.offsets[3] = 260;
-	sc.sizes[3] = 4;
-	sc.types[3] = INTEGER;
 	sc.row_data_size = sc.offsets[sc.num_fields - 1] + sc.sizes[sc.num_fields - 1];
 
 	row = (uint8_t*)malloc(MAX_ROW_SIZE);
@@ -822,7 +824,7 @@ int test_merge_sort_write(sgx_enclave_id_t eid)
 
 	std::ifstream file("rankings_small.csv");
 
-	row[0] = 'a';
+	//row[0] = 'a';
 	for(int i = 0; i < RANKINGS_TABLE_SIZE; i++) {
 		memset(row, 'a', MAX_ROW_SIZE);
 		file.getline(line, MAX_ROW_SIZE); //get the field
@@ -857,37 +859,40 @@ int test_merge_sort_write(sgx_enclave_id_t eid)
 	printf("created rankings table with db ID:%d | table_id:%d\n",
 			db_id, rankings_table_id);
 
+
 	sc_udata.num_fields = 10;
+/*
 	sc_udata.offsets[0] = 0;
 	sc_udata.sizes[0] = 1;
 	sc_udata.types[0] = CHARACTER;
-	sc_udata.offsets[1] = 1;
+*/
+	sc_udata.offsets[0] = 1;
+	sc_udata.sizes[0] = 255;
+	sc_udata.types[0] = TINYTEXT;
+	sc_udata.offsets[1] = 256;
 	sc_udata.sizes[1] = 255;
 	sc_udata.types[1] = TINYTEXT;
-	sc_udata.offsets[2] = 256;
-	sc_udata.sizes[2] = 255;
-	sc_udata.types[2] = TINYTEXT;
-	sc_udata.offsets[3] = 511;
+	sc_udata.offsets[2] = 511;
+	sc_udata.sizes[2] = 4;
+	sc_udata.types[2] = INTEGER;
+	sc_udata.offsets[3] = 515;
 	sc_udata.sizes[3] = 4;
 	sc_udata.types[3] = INTEGER;
-	sc_udata.offsets[4] = 515;
-	sc_udata.sizes[4] = 4;
-	sc_udata.types[4] = INTEGER;
-	sc_udata.offsets[5] = 519;
+	sc_udata.offsets[4] = 519;
+	sc_udata.sizes[4] = 255;
+	sc_udata.types[4] = TINYTEXT;
+	sc_udata.offsets[5] = 774;
 	sc_udata.sizes[5] = 255;
 	sc_udata.types[5] = TINYTEXT;
-	sc_udata.offsets[6] = 774;
+	sc_udata.offsets[6] = 1029;
 	sc_udata.sizes[6] = 255;
 	sc_udata.types[6] = TINYTEXT;
-	sc_udata.offsets[7] = 1029;
+	sc_udata.offsets[7] = 1284;
 	sc_udata.sizes[7] = 255;
 	sc_udata.types[7] = TINYTEXT;
-	sc_udata.offsets[8] = 1284;
-	sc_udata.sizes[8] = 255;
-	sc_udata.types[8] = TINYTEXT;
-	sc_udata.offsets[9] = 1539;
-	sc_udata.sizes[9] = 4;
-	sc_udata.types[9] = INTEGER;
+	sc_udata.offsets[8] = 1539;
+	sc_udata.sizes[8] = 4;
+	sc_udata.types[8] = INTEGER;
 
 	sc_udata.row_data_size = sc_udata.offsets[sc_udata.num_fields - 1] + sc_udata.sizes[sc_udata.num_fields - 1];
 
@@ -900,7 +905,7 @@ int test_merge_sort_write(sgx_enclave_id_t eid)
 
 	std::ifstream file2("uservisits_small.csv");
 
-	row[0] = 'a';
+	// row[0] = 'a';
 	for(int i = 0; i < UVISITS_TABLE_SIZE; i++) {
 		memset(row, 'a', MAX_ROW_SIZE);
 		file2.getline(line, MAX_ROW_SIZE);//get the field
@@ -933,18 +938,18 @@ int test_merge_sort_write(sgx_enclave_id_t eid)
 	printf("created uservisits table with ID:%d | table_id:%d\n",
 			db_id, udata_table_id);
 
-	int project_columns_left[4] = {0,1,2,3};
+	int project_columns_left[4] = {0,1,2};
 	int* ptr_project_columns_left = (int*)project_columns_left;
 	int num_project_columns_left = sizeof(project_columns_left)/sizeof(project_columns_left[0]);
-	int promote_columns_left[1] = {1};
+	int promote_columns_left[1] = {0};
 	int* ptr_promote_columns_left = (int*)promote_columns_left;
 	// unsigned long -> int conversion
 	int num_pad_bytes_left = max(row_size(&sc),row_size(&sc_udata))-row_size(&sc);
 
-	int project_columns_right[10] = {0,1,2,3,4,5,6,7,8,9};
+	int project_columns_right[10] = {0,1,2,3,4,5,6,7,8};
 	int* ptr_project_columns_right = (int*)project_columns_right;
 	int num_project_columns_right = sizeof(project_columns_right)/sizeof(project_columns_right[0]);
-	int promote_columns_right[1] = {2};
+	int promote_columns_right[1] = {1};
 	int* ptr_promote_columns_right = (int*)promote_columns_right;
 	// unsigned long -> int conversion
 	int num_pad_bytes_right = max(row_size(&sc),row_size(&sc_udata))-row_size(&sc_udata);

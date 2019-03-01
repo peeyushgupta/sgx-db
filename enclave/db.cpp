@@ -1242,6 +1242,7 @@ int project_promote_pad_table(
     int *promote_columns,
     int num_pad_bytes,
     table_t **p3_tbl,
+	schema_t *p2_schema,
     schema_t *p3_schema
 )
 {
@@ -1324,6 +1325,7 @@ int project_promote_pad_table(
     }
 
     bflush(*p3_tbl);
+	*p2_schema = project_promote_sc;
     *p3_schema = project_promote_pad_sc;
     ret = 0;
 
@@ -1360,7 +1362,7 @@ int ecall_merge_and_sort_and_write(int db_id,
 
 	table_t *p3_tbl_left, *p3_tbl_right, *append_table, *s_table;
 	row_t *row_left = NULL, *row_right = NULL, *join_row = NULL;
-	schema_t append_sc, p3_left_schema, p3_right_schema;
+	schema_t append_sc, p3_left_schema, p3_right_schema, p2_left_schema, p2_right_schema;
 	std::string append_table_name;  
 	int append_table_id;
 
@@ -1389,7 +1391,7 @@ int ecall_merge_and_sort_and_write(int db_id,
 #endif
 	ret = project_promote_pad_table(db, tbl_left, project_columns_left,
 			num_project_columns_left, promote_columns_left,
-			num_pad_bytes_left, &p3_tbl_left, &p3_left_schema);
+			num_pad_bytes_left, &p3_tbl_left, &p2_left_schema, &p3_left_schema);
 
 #if defined(REPORT_3P_STATS)
 	end = RDTSC();
@@ -1409,7 +1411,7 @@ int ecall_merge_and_sort_and_write(int db_id,
 
 	ret = project_promote_pad_table(db, tbl_right, project_columns_right,
 			num_project_columns_right, promote_columns_right,
-			num_pad_bytes_right, &p3_tbl_right, &p3_right_schema);
+			num_pad_bytes_right, &p3_tbl_right, &p2_right_schema, &p3_right_schema);
 
 #if defined(REPORT_3P_STATS)
 	end = RDTSC();
@@ -1446,7 +1448,7 @@ int ecall_merge_and_sort_and_write(int db_id,
 	int num_join_columns_right = 1;
 
 	/* Is this the right way to create a schema to append two tables? */
-	ret = join_schema_algo(&append_sc, &p3_left_schema, &p3_right_schema, join_columns_right, 
+	ret = join_schema_algo(&append_sc, &p2_left_schema, &p2_right_schema, join_columns_right, 
     		num_join_columns_right);
 	if (ret) {
 		ERR("create table error:%d\n", ret);
