@@ -13,8 +13,8 @@
 
 using namespace std;
 #define OCALL_TEST_LENGTH 10000
-#define RANKINGS_TABLE_SIZE	(360000)
-#define UVISITS_TABLE_SIZE	(350000)
+#define RANKINGS_TABLE_SIZE	(10)
+#define UVISITS_TABLE_SIZE	(20)
 
 void column_sort_table_parallel(sgx_enclave_id_t eid, int db_id, int table_id, int field, int num_threads);
 
@@ -938,7 +938,7 @@ int test_merge_sort_write(sgx_enclave_id_t eid)
 	printf("created uservisits table with ID:%d | table_id:%d\n",
 			db_id, udata_table_id);
 
-	int project_columns_left[4] = {0,1,2};
+	int project_columns_left[3] = {0,1,2};
 	int* ptr_project_columns_left = (int*)project_columns_left;
 	int num_project_columns_left = sizeof(project_columns_left)/sizeof(project_columns_left[0]);
 	int promote_columns_left[1] = {0};
@@ -946,7 +946,7 @@ int test_merge_sort_write(sgx_enclave_id_t eid)
 	// unsigned long -> int conversion
 	int num_pad_bytes_left = max(row_size(&sc),row_size(&sc_udata))-row_size(&sc);
 
-	int project_columns_right[10] = {0,1,2,3,4,5,6,7,8};
+	int project_columns_right[9] = {0,1,2,3,4,5,6,7,8};
 	int* ptr_project_columns_right = (int*)project_columns_right;
 	int num_project_columns_right = sizeof(project_columns_right)/sizeof(project_columns_right[0]);
 	int promote_columns_right[1] = {1};
@@ -956,7 +956,7 @@ int test_merge_sort_write(sgx_enclave_id_t eid)
 
 	printf("set up input for the algorithm\n");
 
-#define PRINT_APPEND_WRITE_TABLE
+//#define PRINT_APPEND_WRITE_TABLE
 #define	CREATE_APPEND_TABLE
 /// Create multiple threads
 	{
