@@ -189,7 +189,9 @@ int project_promote_pad_table(
     int num_project_columns,
     int promote_columns [],
     int num_pad_bytes,
-    table_t **p3_tbl    
+	table_t **p3_tbl,
+	schema_t *p2_schema,
+    schema_t *p3_schema 
 );
 
 int print_table_dbg(table_t *table, int start, int end);

@@ -569,7 +569,7 @@ int join_schema_algo(schema_t *sc, schema_t *left, schema_t *right,
 		for(int j = 0; j < num_join_columns; j++){
 			// skip join column
 			if(join_columns[j] == i){
-				INFO("Skipping (%d)th column", j);
+				INFO("Skipping join (%d)th column", j);
 				break;
 			}
 		
