@@ -37,6 +37,6 @@ void *aligned_malloc(size_t size, size_t alignment)
 void aligned_free(void *aligned_ptr)
 {
 	void *optr = (void*)(*((unsigned long long*)aligned_ptr - 1));
-	printf("%s, aligned_free %p\n", optr);
+	printf("%s, freeing %p\n", __func__, optr);
 	free(optr);
 }
