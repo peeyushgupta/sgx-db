@@ -1259,22 +1259,26 @@ int project_schema(schema_t *old_sc, int* columns, int num_columns, schema_t *ne
     return 0;
 }
 
-int pad_schema(schema_t *old_sc, int num_pad_bytes, schema_t *new_sc){
-    if (old_sc->num_fields == MAX_COLS)
-        return -1;
-    int i;
-    for (i = 0; i < old_sc->num_fields; i++) {
-        new_sc->offsets[i] = old_sc->offsets[i];
-        new_sc->sizes[i] = old_sc->sizes[i];
-        new_sc->types[i] = old_sc->types[i];
-    }
-    new_sc->offsets[i] = old_sc->row_data_size;
-    new_sc->sizes[i] = num_pad_bytes;
-    new_sc->types[i] = schema_type::PADDING;
+int pad_schema(schema_t *old_sc, int num_pad_bytes, schema_t *new_sc)
+{
+	if (old_sc->num_fields == MAX_COLS)
+		return -1;
 
-    new_sc->num_fields = old_sc->num_fields + 1;
-    new_sc->row_data_size = old_sc->row_data_size + num_pad_bytes;
-    return 0; 
+	auto i = old_sc->num_fields;
+
+	// copy old schema
+	*new_sc = *old_sc;
+
+	// pad only if padding is zero to avoid creating an extra padding field
+	if (num_pad_bytes) {
+		new_sc->offsets[i] = old_sc->row_data_size;
+		new_sc->sizes[i] = num_pad_bytes;
+		new_sc->types[i] = schema_type::PADDING;
+
+		new_sc->num_fields = i + 1;
+		new_sc->row_data_size = old_sc->row_data_size + num_pad_bytes;
+	}
+	return 0;
 }
 
 int project_row(row_t *old_row, schema_t *sc, row_t *new_row) {
