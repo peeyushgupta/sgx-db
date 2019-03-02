@@ -23,7 +23,7 @@ set(SGX_COMMON_CFLAGS "${SGX_COMMON_CFLAGS} \
 
 IF(NOT DEFINED SGX_SDK)
     MESSAGE(STATUS "SGX_SDK is not defined. using /opt/intel/sgxsdk")
-    SET(SGX_SDK /home/peeyush/SGX/sgx-sdk/sgxsdk/)
+    SET(SGX_SDK /opt/intel/sgxsdk)
 ENDIF()
 IF (NOT DEFINED ENV{SGX_MODE})
     MESSAGE(STATUS "SGX_MODE is not defined. using SIM")
