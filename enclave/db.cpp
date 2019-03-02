@@ -574,43 +574,55 @@ int join_schema(schema_t *sc, schema_t *left, schema_t *right) {
 }
 
 int join_schema_algo(schema_t *sc, schema_t *left, schema_t *right,
-	int *join_columns, 
-    int num_join_columns) {
-	
-	sc->num_fields = left->num_fields + right->num_fields - num_join_columns;
-	if(sc->num_fields > MAX_COLS)
+		int *join_columns, int num_join_columns)
+{
+	auto num_fields = left->num_fields + right->num_fields - num_join_columns;
+
+	if (num_fields > MAX_COLS)
 		return -1; 
 
-	for(int i = 0; i < left->num_fields; i++) {
+	sc->num_fields = num_fields;
+
+	for (auto i = 0; i < left->num_fields; i++) {
 		sc->offsets[i] = left->offsets[i];
 		sc->sizes[i] = left->sizes[i];
 		sc->types[i] = left->types[i];	
 	}
 
-	bool skip = false;
-	int counter = 0;
+	auto counter = left->num_fields;
 
-	for(int i = 0; i < right->num_fields; i++) {
-
-		for(int j = 0; j < num_join_columns; j++){
-			// skip join column
-			if(join_columns[j] == i){
-				INFO(" Skipping join (%d)th column\n", j);
-				skip = true;
-			}
+	auto offset_adj = [&]()->int {
+		auto sum = 0u;
+		for (auto j = 0; j < num_join_columns; j++) {
+			sum += right->sizes[join_columns[j]];
 		}
+		return sum;
+	}();
 
-		if( !skip )
-		{
-			sc->offsets[counter + left->num_fields] = left->row_data_size + right->offsets[counter];
-			sc->sizes[counter + left->num_fields] = right->sizes[counter];
-			sc->types[counter + left->num_fields] = right->types[counter];
-			counter++;	
-		} 
-		else
-			skip = false;
-		
+	INFO("Offset adjustment: %d\n", offset_adj);
+
+	for (auto i = 0; i < right->num_fields; i++) {
+
+		auto should_skip = [&]() {
+			for (auto j = 0; j < num_join_columns; j++) {
+				if (join_columns[j] == i){
+					// skip matching column
+					INFO(" skipping join (%d)th column\n", j);
+					return true;
+				}
+			}
+			return false;
+		}();
+
+		if (should_skip)
+			continue;
+
+		sc->offsets[counter] = left->row_data_size + right->offsets[i] - offset_adj;
+		sc->sizes[counter] = right->sizes[i];
+		sc->types[counter] = right->types[i];
+		counter++;
 	}
+
 	sc->row_data_size = sc->offsets[sc->num_fields - 1] + sc->sizes[sc->num_fields - 1];
 
 	return 0;
@@ -1094,8 +1106,9 @@ int print_schema(schema_t *sc, std::string name)
 	}
 	total_sz += row_header_size();
 	printf("+-------------------------------------+\n");
-	printf("row_size " TXT_FG_GREEN "%d" TXT_FG_WHITE " bytes\n",
-			total_sz);
+	printf("row_size " TXT_FG_GREEN "%d" TXT_FG_WHITE " bytes"
+		" row_data_sz " TXT_FG_GREEN "%d" TXT_FG_WHITE " bytes\n",
+			total_sz, sc->row_data_size);
 }
 
 int print_row(schema_t *sc, row_t *row) {
