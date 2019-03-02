@@ -17,8 +17,8 @@
 #include "bitonic_sort.hpp"
 #include "quick_sort.hpp"
 
-#define COLUMNSORT_VERBOSE 0
-#define COLUMNSORT_VERBOSE_L2 0
+#define COLUMNSORT_VERBOSE 1
+#define COLUMNSORT_VERBOSE_L2 1
 
 extern thread_local int thread_id;
 /* 

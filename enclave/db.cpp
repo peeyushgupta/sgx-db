@@ -22,6 +22,8 @@
 
 #include "bitonic_sort.hpp"
 #include "column_sort.hpp"
+#include "quick_sort.hpp"
+
 //#define FILE_READ_SIZE (1 << 12)
 
 #define FILE_READ_SIZE DATA_BLOCK_SIZE
@@ -1611,14 +1613,14 @@ int ecall_merge_and_sort_and_write(int db_id,
 	// Sort: 1) bitonic or 2) quick
 	/* Which field to sort? */
 	int field;
-	field = 0;
+	field = 1;
 
 #if defined(REPORT_SORT_STATS)
 	start = RDTSC();
 #endif
 	// Refer to parallelization and update - column_sort_table_parallel();
-	ret = column_sort_table(db, append_table, field);
-	//ret = bitonic_sort_table(db, append_table, field, &s_table);
+	//ret = column_sort_table(db, append_table, field);
+	ret = bitonic_sort_table(db, append_table, field, &s_table);
 	//ret = quick_sort_table(db, append_table, field, &s_table); 
 	if(ret) {
 		ERR("failed to bitonic sort table %s\n",
@@ -1635,6 +1637,8 @@ int ecall_merge_and_sort_and_write(int db_id,
 
 	INFO(" Sorting merged table took %llu cycles (%f sec)\n", cycles, secs);
 #endif
+
+	return 0; 
 
 	/* Later remove join condition - each row has the info where it came from */
 	join_condition_t c;
