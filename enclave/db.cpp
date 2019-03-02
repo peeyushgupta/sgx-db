@@ -31,6 +31,7 @@
 #define OCALL_VERBOSE 0
 #define JOIN_VERBOSE 0
 #define IO_VERBOSE 0
+#define PIN_VERBOSE 1
 
 data_base_t* g_dbs[MAX_DATABASES];
 
@@ -648,7 +649,9 @@ int pin_table(table_t *table) {
 		return -ENOMEM;
 
 	for(blk_num = 0; blk_num*table->rows_per_blk < table->num_rows; blk_num++) 
-	{ 
+	{
+		DBG_ON(PIN_VERBOSE, "pin:%s, blk_num: %d\n", table->name.c_str(), blk_num);
+
         	b = bread(table, blk_num);
 		ERR_ON(!b, "got NULL block"); 
 		table->pinned_blocks[blk_num] = b; 

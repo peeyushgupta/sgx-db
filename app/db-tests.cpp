@@ -13,8 +13,8 @@
 
 using namespace std;
 #define OCALL_TEST_LENGTH 10000
-#define RANKINGS_TABLE_SIZE	(10)
-#define UVISITS_TABLE_SIZE	(20)
+#define RANKINGS_TABLE_SIZE	(360000)
+#define UVISITS_TABLE_SIZE	(350000)
 #define RANDINT_TABLE_SIZE	256
 
 typedef enum {
