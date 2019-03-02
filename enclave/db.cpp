@@ -1055,11 +1055,19 @@ int ecall_insert_row_dbg(int db_id, int table_id, void *row_data) {
 	return ret; 
 }
 
-int print_schema(schema_t *sc)
+int print_schema(schema_t *sc, std::string name)
 {
+	printf("Dumping" TXT_FG_GREEN " %s " TXT_FG_WHITE "schema with %d "
+			"fields\n", name.c_str(), sc->num_fields);
+	printf("+-------------------------------------+\n");
+	printf("| column | offset |    type (size)    |\n");
+	printf("+-------------------------------------+\n");
 	for(int i = 0;  i < sc->num_fields; i++) {
-		printf("%d offset: %d, size: %d, type: %d\n", i, sc->offsets[i], sc->sizes[i], sc->types[i]);
-    }
+		printf("|%8d|%8d|%10s(%5d)  |\n", i, sc->offsets[i],
+				get_schema_type(sc->types[i]).c_str(),
+				sc->sizes[i]);
+	}
+	printf("+-------------------------------------+\n");
 }
 
 int print_row(schema_t *sc, row_t *row) {
@@ -1605,7 +1613,7 @@ int ecall_merge_and_sort_and_write(int db_id,
 		return ret; 
 	}
 
-	print_schema(&join_sc);
+	print_schema(&join_sc, "join_schema");
 
 	// Join and write sorted table
 	ret = join_and_write_sorted_table( db, append_table, &c, &join_sc, write_table_id );

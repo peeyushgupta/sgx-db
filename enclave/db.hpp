@@ -30,6 +30,28 @@ typedef enum schema_type {
 	PADDING = 9,
 } schema_type_t;
 
+std::string get_schema_type(schema_type_t t) {
+	switch (t) {
+	case BOOLEAN:
+		return "BOOL";
+	case BINARY:
+		return "BINARY";
+	case VARBINARY:
+		return "VARBINARY";
+	case DECIMAL:
+		return "DECIMAL";
+	case CHARACTER:
+		return "CHARACTER";
+	case VARCHAR:
+		return "VARCHAR";
+	case INTEGER:
+		return "INTEGER";
+	case TINYTEXT:
+		return "TINYTEXT";
+	case PADDING:
+		return "PADDING";
+	}
+}
 
 #if 0 
 struct Column{
