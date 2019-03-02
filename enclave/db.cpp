@@ -1613,14 +1613,14 @@ int ecall_merge_and_sort_and_write(int db_id,
 	// Sort: 1) bitonic or 2) quick
 	/* Which field to sort? */
 	int field;
-	field = 1;
+	field = 0;
 
 #if defined(REPORT_SORT_STATS)
 	start = RDTSC();
 #endif
 	// Refer to parallelization and update - column_sort_table_parallel();
-	//ret = column_sort_table(db, append_table, field);
-	ret = bitonic_sort_table(db, append_table, field, &s_table);
+	ret = column_sort_table(db, append_table, field);
+	//ret = bitonic_sort_table(db, append_table, field, &s_table);
 	//ret = quick_sort_table(db, append_table, field, &s_table); 
 	if(ret) {
 		ERR("failed to bitonic sort table %s\n",

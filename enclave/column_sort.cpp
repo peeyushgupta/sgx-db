@@ -54,7 +54,7 @@ int column_sort_pick_params(unsigned long num_records,
 		r = r * 2;
 
 		/* Choose s */
-		for (s = num_records / r; s < r; s ++) {
+		for (s = (num_records / r) + 1; s < r; s ++) {
 		
  			DBG_ON(COLUMNSORT_VERBOSE_L2, 
 				"trying r=%d and s=%d\n", r, s);
