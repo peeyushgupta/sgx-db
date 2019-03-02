@@ -15,6 +15,7 @@ using namespace std;
 #define OCALL_TEST_LENGTH 10000
 #define RANKINGS_TABLE_SIZE	(10)
 #define UVISITS_TABLE_SIZE	(20)
+#define RANDINT_TABLE_SIZE	256
 
 typedef enum {
 	RANKINGS_TABLE_ID = 0,
@@ -78,6 +79,50 @@ schema_t get_predef_schema(table_id_t id)
 out:
 	DBG("Could not find predefined schema for table_id: %d\n", id);
 	return {0};
+}
+
+int populate_database_from_csv(std::string fname, int num_rows, int db_id, int
+		table_id, schema_t *sc, sgx_enclave_id_t eid)
+{
+	uint8_t *row;
+	char data[MAX_ROW_SIZE];
+	char line[MAX_ROW_SIZE];
+	int sgx_ret;
+	int ret;
+
+	std::ifstream file(fname);
+
+	row = (uint8_t*)malloc(MAX_ROW_SIZE);
+
+	for (auto i = 0u; i < num_rows; i++) {
+		memset(row, 0x0, MAX_ROW_SIZE);
+		file.getline(line, MAX_ROW_SIZE);
+
+		std::istringstream ss(line);
+
+		for (auto j = 0u; j < sc->num_fields; j++) {
+			if (!ss.getline(data, MAX_ROW_SIZE, ',')) {
+				break;
+			}
+			if(sc->types[j] == INTEGER) {
+				auto d = 0;
+				d = atoi(data);
+				memcpy(&row[sc->offsets[j]], &d, 4);
+			} else if (sc->types[j] == TINYTEXT) {
+				strncpy((char*)&row[sc->offsets[j]], data, strlen(data) + 1);
+			}
+		}
+
+		sgx_ret = ecall_insert_row_dbg(eid, &ret, db_id, table_id, row);
+
+		if (sgx_ret || ret) {
+			ERR("insert row:%d from %s, err:%d (sgx ret:%d)\n",
+				i, fname.c_str(), ret, sgx_ret);
+			return ret;
+		}
+
+	}
+	return 0;
 }
 
 void column_sort_table_parallel(sgx_enclave_id_t eid, int db_id, int table_id, int field, int num_threads);
@@ -232,15 +277,9 @@ int test_rankings(sgx_enclave_id_t eid) {
 	std::string udata_table_name("udata");
 	int i, db_id, rankings_table_id, udata_table_id, join_table_id, ret; 
 	join_condition_t c;
-	char line[MAX_ROW_SIZE]; 
-	char data[MAX_ROW_SIZE];
-	uint8_t *row;
 	sgx_status_t sgx_ret = SGX_ERROR_UNEXPECTED;
 
 	sc = get_predef_schema(RANKINGS_TABLE_ID);
-
-	//row = (uint8_t*)malloc(sc.row_size);
-	row = (uint8_t*)malloc(MAX_ROW_SIZE);
 
 	sgx_ret = ecall_create_db(eid, &ret, db_name.c_str(), db_name.length(), &db_id);
 	if (sgx_ret || ret) {
@@ -254,36 +293,13 @@ int test_rankings(sgx_enclave_id_t eid) {
 		return ret; 
 	}
 
-	std::ifstream file("rankings.csv");
+	std::string rankings_csv("rankings.csv");
 
-	for(int i = 0; i < RANKINGS_TABLE_SIZE; i++) {
-		memset(row, 'a', MAX_ROW_SIZE);
-		file.getline(line, MAX_ROW_SIZE); //get the field
+	ret = populate_database_from_csv(rankings_csv, RANKINGS_TABLE_SIZE, db_id, rankings_table_id, &sc, eid);
 
-		std::istringstream ss(line);
-		for(int j = 0; j < sc.num_fields; j++) {
-			if(!ss.getline(data, MAX_ROW_SIZE, ',')) {
-				ERR("something is wrong with data (skipping):%s\n", line);
-				break;
-			}
-			if(sc.types[j] == INTEGER) {
-				int d = 0;
-				d = atoi(data);
-				memcpy(&row[sc.offsets[j]], &d, 4);
-			} else if (sc.types[j] == TINYTEXT) {
-				strncpy((char*)&row[sc.offsets[j]], data, strlen(data) + 1);
-			}
-		}
-
-		//DBG_ON(VERBOSE_INSERT, "insert row:%s\n", (char*)row); 
-	
-		sgx_ret = ecall_insert_row_dbg(eid, &ret, db_id, rankings_table_id, row);
-		if (sgx_ret) {
-			ERR("insert row:%d, err:%d (sgx ret:%d)\n", i, ret, sgx_ret);
-			return ret; 
-		}
-		
-	
+	if (ret) {
+		ERR("populate db from %s error:%d\n", rankings_csv.c_str(), ret);
+		return ret;
 	}
 
 	ecall_flush_table(eid, &ret, db_id, rankings_table_id);
@@ -299,34 +315,13 @@ int test_rankings(sgx_enclave_id_t eid) {
 		return ret; 
 	}
 
-	std::ifstream file2("uservisits.csv");
+	std::string uvisits_csv("uservisits.csv");
 
-	for(int i = 0; i < UVISITS_TABLE_SIZE; i++) {
-		memset(row, 'a', MAX_ROW_SIZE);
-		file2.getline(line, MAX_ROW_SIZE);//get the field
+	ret = populate_database_from_csv(uvisits_csv, UVISITS_TABLE_SIZE, db_id, udata_table_id, &sc_udata, eid);
 
-		std::istringstream ss(line);
-
-		for(int j = 0; j < sc_udata.num_fields; j++) {
-			if(!ss.getline(data, MAX_ROW_SIZE, ',')){
-				break;
-			}
-			if(sc_udata.types[j] == INTEGER) {
-				int d = 0;
-				d = atoi(data);
-				memcpy(&row[sc_udata.offsets[j]], &d, 4);
-			} else if (sc_udata.types[j] == TINYTEXT) {
-				strncpy((char*)&row[sc_udata.offsets[j]], data, strlen(data) + 1);
-			}
-		}
-
-		sgx_ret = ecall_insert_row_dbg(eid, &ret, db_id, udata_table_id, row);
-		if (sgx_ret || ret) {
-			ERR("insert row:%d into %s, err:%d (sgx ret:%d)\n", 
-				i, udata_table_name.c_str(), ret, sgx_ret);
-			return ret; 
-		}
-
+	if (ret) {
+		ERR("populate db from %s error:%d\n", uvisits_csv.c_str(), ret);
+		return ret;
 	}
 
 	ecall_flush_table(eid, &ret, db_id, udata_table_id);
@@ -489,16 +484,11 @@ int test_bitonic_sort(sgx_enclave_id_t eid)
 	std::string db_name("random-integers");
 	std::string table_name("rand_int");
 	int i, db_id, table_id, join_table_id, ret;
-	char line[MAX_ROW_SIZE] = {0};
-	char data[MAX_ROW_SIZE] = {0};
-	uint8_t *row;
 	sgx_status_t sgx_ret = SGX_ERROR_UNEXPECTED;
 
 	printf(TXT_FG_YELLOW "Starting bitonic sort test" TXT_NORMAL "\n");
 
 	sc = get_predef_schema(RAND_INT_TABLE_ID);
-
-	row = (uint8_t*)malloc(MAX_ROW_SIZE);
 
 	sgx_ret = ecall_create_db(eid, &ret, db_name.c_str(), db_name.length(), &db_id);
 	if (sgx_ret || ret) {
@@ -512,29 +502,13 @@ int test_bitonic_sort(sgx_enclave_id_t eid)
 		return ret;
 	}
 
-	std::ifstream file("rand.csv");
+	std::string rand_csv("rand.csv");
 
-	for(auto i = 0u; i < 256; i++) {
+	ret = populate_database_from_csv(rand_csv, RANDINT_TABLE_SIZE, db_id, table_id, &sc, eid);
 
-		memset(row, 0x0, MAX_ROW_SIZE);
-		file.getline(line, MAX_ROW_SIZE); //get the field
-		std::istringstream ss(line);
-		for(auto j = 0u; j < sc.num_fields; j++) {
-			if(!ss.getline(data, MAX_ROW_SIZE, ',')) {
-				ERR("something is wrong with data (skipping):%s\n", line);
-				break;
-			}
-			if(sc.types[j] == INTEGER) {
-				auto d = atoi(data);
-				memcpy(&row[sc.offsets[j]], &d, 4);
-			}
-		}
-
-		sgx_ret = ecall_insert_row_dbg(eid, &ret, db_id, table_id, row);
-		if (sgx_ret) {
-			ERR("insert row:%d, err:%d (sgx ret:%d)\n", i, ret, sgx_ret);
-			return ret;
-		}
+	if (ret) {
+		ERR("populate db from %s error:%d\n", rand_csv.c_str(), ret);
+		return ret;
 	}
 
 	ecall_flush_table(eid, &ret, db_id, table_id);
@@ -597,17 +571,12 @@ int test_column_sort(sgx_enclave_id_t eid)
 	std::string db_name("columnsort-db");
 	std::string table_name("columnsort");
 	int i, db_id, table_id, ret;
-	char line[MAX_ROW_SIZE] = {0};
-	char data[MAX_ROW_SIZE] = {0};
-	uint8_t *row;
 	sgx_status_t sgx_ret = SGX_ERROR_UNEXPECTED;
 
 
 	printf(TXT_FG_YELLOW "Starting column sort test" TXT_NORMAL "\n"); 
 
 	sc = get_predef_schema(RAND_INT_TABLE_ID);
-
-	row = (uint8_t*)malloc(MAX_ROW_SIZE);
 
 	sgx_ret = ecall_create_db(eid, &ret, db_name.c_str(), db_name.length(), &db_id);
 	if (sgx_ret || ret) {
@@ -621,31 +590,13 @@ int test_column_sort(sgx_enclave_id_t eid)
 		return ret;
 	}
 
-	std::ifstream file("columnsort.csv");
+	std::string rand_csv("rand.csv");
 
-	for(int i = 0; i < 16; i++) {
+	ret = populate_database_from_csv(rand_csv, RANDINT_TABLE_SIZE, db_id, table_id, &sc, eid);
 
-		memset(row, 0x0, MAX_ROW_SIZE);
-		file.getline(line, MAX_ROW_SIZE); //get the field
-		std::istringstream ss(line);
-		for(int j = 0; j < sc.num_fields; j++) {
-			if(!ss.getline(data, MAX_ROW_SIZE, ',')) {
-				ERR("something is wrong with data (skipping):%s\n", line);
-				break;
-			}
-			if(sc.types[j] == INTEGER) {
-				int d = 0;
-				d = atoi(data);
-				//printf("%s, row %d | data %s : %d\n", __func__, i, data, atoi(data));
-				memcpy(&row[sc.offsets[j]], &d, 4);
-			}
-		}
-
-		sgx_ret = ecall_insert_row_dbg(eid, &ret, db_id, table_id, row);
-		if (sgx_ret) {
-			ERR("insert row:%d, err:%d (sgx ret:%d)\n", i, ret, sgx_ret);
-			return ret;
-		}
+	if (ret) {
+		ERR("populate db from %s error:%d\n", rand_csv.c_str(), ret);
+		return ret;
 	}
 
 	ecall_flush_table(eid, &ret, db_id, table_id);
@@ -697,16 +648,11 @@ int test_quick_sort(sgx_enclave_id_t eid)
 	std::string db_name("qsort_test");
 	std::string table_name("qsort_rankings");
 	int i, db_id, table_id, join_table_id, ret;
-	char line[MAX_ROW_SIZE] = {0};
-	char data[MAX_ROW_SIZE] = {0};
-	uint8_t *row;
 	sgx_status_t sgx_ret = SGX_ERROR_UNEXPECTED;
 
 	printf(TXT_FG_YELLOW "Starting quick sort test" TXT_NORMAL "\n");
 
 	sc = get_predef_schema(RANKINGS_TABLE_ID);
-
-	row = (uint8_t*)malloc(MAX_ROW_SIZE);
 
 	sgx_ret = ecall_create_db(eid, &ret, db_name.c_str(), db_name.length(), &db_id);
 	if (sgx_ret || ret) {
@@ -720,34 +666,17 @@ int test_quick_sort(sgx_enclave_id_t eid)
 		return ret;
 	}
 
-	std::ifstream file("rankings.csv");
+	std::string rankings_csv("rankings.csv");
 
-	for(int i = 0; i < RANKINGS_TABLE_SIZE; i++) {
-		memset(row, 'a', MAX_ROW_SIZE);
-		file.getline(line, MAX_ROW_SIZE); //get the field
+	ret = populate_database_from_csv(rankings_csv, RANKINGS_TABLE_SIZE, db_id, table_id, &sc, eid);
 
-		std::istringstream ss(line);
-		for(int j = 0; j < sc.num_fields; j++) {
-			if(!ss.getline(data, MAX_ROW_SIZE, ',')) {
-				ERR("something is wrong with data (skipping):%s\n", line);
-				break;
-			}
-			if(sc.types[j] == INTEGER) {
-				int d = 0;
-				d = atoi(data);
-				memcpy(&row[sc.offsets[j]], &d, 4);
-			} else if (sc.types[j] == TINYTEXT) {
-				strncpy((char*)&row[sc.offsets[j]], data, strlen(data) + 1);
-			}
-		}
-
-		sgx_ret = ecall_insert_row_dbg(eid, &ret, db_id, table_id, row);
-		if (sgx_ret) {
-			ERR("insert row:%d, err:%d (sgx ret:%d)\n", i, ret, sgx_ret);
-			return ret;
-		}
+	if (ret) {
+		ERR("populate db from %s error:%d\n", rankings_csv.c_str(), ret);
+		return ret;
 	}
+
 	ecall_flush_table(eid, &ret, db_id, table_id);
+
 	printf("created %s table\n", table_name.c_str());
 
 	{
@@ -755,7 +684,7 @@ int test_quick_sort(sgx_enclave_id_t eid)
 		unsigned long long start, end;
 		start = RDTSC_START();
 		auto num_threads = 2u;
-		ecall_quicksort_table(eid, &ret, db_id, table_id, 3, &sorted_id);
+		ecall_quicksort_table(eid, &ret, db_id, table_id, 1, &sorted_id);
 
 		//quick_sort_parallel(eid, db_id, table_id, 0, num_threads);
 #ifdef CREATE_SORTED_TABLE
@@ -781,14 +710,10 @@ int test_merge_sort_write(sgx_enclave_id_t eid)
 	std::string udata_table_name("udata");
 	int i, db_id, rankings_table_id, udata_table_id, join_table_id, ret; 
 	join_condition_t c;
-	char line[MAX_ROW_SIZE]; 
-	char data[MAX_ROW_SIZE];
-	uint8_t *row;
+
 	sgx_status_t sgx_ret = SGX_ERROR_UNEXPECTED;
 
 	sc = get_predef_schema(RANKINGS_TABLE_ID);
-
-	row = (uint8_t*)malloc(MAX_ROW_SIZE);
 
 	sgx_ret = ecall_create_db(eid, &ret, db_name.c_str(), db_name.length(), &db_id);
 	if (sgx_ret || ret) {
@@ -802,36 +727,13 @@ int test_merge_sort_write(sgx_enclave_id_t eid)
 		return ret; 
 	}
 
-	std::ifstream file("rankings.csv");
+	std::string rankings_csv("rankings.csv");
 
-	for(int i = 0; i < RANKINGS_TABLE_SIZE; i++) {
-		memset(row, 'a', MAX_ROW_SIZE);
-		file.getline(line, MAX_ROW_SIZE); //get the field
+	ret = populate_database_from_csv(rankings_csv, RANKINGS_TABLE_SIZE, db_id, rankings_table_id, &sc, eid);
 
-		std::istringstream ss(line);
-		for(int j = 0; j < sc.num_fields; j++) {
-			if(!ss.getline(data, MAX_ROW_SIZE, ',')) {
-				ERR("something is wrong with data (skipping):%s\n", line);
-				break;
-			}
-			if(sc.types[j] == INTEGER) {
-				int d = 0;
-				d = atoi(data);
-				memcpy(&row[sc.offsets[j]], &d, 4);
-			} else if (sc.types[j] == TINYTEXT) {
-				strncpy((char*)&row[sc.offsets[j]], data, strlen(data) + 1);
-			}
-		}
-
-		//DBG_ON(VERBOSE_INSERT, "insert row:%s\n", (char*)row); 
-	
-		sgx_ret = ecall_insert_row_dbg(eid, &ret, db_id, rankings_table_id, row);
-		if (sgx_ret) {
-			ERR("insert row:%d, err:%d (sgx ret:%d)\n", i, ret, sgx_ret);
-			return ret; 
-		}
-		
-	
+	if (ret) {
+		ERR("populate db from %s error:%d\n", rankings_csv.c_str(), ret);
+		return ret;
 	}
 
 	ecall_flush_table(eid, &ret, db_id, rankings_table_id);
@@ -847,37 +749,17 @@ int test_merge_sort_write(sgx_enclave_id_t eid)
 		return ret; 
 	}
 
-	std::ifstream file2("uservisits.csv");
+	std::string uvisits_csv("uservisits.csv");
 
-	for(int i = 0; i < UVISITS_TABLE_SIZE; i++) {
-		memset(row, 'a', MAX_ROW_SIZE);
-		file2.getline(line, MAX_ROW_SIZE);//get the field
+	ret = populate_database_from_csv(uvisits_csv, UVISITS_TABLE_SIZE, db_id, udata_table_id, &sc_udata, eid);
 
-		std::istringstream ss(line);
-
-		for(int j = 0; j < sc_udata.num_fields; j++) {
-			if(!ss.getline(data, MAX_ROW_SIZE, ',')){
-				break;
-			}
-			if(sc_udata.types[j] == INTEGER) {
-				int d = 0;
-				d = atoi(data);
-				memcpy(&row[sc_udata.offsets[j]], &d, 4);
-			} else if (sc_udata.types[j] == TINYTEXT) {
-				strncpy((char*)&row[sc_udata.offsets[j]], data, strlen(data) + 1);
-			}
-		}
-
-		sgx_ret = ecall_insert_row_dbg(eid, &ret, db_id, udata_table_id, row);
-		if (sgx_ret || ret) {
-			ERR("insert row:%d into %s, err:%d (sgx ret:%d)\n", 
-				i, udata_table_name.c_str(), ret, sgx_ret);
-			return ret; 
-		}
-
+	if (ret) {
+		ERR("populate db from %s error:%d\n", uvisits_csv.c_str(), ret);
+		return ret;
 	}
 
 	ecall_flush_table(eid, &ret, db_id, udata_table_id);
+
 	printf("created uservisits table with ID:%d | table_id:%d\n",
 			db_id, udata_table_id);
 
