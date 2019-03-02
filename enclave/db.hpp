@@ -30,7 +30,7 @@ typedef enum schema_type {
 	PADDING = 9,
 } schema_type_t;
 
-std::string get_schema_type(schema_type_t t) {
+std::string inline get_schema_type(schema_type_t t) {
 	switch (t) {
 	case BOOLEAN:
 		return "BOOL";
