@@ -52,6 +52,29 @@ data_base_t *get_db(unsigned int id) {
 	return NULL;
 }
 
+std::string get_schema_type(schema_type_t t) {
+	switch (t) {
+	case BOOLEAN:
+		return "BOOL";
+	case BINARY:
+		return "BINARY";
+	case VARBINARY:
+		return "VARBINARY";
+	case DECIMAL:
+		return "DECIMAL";
+	case CHARACTER:
+		return "CHARACTER";
+	case VARCHAR:
+		return "VARCHAR";
+	case INTEGER:
+		return "INTEGER";
+	case TINYTEXT:
+		return "TINYTEXT";
+	case PADDING:
+		return "PADDING";
+	}
+}
+
 /* Data layout
  *
  * - Data base is a collection of tables
@@ -1057,6 +1080,7 @@ int ecall_insert_row_dbg(int db_id, int table_id, void *row_data) {
 
 int print_schema(schema_t *sc, std::string name)
 {
+	auto total_sz = 0u;
 	printf("Dumping" TXT_FG_GREEN " %s " TXT_FG_WHITE "schema with %d "
 			"fields\n", name.c_str(), sc->num_fields);
 	printf("+-------------------------------------+\n");
@@ -1066,8 +1090,12 @@ int print_schema(schema_t *sc, std::string name)
 		printf("|%8d|%8d|%10s(%5d)  |\n", i, sc->offsets[i],
 				get_schema_type(sc->types[i]).c_str(),
 				sc->sizes[i]);
+		total_sz += sc->sizes[i];
 	}
+	total_sz += row_header_size();
 	printf("+-------------------------------------+\n");
+	printf("row_size " TXT_FG_GREEN "%d" TXT_FG_WHITE " bytes\n",
+			total_sz);
 }
 
 int print_row(schema_t *sc, row_t *row) {
