@@ -732,19 +732,47 @@ int unpin_table_dirty(table_t *table) {
 	return 0; 
 }
 
-int join_rows(row_t *join_row, unsigned int join_row_data_size, row_t * row_left, unsigned int row_left_data_size, row_t * row_right, unsigned int row_right_data_size, unsigned int offset) {
+int join_rows(row_t *join_row, unsigned int join_row_data_size, row_t *
+		row_left, unsigned int row_left_data_size, row_t * row_right,
+		unsigned int row_right_data_size, unsigned int offset) {
 
 	/*
-	if(row_left_data_size + row_right_data_size > join_row_data_size)
-		return -1; 
-	*/
-	
-	memcpy(join_row, row_left, row_header_size() + row_left_data_size); 
-	memcpy((void*)((char*)join_row + row_header_size() + row_left_data_size), row_right->data + offset, 	row_right_data_size-offset);
+	   if(row_left_data_size + row_right_data_size > join_row_data_size)
+	   return -1;
+	   */
+
+	memcpy(join_row, row_left, row_header_size() + row_left_data_size);
+	memcpy((void*)((char*)join_row + row_header_size() +
+				row_left_data_size), row_right->data + offset,
+			row_right_data_size-offset);
 	return 0; 
 }; 
 
+int _join_rows(row_t *join_row, unsigned int join_row_data_size, row_t *
+		row_r, schema_t *sc_r, row_t * row_s, schema_t *sc_s) {
 
+	auto calc_bytes_to_copy = [&](auto sc) {
+		for (int i = 0; i < sc->num_fields; i++) {
+			if (sc->types[i] == PADDING) {
+				return sc->offsets[i];
+			}
+		}
+	};
+
+	// We should skip the joining column
+	auto row_s_offset = sc_s->sizes[0];
+	// compute bytes to copy from table R
+	auto row_r_bytes = calc_bytes_to_copy(sc_r);
+	// compute bytes to copy from table S
+	auto row_s_bytes = calc_bytes_to_copy(sc_s);
+
+	memcpy(join_row, row_r, row_header_size() + row_r_bytes);
+
+	memcpy((void*)((char*)join_row + row_header_size() +
+				row_r_bytes), row_s->data + row_s_offset,
+			row_s_bytes - row_s_offset);
+	return 0;
+}
 
 /* Join */
 int ecall_join(int db_id, join_condition_t *c, int *join_table_id) {
