@@ -1709,9 +1709,9 @@ int ecall_merge_and_sort_and_write(int db_id,
 	start = RDTSC();
 #endif
 	// Refer to parallelization and update - column_sort_table_parallel();
-	ret = column_sort_table(db, append_table, field);
+	//ret = column_sort_table(db, append_table, field);
 	//ret = bitonic_sort_table(db, append_table, field, &s_table);
-	//ret = quick_sort_table(db, append_table, field, &s_table); 
+	ret = quick_sort_table(db, append_table, field, &s_table);
 	if(ret) {
 		ERR("failed to bitonic sort table %s\n",
 			append_table->name.c_str());
@@ -1727,8 +1727,6 @@ int ecall_merge_and_sort_and_write(int db_id,
 
 	INFO(" Sorting merged table took %llu cycles (%f sec)\n", cycles, secs);
 #endif
-
-	return 0; 
 
 	/* Later remove join condition - each row has the info where it came from */
 	join_condition_t c;
