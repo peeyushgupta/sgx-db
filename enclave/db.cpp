@@ -1303,7 +1303,7 @@ int print_table_dbg(table_t *table, int start, int end) {
 	printf("printing table:%s with %lu rows (row size:%d) from %d to %d\n", 
 		table->name.c_str(), table->num_rows, row_size(table), start, end); 
 
-	row = (row_t *)malloc(row_size(table)); 
+	row = (row_t *)calloc(row_size(table), 1);
 	if (!row) {
 		ERR("can't allocate memory for the row\n");
 		return -ENOMEM;
@@ -1317,6 +1317,12 @@ int print_table_dbg(table_t *table, int start, int end) {
 	
 		/* Read one row. */
 		read_row(table, i, row);
+
+		if (row->header.fake) {
+			printf("FAKE\n");
+			continue;
+		}
+
 		print_row(&table->sc, row); 
 
 	}
