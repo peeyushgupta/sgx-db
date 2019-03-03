@@ -65,7 +65,10 @@ int main(){
 	   rankings and udata tables */
 	test_rankings(eid);
 	
+	// TODO: Use a better flag here
+#ifndef TEST_BIN_PACKING_JOIN
 	test_merge_sort_write(eid);
+#endif
 
 	/* Destroy the enclave */
 	sgx_destroy_enclave(eid);

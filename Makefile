@@ -43,9 +43,10 @@ SGX_COMMON_CFLGAS +=-DREPORT_JOIN_WRITE_STATS
 #SGX_COMMON_CFLAGS +=-DPROMOTE_COLUMN
 #SGX_COMMON_CFLAGS +=-DTABLE_SCAN_TESTS
 #SGX_COMMON_CFLAGS +=-DTEST_RANKINGS_IN_A_SEPARATE_THREAD
-#SGX_COMMON_CFLAGS +=-DTEST_JOIN
+SGX_COMMON_CFLAGS +=-DTEST_JOIN
 #SGX_COMMON_CFLAGS +=-DTEST_COLUMN_SORT_RANKINGS
 #SGX_COMMON_CFLAGS +=-DTEST_QUICKSORT
+SGX_COMMON_CFLAGS +=-DTEST_BIN_PACKING_JOIN
 
 AVX_CFLAGS=
 #SGX_COMMON_CFLAGS +=-lprofiler
@@ -184,6 +185,7 @@ Enclave_Cpp_Files := enclave/bcache.cpp \
 			enclave/column_sort.cpp \
 			enclave/bitonic_sort.cpp \
 			enclave/quick_sort.cpp \
+			enclave/bin_packing_join.cpp \
 			enclave/spinlock.cpp \
 			enclave/tests.cpp \
 			enclave/aligned_alloc.cpp \

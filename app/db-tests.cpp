@@ -397,8 +397,11 @@ int test_rankings(sgx_enclave_id_t eid) {
 		
 		printf(TXT_FG_YELLOW "Sort join test" TXT_NORMAL ": joining rankings and udata tables \n"); 
 
-	
+#if defined(TEST_BIN_PACKING_JOIN)	
+		sgx_ret = ecall_bin_packing_join(eid, &ret, db_id, &c, &join_table_id);
+#else
 		sgx_ret = ecall_join(eid, &ret, db_id, &c, &join_table_id);
+#endif
 		if (sgx_ret || ret) {
 			ERR("join failed, err:%d (sgx ret:%d)\n", 
 				ret, sgx_ret);
