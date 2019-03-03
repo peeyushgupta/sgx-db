@@ -53,12 +53,14 @@ int column_sort_pick_params(unsigned long num_records,
 		/* Increase r, start over */
 		r = r * 2;
 
-		/* Choose s */
-		for (s = (num_records / r) + 1; s < r; s ++) {
-		
+		/* Choose s: if r is a power of two then to be divisible by s, s
+		   has to be a power of two too */
+		//for (s = (num_records / r) + 1; s < r; s ++) {
+		for (s = 1; s < r; s *=2 ) {
+
  			DBG_ON(COLUMNSORT_VERBOSE_L2, 
 				"trying r=%d and s=%d\n", r, s);
-			if (s == 0)
+			if (s * r < num_records)
 				continue; 
 	
 			if( r % s != 0) {

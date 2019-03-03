@@ -33,6 +33,7 @@ enclave {
  
 	trusted {
 		public int ecall_create_db([in,size=name_len] const char *cname, int name_len, [out] int *db_id);
+		public int ecall_free_db(int db_id);
 		public int ecall_create_table(int db_id, [in,size=name_len] const char *cname, int name_len, [user_check]schema_t *schema, [out]int *table_id);
 		public int ecall_insert_row_dbg(int db_id, int table_id, [user_check] void *row);
 		public int ecall_flush_table(int db_id, int table_id);

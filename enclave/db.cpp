@@ -22,6 +22,8 @@
 
 #include "bitonic_sort.hpp"
 #include "column_sort.hpp"
+#include "quick_sort.hpp"
+
 //#define FILE_READ_SIZE (1 << 12)
 
 #define FILE_READ_SIZE DATA_BLOCK_SIZE
@@ -29,6 +31,7 @@
 #define OCALL_VERBOSE 0
 #define JOIN_VERBOSE 0
 #define IO_VERBOSE 0
+#define PIN_VERBOSE 0
 
 data_base_t* g_dbs[MAX_DATABASES];
 
@@ -323,6 +326,41 @@ cleanup:
 	return ret;
 };
 
+/* Free data base */
+int ecall_free_db(int db_id) {
+	data_base *db;
+
+	db = g_dbs[db_id];
+
+	if (db_id >= MAX_DATABASES) {
+		ERR("Trying to free wrong DB: %d > MAX_DATABASES (%d)\n", 
+			db_id, MAX_DATABASES);
+		return -EINVAL;  
+	}
+
+	if (!db) {
+		ERR("Trying to free NULL db: %d\n", db_id);
+		return -EINVAL;  
+	}
+
+	
+	/* Free all tables */
+	for (auto i = 0; i < MAX_TABLES; i++) {
+		if(db->tables[i]) {
+			free_table(db->tables[i]); 
+			db->tables[i] = NULL; 
+		}
+	}
+
+
+	g_dbs[db_id] = NULL;
+	free_data_blocks(db);
+	delete db;
+ 
+	return 0;
+}
+
+
 int create_table(data_base_t *db, std::string &name, schema_t *schema, table_t **new_table) {
 	table_t *table; 
 	int i, fd, ret, sgx_ret; 
@@ -416,6 +454,22 @@ int ecall_create_table(int db_id, const char *cname, int name_len, schema_t *sch
 	return 0; 
 };
 
+void free_table(table_t *table) {
+	int ret, sgx_ret; 
+
+	for(int i = 0; i < 1 /* THREADS_PER_DB*/; i++) {
+		/* Call outside of enclave to open a file for the table */
+		sgx_ret = ocall_close_file(&ret, table->fd[i]);
+		if (sgx_ret || ret) {
+			ERR("Failed to close table file (table:%s, fd[%d]), sgx_ret:%d, ret:%d\n", 
+				table->name.c_str(), table->fd[i], sgx_ret, ret); 
+		} 
+	}
+
+	delete table;
+	return; 
+}
+
 int delete_table(data_base_t *db, table_t *table) {
 	int ret, sgx_ret; 
 
@@ -427,11 +481,13 @@ int delete_table(data_base_t *db, table_t *table) {
 	for(int i = 0; i < 1 /* THREADS_PER_DB*/; i++) {
 		sgx_ret = ocall_close_file(&ret, table->fd[i]);
 		if (sgx_ret) {
+			ERR("Failed to close table file (table:%s, fd[%d]), err:%d\n", 
+				table->name.c_str(), table->fd[i], sgx_ret); 
 			ret = sgx_ret;
 		} 
 	}
 
-	/* Call outside of enclave to open a file for the table */
+	/* Call outside of enclave to delete a file for the table */
 	sgx_ret = ocall_rm_file(&ret, table->name.c_str());
 	if (sgx_ret) {
 		ret = sgx_ret;
@@ -646,7 +702,9 @@ int pin_table(table_t *table) {
 		return -ENOMEM;
 
 	for(blk_num = 0; blk_num*table->rows_per_blk < table->num_rows; blk_num++) 
-	{ 
+	{
+		DBG_ON(PIN_VERBOSE, "pin:%s, blk_num: %d\n", table->name.c_str(), blk_num);
+
         	b = bread(table, blk_num);
 		ERR_ON(!b, "got NULL block"); 
 		table->pinned_blocks[blk_num] = b; 
@@ -1635,6 +1693,8 @@ int ecall_merge_and_sort_and_write(int db_id,
 
 	INFO(" Sorting merged table took %llu cycles (%f sec)\n", cycles, secs);
 #endif
+
+	return 0; 
 
 	/* Later remove join condition - each row has the info where it came from */
 	join_condition_t c;
