@@ -279,6 +279,10 @@ int test_rankings(sgx_enclave_id_t eid) {
 	join_condition_t c;
 	sgx_status_t sgx_ret = SGX_ERROR_UNEXPECTED;
 
+	std::string rankings_csv("rankings.csv");
+	std::string uvisits_csv("uservisits.csv");
+
+
 	sc = get_predef_schema(RANKINGS_TABLE_ID);
 
 	sgx_ret = ecall_create_db(eid, &ret, db_name.c_str(), db_name.length(), &db_id);
@@ -290,16 +294,14 @@ int test_rankings(sgx_enclave_id_t eid) {
 	sgx_ret = ecall_create_table(eid, &ret, db_id, table_name.c_str(), table_name.length(), &sc, &rankings_table_id);
 	if (sgx_ret || ret) {
 		ERR("create table error:%d (sgx ret:%d)\n", ret, sgx_ret);
-		return ret; 
+		goto out; 
 	}
-
-	std::string rankings_csv("rankings.csv");
 
 	ret = populate_database_from_csv(rankings_csv, RANKINGS_TABLE_SIZE, db_id, rankings_table_id, &sc, eid);
 
 	if (ret) {
 		ERR("populate db from %s error:%d\n", rankings_csv.c_str(), ret);
-		return ret;
+		goto out;
 	}
 
 	ecall_flush_table(eid, &ret, db_id, rankings_table_id);
@@ -312,16 +314,15 @@ int test_rankings(sgx_enclave_id_t eid) {
 	if (sgx_ret || ret) {
 		ERR("create table error:%d (sgx ret:%d), table:%s\n", 
 			ret, sgx_ret, udata_table_name.c_str());
-		return ret; 
+		goto out; 
 	}
 
-	std::string uvisits_csv("uservisits.csv");
 
 	ret = populate_database_from_csv(uvisits_csv, UVISITS_TABLE_SIZE, db_id, udata_table_id, &sc_udata, eid);
 
 	if (ret) {
 		ERR("populate db from %s error:%d\n", uvisits_csv.c_str(), ret);
-		return ret;
+		goto out;
 	}
 
 	ecall_flush_table(eid, &ret, db_id, udata_table_id);
@@ -382,7 +383,7 @@ int test_rankings(sgx_enclave_id_t eid) {
 			
 		unsigned long long start, end;
 		start = RDTSC_START();
-		auto num_threads = 4;
+		int num_threads = 4;
 		
 		//ecall_column_sort_table_dbg(eid, &ret, db_id, rankings_table_id, column);
 		column_sort_table_parallel(eid, db_id, rankings_table_id, column, num_threads);
@@ -414,7 +415,7 @@ int test_rankings(sgx_enclave_id_t eid) {
 		if (sgx_ret || ret) {
 			ERR("join failed, err:%d (sgx ret:%d)\n", 
 				ret, sgx_ret);
-			return ret; 
+			goto out; 
 		}
 
 		ecall_flush_table(eid, &ret, db_id, join_table_id);
@@ -422,8 +423,10 @@ int test_rankings(sgx_enclave_id_t eid) {
 
 	}
 #endif
-	return 0;
-
+	ret = 0;
+out:
+	ecall_free_db(eid, &ret, db_id); 
+	return ret;
 }
 
 int test_project_schema(sgx_enclave_id_t eid) {
@@ -485,6 +488,7 @@ int test_bitonic_sort(sgx_enclave_id_t eid)
 	std::string table_name("rand_int");
 	int i, db_id, table_id, join_table_id, ret;
 	sgx_status_t sgx_ret = SGX_ERROR_UNEXPECTED;
+	std::string rand_csv("rand.csv");
 
 	printf(TXT_FG_YELLOW "Starting bitonic sort test" TXT_NORMAL "\n");
 
@@ -499,16 +503,15 @@ int test_bitonic_sort(sgx_enclave_id_t eid)
 	sgx_ret = ecall_create_table(eid, &ret, db_id, table_name.c_str(), table_name.length(), &sc, &table_id);
 	if (sgx_ret || ret) {
 		ERR("create table error:%d (sgx ret:%d)\n", ret, sgx_ret);
-		return ret;
+		goto out;
 	}
 
-	std::string rand_csv("rand.csv");
 
 	ret = populate_database_from_csv(rand_csv, RANDINT_TABLE_SIZE, db_id, table_id, &sc, eid);
 
 	if (ret) {
 		ERR("populate db from %s error:%d\n", rand_csv.c_str(), ret);
-		return ret;
+		goto out;
 	}
 
 	ecall_flush_table(eid, &ret, db_id, table_id);
@@ -534,7 +537,10 @@ int test_bitonic_sort(sgx_enclave_id_t eid)
 #endif
 	}
 
-	return 0;
+	ret = 0;
+out:
+	ecall_free_db(eid, &ret, db_id); 
+	return ret;
 }
 
 
@@ -573,6 +579,7 @@ int test_column_sort(sgx_enclave_id_t eid)
 	int i, db_id, table_id, ret;
 	sgx_status_t sgx_ret = SGX_ERROR_UNEXPECTED;
 
+	std::string rand_csv("rand.csv");
 
 	printf(TXT_FG_YELLOW "Starting column sort test" TXT_NORMAL "\n"); 
 
@@ -587,16 +594,15 @@ int test_column_sort(sgx_enclave_id_t eid)
 	sgx_ret = ecall_create_table(eid, &ret, db_id, table_name.c_str(), table_name.length(), &sc, &table_id);
 	if (sgx_ret || ret) {
 		ERR("create table error:%d (sgx ret:%d)\n", ret, sgx_ret);
-		return ret;
+		goto out;
 	}
 
-	std::string rand_csv("rand.csv");
 
 	ret = populate_database_from_csv(rand_csv, RANDINT_TABLE_SIZE, db_id, table_id, &sc, eid);
 
 	if (ret) {
 		ERR("populate db from %s error:%d\n", rand_csv.c_str(), ret);
-		return ret;
+		goto out;
 	}
 
 	ecall_flush_table(eid, &ret, db_id, table_id);
@@ -604,24 +610,25 @@ int test_column_sort(sgx_enclave_id_t eid)
 	printf("created columnsort table\n");
 
 	/* Column sort tests */
+	{		
+		unsigned int column = 0; 
 		
-	unsigned int column;
+		unsigned long long start, end;
+		start = RDTSC_START();
+		auto num_threads = 4;
+		//ecall_column_sort_table_dbg(eid, &ret, db_id, table_id, column);
 
-	column = 0; 
-		
-	unsigned long long start, end;
-	start = RDTSC_START();
-	auto num_threads = 4;
-	//ecall_column_sort_table_dbg(eid, &ret, db_id, table_id, column);
-
-	column_sort_table_parallel(eid, db_id, table_id, column, num_threads);
-	ecall_flush_table(eid, &ret, db_id, table_id);
-	end = RDTSCP();
+		column_sort_table_parallel(eid, db_id, table_id, column, num_threads);
+		ecall_flush_table(eid, &ret, db_id, table_id);
+		end = RDTSCP();
 	
-	printf("Sorting columnsort table + flushing took %llu cycles\n", end - start);
-	ecall_print_table_dbg(eid, &ret, db_id, table_id, 0, 23);
-
-	return 0;
+		printf("Sorting columnsort table + flushing took %llu cycles\n", end - start);
+		ecall_print_table_dbg(eid, &ret, db_id, table_id, 0, 23);
+	}
+	ret = 0;
+out:
+	ecall_free_db(eid, &ret, db_id); 
+	return ret;
 }
 
 void quick_sorter_fn(sgx_enclave_id_t eid, int db_id, int table_id, int field, int tid, int num_threads)
@@ -649,6 +656,7 @@ int test_quick_sort(sgx_enclave_id_t eid)
 	std::string table_name("qsort_rankings");
 	int i, db_id, table_id, join_table_id, ret;
 	sgx_status_t sgx_ret = SGX_ERROR_UNEXPECTED;
+	std::string rankings_csv("rankings.csv");
 
 	printf(TXT_FG_YELLOW "Starting quick sort test" TXT_NORMAL "\n");
 
@@ -663,16 +671,15 @@ int test_quick_sort(sgx_enclave_id_t eid)
 	sgx_ret = ecall_create_table(eid, &ret, db_id, table_name.c_str(), table_name.length(), &sc, &table_id);
 	if (sgx_ret || ret) {
 		ERR("create table error:%d (sgx ret:%d)\n", ret, sgx_ret);
-		return ret;
+		goto out;
 	}
 
-	std::string rankings_csv("rankings.csv");
 
 	ret = populate_database_from_csv(rankings_csv, RANKINGS_TABLE_SIZE, db_id, table_id, &sc, eid);
 
 	if (ret) {
 		ERR("populate db from %s error:%d\n", rankings_csv.c_str(), ret);
-		return ret;
+		goto out;
 	}
 
 	ecall_flush_table(eid, &ret, db_id, table_id);
@@ -698,7 +705,10 @@ int test_quick_sort(sgx_enclave_id_t eid)
 #endif
 	}
 
-	return 0;	
+	ret = 0;
+out:
+	ecall_free_db(eid, &ret, db_id); 
+	return ret;
 }
 
 int test_merge_sort_write(sgx_enclave_id_t eid)
@@ -710,6 +720,8 @@ int test_merge_sort_write(sgx_enclave_id_t eid)
 	std::string udata_table_name("udata");
 	int i, db_id, rankings_table_id, udata_table_id, join_table_id, ret; 
 	join_condition_t c;
+	std::string uvisits_csv("uservisits.csv");
+	std::string rankings_csv("rankings.csv");
 
 	sgx_status_t sgx_ret = SGX_ERROR_UNEXPECTED;
 
@@ -724,16 +736,15 @@ int test_merge_sort_write(sgx_enclave_id_t eid)
 	sgx_ret = ecall_create_table(eid, &ret, db_id, table_name.c_str(), table_name.length(), &sc, &rankings_table_id);
 	if (sgx_ret || ret) {
 		ERR("create table error:%d (sgx ret:%d)\n", ret, sgx_ret);
-		return ret; 
+		goto out; 
 	}
 
-	std::string rankings_csv("rankings.csv");
 
 	ret = populate_database_from_csv(rankings_csv, RANKINGS_TABLE_SIZE, db_id, rankings_table_id, &sc, eid);
 
 	if (ret) {
 		ERR("populate db from %s error:%d\n", rankings_csv.c_str(), ret);
-		return ret;
+		goto out;
 	}
 
 	ecall_flush_table(eid, &ret, db_id, rankings_table_id);
@@ -746,16 +757,15 @@ int test_merge_sort_write(sgx_enclave_id_t eid)
 	if (sgx_ret || ret) {
 		ERR("create table error:%d (sgx ret:%d), table:%s\n", 
 			ret, sgx_ret, udata_table_name.c_str());
-		return ret; 
+		goto out; 
 	}
 
-	std::string uvisits_csv("uservisits.csv");
 
 	ret = populate_database_from_csv(uvisits_csv, UVISITS_TABLE_SIZE, db_id, udata_table_id, &sc_udata, eid);
 
 	if (ret) {
 		ERR("populate db from %s error:%d\n", uvisits_csv.c_str(), ret);
-		return ret;
+		goto out;
 	}
 
 	ecall_flush_table(eid, &ret, db_id, udata_table_id);
@@ -763,27 +773,28 @@ int test_merge_sort_write(sgx_enclave_id_t eid)
 	printf("created uservisits table with ID:%d | table_id:%d\n",
 			db_id, udata_table_id);
 
-	int project_columns_left[3] = {0,1,2};
-	int* ptr_project_columns_left = (int*)project_columns_left;
-	int num_project_columns_left = sizeof(project_columns_left)/sizeof(project_columns_left[0]);
-	int promote_columns_left[1] = {0};
-	int* ptr_promote_columns_left = (int*)promote_columns_left;
-	int num_pad_bytes_left = max(row_size(&sc),row_size(&sc_udata))-row_size(&sc);
+	{
 
-	int project_columns_right[9] = {0,1,2,3,4,5,6,7,8};
-	int* ptr_project_columns_right = (int*)project_columns_right;
-	int num_project_columns_right = sizeof(project_columns_right)/sizeof(project_columns_right[0]);
-	int promote_columns_right[1] = {1};
-	int* ptr_promote_columns_right = (int*)promote_columns_right;
-	// unsigned long -> int conversion
-	int num_pad_bytes_right = max(row_size(&sc),row_size(&sc_udata))-row_size(&sc_udata);
+		int project_columns_left[3] = {0,1,2};
+		int* ptr_project_columns_left = (int*)project_columns_left;
+		int num_project_columns_left = sizeof(project_columns_left)/sizeof(project_columns_left[0]);
+		int promote_columns_left[1] = {0};
+		int* ptr_promote_columns_left = (int*)promote_columns_left;
+		int num_pad_bytes_left = max(row_size(&sc),row_size(&sc_udata))-row_size(&sc);
 
-	printf("set up input for the algorithm\n");
+		int project_columns_right[9] = {0,1,2,3,4,5,6,7,8};
+		int* ptr_project_columns_right = (int*)project_columns_right;
+		int num_project_columns_right = sizeof(project_columns_right)/sizeof(project_columns_right[0]);
+		int promote_columns_right[1] = {1};
+		int* ptr_promote_columns_right = (int*)promote_columns_right;
+		// unsigned long -> int conversion
+		int num_pad_bytes_right = max(row_size(&sc),row_size(&sc_udata))-row_size(&sc_udata);
+
+		printf("set up input for the algorithm\n");
 
 //#define PRINT_APPEND_WRITE_TABLE
 #define	CREATE_APPEND_TABLE
 /// Create multiple threads
-	{
 		int	write_table_id;
 		unsigned long long start, end;
 		start = RDTSC_START();
@@ -814,8 +825,10 @@ int test_merge_sort_write(sgx_enclave_id_t eid)
 		ecall_print_table_dbg(eid, &ret, db_id, write_table_id, 0, 16);
 #endif
 	}
-	
-	return 0;	
+	ret = 0;
+out:
+	ecall_free_db(eid, &ret, db_id); 
+	return ret;	
 }
 
 
