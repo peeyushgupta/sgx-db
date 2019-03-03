@@ -1734,8 +1734,10 @@ int ecall_merge_and_sort_and_write(int db_id,
 	join_condition_t c;
 	c.table_left = p3_tbl_left->id;
 	c.table_right = p3_tbl_right->id;
-	c.max_joinability = 10;
-
+	c.max_joinability = 5;
+	c.num_conditions = 1;
+	c.fields_left[0] = 0;
+	c.fields_right[0] = 0;
 #if defined(REPORT_JOIN_WRITE_STATS)
 	start = RDTSC();
 #endif	
@@ -1794,14 +1796,9 @@ cleanup:
 int join_and_write_sorted_table(data_base_t *db, table_t *tbl, join_condition_t *c, 
 	schema_t* join_sc, int *join_table_id)
 {
-	auto N = tbl->num_rows;
-	assert (((N & (N - 1)) == 0));
-	// printf("%s, num_rows %d | tid = %d\n", __func__, table->num_rows, tid);
-
 	int ret;
 	table_t *tbl_left, *tbl_right, *join_table;
 	row_t *row_left = NULL, *row_right = NULL, *join_row = NULL;
-	//schema_t join_sc;
 	std::string join_table_name;  
 
 	if (!c)	
@@ -1812,7 +1809,8 @@ int join_and_write_sorted_table(data_base_t *db, table_t *tbl, join_condition_t 
 
 	tbl_left = db->tables[c->table_left];
 	tbl_right = db->tables[c->table_right];
-	if (! tbl_left || ! tbl_right)
+
+	if (!tbl_left || ! tbl_right)
 		return -3; 
 
 	/* To create a join table with combination of names */
@@ -1827,36 +1825,25 @@ int join_and_write_sorted_table(data_base_t *db, table_t *tbl, join_condition_t 
 	*join_table_id = join_table->id; 
 
 	DBG("Created join table %s, id:%d\n", join_table_name.c_str(), *join_table_id); 
-	
-	join_row = (row_t *) calloc(row_size(tbl_left)+row_size(tbl_right), 1);// - row_header_size());
-	if(!join_row)
+
+	join_row = (row_t *) calloc(row_size(tbl_left) + row_size(tbl_right), 1);
+	if (!join_row)
 		return -ENOMEM;
 
-	row_left = (row_t *) calloc(std::max(row_size(tbl_left),row_size(tbl_right)), 1); //- row_header_size()); //malloc(row_size(tbl_left));
+	row_left = (row_t *) calloc(std::max(row_size(tbl_left), row_size(tbl_right)), 1);
 	if(!row_left)
 		return -ENOMEM;
 
-	row_right = (row_t *) calloc(std::max(row_size(tbl_left),row_size(tbl_right)), 1); // - row_header_size()); //malloc(row_size(tbl_right));
+	row_right = (row_t *) calloc(std::max(row_size(tbl_left), row_size(tbl_right)), 1);
 	if(!row_right)
 		return -ENOMEM;
 
 	unsigned int size = tbl->num_rows;
 	unsigned int joinability = c->max_joinability;
 	
-	for (int i = 0; i < size; i ++) {
-
-		// DBG("Iteration (%d)\n", i);
-		if( i >= size )
-			break;
-
-		unsigned int starting = i + 1;
-		//DBG("starting (%d), ending (%d)\n", starting, i + joinability + 1);
-		
-		if( starting >= size )
-		{
-			//DBG("R starting (%d) >= size (%d)\n", starting, size);
-			break;
-		}
+	// We cannot join the last row with anything
+	for (auto i = 0; i < size - 1; i++) {
+		unsigned int start = i + 1;
 
 		// Read left row
 		ret = read_row(tbl, i, row_left);
@@ -1867,18 +1854,8 @@ int join_and_write_sorted_table(data_base_t *db, table_t *tbl, join_condition_t 
 		}
 
 		// Read right row
-		for ( int j = starting; j < i + joinability + 1; j ++ ) {
-
-			// Don't go over the size of append table
-			if( j >= size )
-			{
-				//DBG("S starting (%d) >= size (%d)\n", j, size);
-				break;
-			}
-
+		for (auto j = start; j < (start + joinability) && j < size; j++) {
 			bool equal = true;
-			bool eq;
-
 			ret = read_row(tbl, j, row_right);
 			if(ret) {
 				ERR("failed to read row %d of table %s\n",
@@ -1887,8 +1864,7 @@ int join_and_write_sorted_table(data_base_t *db, table_t *tbl, join_condition_t 
 			}
 
 			// If row_left and row_right came from the same table, add a fake row 
-			if( row_left->header.from == row_right->header.from )
-			{
+			if (row_left->header.from == row_right->header.from) {
 				join_row->header.fake = true; 
 
 				// Add a fake row to the join table
@@ -1898,33 +1874,40 @@ int join_and_write_sorted_table(data_base_t *db, table_t *tbl, join_condition_t 
 						i, tbl_left->name.c_str(), j, tbl_right->name.c_str());
 					goto cleanup;
 				}
-			}
-			else {
+			} else {
 				// Else if left_row and right_row came from different table, perform real join
-				/*
-				DBG("left row came from (%d), right row came from (%d)\n", row_left->header.from, row_right->header.from);
-				*/
-
-				// compare left and right
-				for(unsigned int k = 0; k < c->num_conditions; k++) {
-					// DBG_ON(JOIN_VERBOSE, "comparing (i:%d, j:%d, k:%d\n", i, j, k); 
-					// DBG("comparing (i:%d, j:%d, k:%d\n", i, j, k);
-
-					/* How do we know whether the row came from which table? */
-					eq = cmp_row(tbl_left, row_left, c->fields_left[k], tbl_right, row_right, c->fields_right[k]);
-					if (!eq) {
-						equal = eq; 
-					}
+				for (auto k = 0; k < c->num_conditions; k++) {
+					DBG_ON(JOIN_VERBOSE, "comparing (i:%d, j:%d, k:%d\n", i, j, k);
+					equal &= cmp_row(tbl_left, row_left, c->fields_left[k], tbl_right, row_right, c->fields_right[k]);
 				}
 
-				if (equal) { 
-					// DBG_ON(JOIN_VERBOSE, "joining (i:%d, j:%d)\n", i, j); 
-					//DBG("joining (i:%d, j:%d)\n", i, j); 
+				if (equal) {
+					DBG_ON(JOIN_VERBOSE, "joining (i:%d, from:%d) with (j:%d, from:%d)\n",
+							i, row_left->header.from,
+							j, row_right->header.from);
 
-					//DBG("Join schema row data size (%d)", join_sc->row_data_size);
+					if (row_left->header.from) {
+						// if from is '1' then the row is from table S and it joins with a row in table R
+						// So, copy row_right first followed by row_left.
+						// TODO: This should always be mandated when creating tables.
+						ret = _join_rows(join_row,
+								join_sc->row_data_size,
+								row_right,
+								&tbl_left->sc,
+								row_left,
+								&tbl_right->sc);
+					} else {
+						// if from is '0' then the row is from table R and it joins with a row in table S
+						// So, copy row_left first followed by row_right.
+						ret = _join_rows(join_row,
+								join_sc->row_data_size,
+								row_left,
+								&tbl_left->sc,
+								row_right,
+								&tbl_right->sc);
+					}
 
-					ret = join_rows(join_row, join_sc->row_data_size, row_left, tbl_left->sc.row_data_size, row_right, tbl_right->sc.row_data_size, tbl_right->sc.offsets[1]); 
-					if(ret) {
+					if (ret) {
 						ERR("failed to produce a joined row %d of table %s with row %d of table %s\n",
 							i, tbl_left->name.c_str(), j, tbl_right->name.c_str());
 						goto cleanup;
@@ -1932,36 +1915,42 @@ int join_and_write_sorted_table(data_base_t *db, table_t *tbl, join_condition_t 
 				
 					// Add row to the join 
 					ret = insert_row_dbg(join_table, join_row);
-					if(ret) {
+					if (ret) {
 						ERR("failed to join row %d of table %s with row %d of table %s\n",
 							i, tbl_left->name.c_str(), j, tbl_right->name.c_str());
 						goto cleanup;
 					}
-				} 
-				
+				} else {
+					// if not equal write a fake row
+					join_row->header.fake = true;
+
+					// Add a fake row to the join table
+					ret = insert_row_dbg(join_table, join_row);
+					if (ret) {
+						ERR("failed to insert fake row %d of table %s with row %d of table %s\n",
+							i, tbl_left->name.c_str(), j, tbl_right->name.c_str());
+						goto cleanup;
+					}
+				}
 			}	// if left_row and right_row came from different table, perform real join
-
 		}
-
-		bflush(join_table); 	
 	}
 
-	print_table_dbg(join_table, 0, 10);
+	bflush(join_table);
 
+	print_table_dbg(join_table, 0, 135);
 	INFO(" Finished writing the table\n");
 	ret = 0;
 
-cleanup: 
-/*
+cleanup:
 	if (join_row)
-		free(join_row); 
+		free(join_row);
 
 	if (row_left)
-		free(row_left); 
+		free(row_left);
 
 	if (row_right)
-		free(row_right); 
-*/
-	return ret; 
+		free(row_right);
 
+	return ret;
 }
