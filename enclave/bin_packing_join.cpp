@@ -3,6 +3,7 @@
 #include <cerrno>
 #include <unordered_map>
 #include <vector>
+#include <map>
 
 #include "db.hpp"
 #include "dbg.hpp"
@@ -33,53 +34,6 @@ int ecall_bin_packing_join(int db_id, join_condition_t *join_cond,
         return -1;
     }
 
-    // Each table stores the metadata
-    std::vector<table_t *> metadatas;
-
-    do {
-        // Number of occurance of each joining attribute across all datablocks
-        std::unordered_map<std::string, int> total_occurances;
-
-        if (collect_metadata(db_id, join_cond, &total_occurances, &metadatas)) {
-            ERR("Failed to collect metadata");
-            rtn = -1;
-            break;
-        }
-
-        std::vector<std::vector<std::string>> bins;
-        if (pack_bin(total_occurances, metadatas, &bins)) {
-            ERR("Failed to pack bin");
-            rtn = -1;
-            break;
-        }
-
-    } while (0);
-
-    // Clean up
-    for (auto &table : metadatas) {
-        delete_table(db, table);
-    }
-
-    return rtn;
-}
-
-int collect_metadata(int db_id, join_condition *join_cond,
-                     std::unordered_map<std::string, int> *total_occurances,
-                     std::vector<table_t *> *metadatas) {
-
-    // Determine size of data blocks
-#ifdef MAX_HEAP_SIZE
-    const size_t max_heap_size = MAX_HEAP_SIZE;
-#else
-    const size_t max_heap_size = 7E7;
-#endif
-    const size_t dblk_size = max_heap_size / 4;
-
-    // Check params
-    data_base_t *db = get_db(db_id);
-    if (!db) {
-        return -1;
-    }
     const int left_table_id = join_cond->table_left;
     if ((left_table_id > (MAX_TABLES - 1)) || !db->tables[left_table_id]) {
         return -2;
@@ -103,9 +57,59 @@ int collect_metadata(int db_id, join_condition *join_cond,
     metadata_schema.sizes[1] = 4;
     metadata_schema.types[1] = INTEGER;
 
+    // Each table stores the metadata
+    std::vector<table_t *> metadatas;
+
+    do {
+        // Number of occurance of each joining attribute across all datablocks
+        std::unordered_map<std::string, int> total_occurances;
+
+        if (collect_metadata(db_id, join_cond, &total_occurances, &metadatas, metadata_schema)) {
+            ERR("Failed to collect metadata");
+            rtn = -1;
+            break;
+        }
+
+        std::vector<std::vector<std::string>> bins;
+        if (pack_bins(&total_occurances, metadatas, &bins, metadata_schema)) {
+            ERR("Failed to pack bin");
+            rtn = -1;
+            break;
+        }
+
+    } while (0);
+
+    // Clean up
+    for (auto &table : metadatas) {
+        delete_table(db, table);
+    }
+
+    return rtn;
+}
+
+int collect_metadata(int db_id, join_condition *join_cond,
+                     std::unordered_map<std::string, int> *total_occurances,
+                     std::vector<table_t *> *metadatas,
+                     schema_t metadata_schema) {
+
+    // Determine size of data blocks
+#ifdef MAX_HEAP_SIZE
+    const size_t max_heap_size = MAX_HEAP_SIZE;
+#else
+    const size_t max_heap_size = 7E7;
+#endif
+    const size_t dblk_size = max_heap_size / 4;
+
+    // Check params
+    data_base_t *db = get_db(db_id);
+    if (!db) {
+        return -1;
+    }
+    
     // Get meatadata from the left table
     {
-        table_t *table = db->tables[left_table_id];
+        const int table_id = join_cond->table_left;
+        table_t *table = db->tables[table_id];
         const int rows_per_dblk = dblk_size / row_size(table);
         const int column = join_cond->fields_left[0];
         schema_t *schema = &(table->sc);
@@ -114,7 +118,7 @@ int collect_metadata(int db_id, join_condition *join_cond,
         // Due to memory limitation, we only do half of the table
         // TODO(tianjiao): increase to full size
         while (row_num < table->num_rows / 2) {
-            std::unordered_map<std::string, int> counter;
+            std::map<std::string, int> counter;
             for (int i = 0; i < rows_per_dblk; ++i) {
                 row_t row;
                 RETURN_IF_FAILED(read_row(table, row_num++, &row));
@@ -140,7 +144,8 @@ int collect_metadata(int db_id, join_condition *join_cond,
     }
     // Get meatadata from the right table
     {
-        table_t *table = db->tables[right_table_id];
+        const int table_id = join_cond->table_right;
+        table_t *table = db->tables[table_id];
         const int rows_per_dblk = dblk_size / row_size(table);
         const int column = join_cond->fields_right[0];
         schema_t *schema = &(table->sc);
@@ -149,7 +154,7 @@ int collect_metadata(int db_id, join_condition *join_cond,
         // Due to memory limitation, we only do half of the table
         // TODO(tianjiao): increase to full size
         while (row_num < table->num_rows / 2) {
-            std::unordered_map<std::string, int> counter;
+            std::map<std::string, int> counter;
             for (int i = 0; i < rows_per_dblk; ++i) {
                 row_t row;
                 if (read_row(table, row_num++, &row)) {
@@ -173,13 +178,59 @@ int collect_metadata(int db_id, join_condition *join_cond,
             RETURN_IF_FAILED(
                 create_table(db, tmp_table_name, &metadata_schema, &tmp_table));
             metadatas->push_back(tmp_table);
+            // std::map is sorted, so we just insert it
+            int i = 0;
+            row_t row;
+            row.header.fake = false;
+	        row.header.from = tmp_table->id;
+            for (const auto& it : counter) {
+                // Populate row
+                if(metadata_schema.types[0] == TINYTEXT) {
+		            strncpy((char*)&(row.data), it.first.c_str(), metadata_schema.sizes[0]);
+		
+                } else if (metadata_schema.types[0] == TINYTEXT) {
+                    memcpy(&(row.data), it.first.c_str(), metadata_schema.sizes[0]);
+                }
+                memcpy(&row.data[metadata_schema.offsets[0]], &(it.second), 4);
+                write_row_dbg(tmp_table, &row, i++);
+            }
+            print_table_dbg(tmp_table, 0, 10);
+
         }
     }
     return 0;
 }
 
-int pack_bin(const std::unordered_map<std::string, int> &total_occurances,
+int pack_bins(std::unordered_map<std::string, int> *total_occurances,
              const std::vector<table_t *> &metadatas,
-             std::vector<std::vector<std::string>> *bins) {
+             std::vector<std::vector<std::string>> *bins,
+             schema_t metadata_schema) {
+    std::unordered_map<std::string, int> last_seen;
+    for (auto& metadata : metadatas) {
+        std::unordered_map<std::string, int> curr_seen;
+        row_t row;
+        for (int row_num = 0; row_num < metadata->num_rows; row_num++) {
+            // Get metadata
+            RETURN_IF_FAILED(read_row(metadata, row_num, &row));
+            std::string val;
+            if (metadata_schema.types[0] != TINYTEXT) {
+                val = std::string((char *)get_column(&metadata_schema, 0, &row),
+                                    metadata_schema.sizes[0]);
+            } else {
+                val = std::string((char *)get_column(&metadata_schema, 0, &row));
+            }
+            int count = *(int*)get_column(&metadata_schema, 1, &row);
+            (*total_occurances)[val] -= count;
+            if ((*total_occurances)[val] < 0) {
+                ERR("Total occurance is smaller than the sum of all occurances");
+            }
+
+            // Fit it into the cell
+            // Metadata is pre-sorted
+        }
+
+        last_seen.swap(curr_seen);
+    }
+    
     return 0;
 }
