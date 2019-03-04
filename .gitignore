@@ -22,3 +22,4 @@ join:*
 .config_HW_RELEASE_x64
 core
 .vscode/
+.clang-format
