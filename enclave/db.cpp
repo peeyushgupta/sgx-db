@@ -451,6 +451,24 @@ void *get_column(schema_t *sc, int field, row_t *row) {
 	return(void*)&row->data[sc->offsets[field]];
 }
 
+void write_column(schema_t *sc, int field, row_t *row, const void *data) {
+	void* dest = get_column(sc, field, row);
+	switch (sc->types[field])
+	{
+		case INTEGER:
+			memcpy(dest, data, sc->sizes[field]);
+			break;
+
+		case TINYTEXT:
+			strncpy((char*)dest, (char*)data, sc->sizes[field]);
+			break;
+	
+		default:
+			ERR("Unimplement type\n");
+			break;
+	}
+}
+
 /* returns ture if column of row_l is found respectively to be greater then column of row_r */
 
 bool compare_rows(schema_t *sc, int column, row_t *row_l, row_t *row_r) {
