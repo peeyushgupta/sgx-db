@@ -66,6 +66,13 @@ int ecall_bin_packing_join(int db_id, join_condition_t *join_cond,
     std::vector<table_t *> metadatas_right;
 
     do {
+#if defined(REPORT_BIN_PACKING_JOIN_STATS)
+        unsigned long long start, end;
+        unsigned long long cycles;
+        double secs;
+        start = RDTSC();
+#endif
+
         // Number of occurance of each joining attribute across all datablocks
         std::unordered_map<std::string, int> total_occurances;
 
@@ -85,10 +92,19 @@ int ecall_bin_packing_join(int db_id, join_condition_t *join_cond,
             break;
         }
 
+#if defined(REPORT_BIN_PACKING_JOIN_STATS)
+        end = RDTSC();
+
+        cycles = end - start;
+        secs = (cycles / cycles_per_sec);
+
+        INFO("Collecting metadata took %llu cycles (%f sec)\n", cycles, secs);
+#endif
+
         std::vector<std::vector<std::string>> bins;
         if (pack_bins(&total_occurances, metadatas_right, &bins,
                       metadata_schema)) {
-            ERR("Failed to pack bin");
+            ERR("Failed to pack bin\n");
             rtn = -1;
             break;
         }
@@ -172,23 +188,10 @@ int collect_metadata(int db_id, int table_id, int column,
         row.header.from = tmp_table->id;
         for (const auto &it : sorted_counter) {
             // Populate row
-            if (metadata_schema.types[0] == INTEGER) {
-                memcpy(&(&row)[metadata_schema.offsets[0]], it.first.c_str(),
-                       4);
-            } else if (metadata_schema.types[0] == TINYTEXT) {
-                strncpy((char *)&(&row)[metadata_schema.offsets[0]],
-                        it.first.c_str(), it.first.size() + 1);
-            } else {
-                ERR("Unimplement type\n");
-                return -1;
-            }
-            memcpy(&row.data[metadata_schema.offsets[1]], &(it.second), 4);
+            write_column(&metadata_schema, 0, &row, it.first.c_str());
+            write_column(&metadata_schema, 1, &row, &it.second);
             insert_row_dbg(tmp_table, &row);
-            DBG("%s, %d\n", it.first.c_str(), it.second);
         }
-        print_table_dbg(tmp_table, 0, 10);
-        // TODO(tianjiao): remove this line
-        return 0;
     }
     return 0;
 }
@@ -213,11 +216,15 @@ int pack_bins(std::unordered_map<std::string, int> *total_occurances,
                     std::string((char *)get_column(&metadata_schema, 0, &row));
             }
             int count = *(int *)get_column(&metadata_schema, 1, &row);
-            (*total_occurances)[val] -= count;
-            if ((*total_occurances)[val] < 0) {
-                ERR("Total occurance is smaller than the sum of all "
-                    "occurances\n");
+            total_occurances->at(val) -= count;
+            if (total_occurances->at(val) < 0) {
+                ERR("Total occurance %d of %s is smaller than its current "
+                    "occurance %d\n",
+                    (*total_occurances)[val] + count, val, count);
                 return -1;
+            }
+            if (total_occurances->at(val) == 0) {
+                total_occurances->erase(val);
             }
 
             // Fit it into the cell
@@ -225,6 +232,12 @@ int pack_bins(std::unordered_map<std::string, int> *total_occurances,
         }
 
         last_seen.swap(curr_seen);
+    }
+
+    if (!total_occurances->empty()) {
+        ERR("There are %d joining attributes that are not packed into a bin\n",
+            total_occurances->size());
+        return -1;
     }
 
     return 0;
