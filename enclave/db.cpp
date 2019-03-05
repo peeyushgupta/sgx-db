@@ -455,16 +455,12 @@ void write_column(schema_t *sc, int field, row_t *row, const void *data) {
 	void* dest = get_column(sc, field, row);
 	switch (sc->types[field])
 	{
-		case INTEGER:
-			memcpy(dest, data, sc->sizes[field]);
-			break;
-
 		case TINYTEXT:
 			strncpy((char*)dest, (char*)data, sc->sizes[field]);
 			break;
 	
 		default:
-			ERR("Unimplement type\n");
+			memcpy(dest, data, sc->sizes[field]);
 			break;
 	}
 }
