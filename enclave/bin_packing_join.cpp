@@ -3,6 +3,7 @@
 #include <algorithm>
 #include <cerrno>
 #include <unordered_map>
+#include <utility>
 #include <vector>
 
 #include "db.hpp"
@@ -43,27 +44,9 @@ int ecall_bin_packing_join(int db_id, join_condition_t *join_cond,
         return -2;
     }
 
-    // Schema for each temp table we create for metadata
-    // It currently only support one joining attrivute
-    // <attribute_1, attribut_2, ... , attribute_n, count>
-    schema_t *joining_sc = &(db->tables[left_table_id]->sc);
-    const int column = join_cond->fields_left[0];
-    const int joining_attr_size = joining_sc->sizes[column];
-    schema_t metadata_schema;
-    metadata_schema.num_fields = 2;
-    metadata_schema.offsets[0] = 0;
-    metadata_schema.sizes[0] = joining_attr_size;
-    metadata_schema.types[0] = joining_sc->types[column];
-    metadata_schema.offsets[1] = joining_attr_size;
-    metadata_schema.sizes[1] = 4;
-    metadata_schema.types[1] = INTEGER;
-    metadata_schema.row_data_size =
-        metadata_schema.offsets[metadata_schema.num_fields - 1] +
-        metadata_schema.sizes[metadata_schema.num_fields - 1];
 
     // Each table stores the metadata
-    std::vector<table_t *> metadatas_left;
-    std::vector<table_t *> metadatas_right;
+    std::vector<std::vector<std::pair<hash_size_t, int>>> metadatas_left, metadatas_right;
 
     do {
 #if defined(REPORT_BIN_PACKING_JOIN_STATS)
@@ -74,7 +57,7 @@ int ecall_bin_packing_join(int db_id, join_condition_t *join_cond,
 #endif
 
         // Number of occurance of each joining attribute across all datablocks
-        std::unordered_map<std::string, int> total_occurances;
+        std::unordered_map<hash_size_t, int> total_occurances;
 
         // if (collect_metadata(db_id, join_cond->table_left,
         //                      join_cond->fields_left[0], metadata_schema,
@@ -85,7 +68,7 @@ int ecall_bin_packing_join(int db_id, join_condition_t *join_cond,
         // }
 
         if (collect_metadata(db_id, join_cond->table_right,
-                             join_cond->fields_right[0], metadata_schema,
+                             join_cond->fields_right[0],
                              &total_occurances, &metadatas_right)) {
             ERR("Failed to collect metadata");
             rtn = -1;
@@ -101,9 +84,8 @@ int ecall_bin_packing_join(int db_id, join_condition_t *join_cond,
         INFO("Collecting metadata took %llu cycles (%f sec)\n", cycles, secs);
 #endif
 
-        std::vector<std::vector<std::string>> bins;
-        if (pack_bins(&total_occurances, metadatas_right, &bins,
-                      metadata_schema)) {
+        std::vector<std::vector<std::vector<hash_size_t>>> bins;
+        if (pack_bins(&total_occurances, metadatas_right, &bins)) {
             ERR("Failed to pack bin\n");
             rtn = -1;
             break;
@@ -112,20 +94,14 @@ int ecall_bin_packing_join(int db_id, join_condition_t *join_cond,
     } while (0);
 
     // Clean up
-    for (auto &table : metadatas_left) {
-        delete_table(db, table);
-    }
-    for (auto &table : metadatas_right) {
-        delete_table(db, table);
-    }
+
 
     return rtn;
 }
 
 int collect_metadata(int db_id, int table_id, int column,
-                     schema_t metadata_schema,
-                     std::unordered_map<std::string, int> *total_occurances,
-                     std::vector<table_t *> *metadatas) {
+                     std::unordered_map<hash_size_t, int> *total_occurances,
+                     std::vector<std::vector<std::pair<hash_size_t, int>>> *metadatas) {
 
     // Determine size of data blocks
 #ifdef MAX_HEAP_SIZE
@@ -146,10 +122,8 @@ int collect_metadata(int db_id, int table_id, int column,
     schema_t *schema = &(table->sc);
 
     int row_num = 0;
-    // Due to memory limitation, we only do half of the table
-    // TODO(tianjiao): increase to full size
-    while (row_num < table->num_rows / 2) {
-        std::unordered_map<std::string, int> counter;
+    while (row_num < table->num_rows) {
+        std::unordered_map<hash_size_t, int> counter;
         for (int i = 0; i < rows_per_dblk; ++i) {
             row_t row;
             if (read_row(table, row_num++, &row)) {
@@ -163,59 +137,35 @@ int collect_metadata(int db_id, int table_id, int column,
             } else {
                 val = std::string((char *)get_column(schema, column, &row));
             }
-            counter[val]++;
-            (*total_occurances)[val]++;
+            // Probably there's more secured/better way to get hash
+            const hash_size_t hash = std::hash<std::string>{}(val);
+            counter[hash]++;
+            (*total_occurances)[hash]++;
         }
-        // Create temp table: bin_packing_join_metadata_collection_<i>
-        table_t *tmp_table;
-        std::string tmp_table_name =
-            "bin_packing_join_mdc_" + std::to_string(metadatas->size());
-        RETURN_IF_FAILED(
-            create_table(db, tmp_table_name, &metadata_schema, &tmp_table));
-        metadatas->push_back(tmp_table);
 
-        std::vector<std::pair<std::string, int>> sorted_counter;
+        std::vector<std::pair<hash_size_t, int>> sorted_counter;
         for (const auto &it : counter) {
             sorted_counter.emplace_back(std::move(it));
         }
         std::sort(
             sorted_counter.begin(), sorted_counter.end(),
             [](const auto &a, const auto &b) { return a.second > b.second; });
-
-        int i = 0;
-        row_t row;
-        row.header.fake = false;
-        row.header.from = tmp_table->id;
-        for (const auto &it : sorted_counter) {
-            // Populate row
-            write_column(&metadata_schema, 0, &row, it.first.c_str());
-            write_column(&metadata_schema, 1, &row, &it.second);
-            insert_row_dbg(tmp_table, &row);
-        }
+        metadatas->push_back(std::move(sorted_counter));
     }
     return 0;
 }
 
-int pack_bins(std::unordered_map<std::string, int> *total_occurances,
-              const std::vector<table_t *> &metadatas,
-              std::vector<std::vector<std::string>> *bins,
-              schema_t metadata_schema) {
-    std::unordered_map<std::string, int> last_seen;
+int pack_bins(std::unordered_map<hash_size_t, int> *total_occurances,
+              const std::vector<std::vector<std::pair<size_t, int>>> &metadatas,
+              std::vector<std::vector<std::vector<hash_size_t>>> *bins) {
+    std::unordered_map<hash_size_t, int> last_seen;
     for (auto &metadata : metadatas) {
-        std::unordered_map<std::string, int> curr_seen;
+        std::unordered_map<hash_size_t, int> curr_seen;
         row_t row;
-        for (int row_num = 0; row_num < metadata->num_rows; row_num++) {
+        for (const auto& kv : metadata){
             // Get metadata
-            RETURN_IF_FAILED(read_row(metadata, row_num, &row));
-            std::string val;
-            if (metadata_schema.types[0] != TINYTEXT) {
-                val = std::string((char *)get_column(&metadata_schema, 0, &row),
-                                  metadata_schema.sizes[0]);
-            } else {
-                val =
-                    std::string((char *)get_column(&metadata_schema, 0, &row));
-            }
-            int count = *(int *)get_column(&metadata_schema, 1, &row);
+            const hash_size_t val = kv.first;
+            const int count = kv.second;
             total_occurances->at(val) -= count;
             if (total_occurances->at(val) < 0) {
                 ERR("Total occurance %d of %s is smaller than its current "
@@ -223,17 +173,20 @@ int pack_bins(std::unordered_map<std::string, int> *total_occurances,
                     (*total_occurances)[val] + count, val, count);
                 return -1;
             }
+            // Debug only. No need in prod
             if (total_occurances->at(val) == 0) {
                 total_occurances->erase(val);
             }
 
             // Fit it into the cell
             // Metadata is pre-sorted
+
         }
 
         last_seen.swap(curr_seen);
     }
 
+    // Debug only. No need in prod
     if (!total_occurances->empty()) {
         ERR("There are %d joining attributes that are not packed into a bin\n",
             total_occurances->size());
