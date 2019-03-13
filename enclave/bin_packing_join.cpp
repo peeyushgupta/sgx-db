@@ -134,7 +134,7 @@ int collect_metadata(int db_id, int table_id, int column,
 
     table_t *table = db->tables[table_id];
     // TODO: fix this
-    const int rows_per_dblk = 100;
+    const int rows_per_dblk = 1000;
     schema_t *schema = &(table->sc);
 
     // For each datablock
@@ -231,6 +231,11 @@ int pack_bins(std::unordered_map<hash_value_t, int> *total_occurances,
             res.emplace_back(std::move(bin));
         }
     }
+
+#if defined(REPORT_BIN_PACKING_JOIN_STATS)
+    INFO("%d bins created with %d cells each bin and %d values each cell\n",
+         res.size(), dblk_count, cell_size);
+#endif
 
     return 0;
 }
