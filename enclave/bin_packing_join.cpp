@@ -54,10 +54,8 @@ int ecall_bin_packing_join(int db_id, join_condition_t *join_cond,
     // Determine size of data blocks
     const size_t dblk_size = usable_heap_size /
                              (db->tables[left_table_id]->num_rows +
-                              db->tables[right_table_id]->num_rows) /
-                             MAX_ROW_SIZE;
-    std::vector<std::vector<std::pair<hash_size_t, int>>> metadatas_left,
-        metadatas_right;
+                              db->tables[right_table_id]->num_rows);
+    metadata_t metadatas_left, metadatas_right;
 
     do {
 #if defined(REPORT_BIN_PACKING_JOIN_STATS)
@@ -68,7 +66,8 @@ int ecall_bin_packing_join(int db_id, join_condition_t *join_cond,
 #endif
 
         // Number of occurance of each joining attribute across all datablocks
-        std::unordered_map<hash_size_t, int> total_occurances;
+        // TODO: get rid of this
+        std::unordered_map<hash_value_t, int> total_occurances;
 
         // if (collect_metadata(db_id, join_cond->table_left,
         //                      join_cond->fields_left[0], metadata_schema,
@@ -95,7 +94,7 @@ int ecall_bin_packing_join(int db_id, join_condition_t *join_cond,
         INFO("Collecting metadata took %llu cycles (%f sec)\n", cycles, secs);
 #endif
 
-        std::vector<std::vector<std::vector<hash_size_t>>> bins;
+        std::vector<std::vector<std::vector<hash_value_t>>> bins;
         if (pack_bins(&total_occurances, metadatas_right, &bins)) {
             ERR("Failed to pack bin\n");
             rtn = -1;
@@ -111,8 +110,8 @@ int ecall_bin_packing_join(int db_id, join_condition_t *join_cond,
 
 int collect_metadata(
     int db_id, int table_id, int column, const size_t dblk_size,
-    std::unordered_map<hash_size_t, int> *total_occurances,
-    std::vector<std::vector<std::pair<hash_size_t, int>>> *metadatas) {
+    std::unordered_map<hash_value_t, int> *total_occurances,
+    metadata_t *metadata) {
 
     // Check params
     data_base_t *db = get_db(db_id);
@@ -121,12 +120,15 @@ int collect_metadata(
     }
 
     table_t *table = db->tables[table_id];
-    const int rows_per_dblk = dblk_size / row_size(table);
+    const int rows_per_dblk = dblk_size /* / row_size(table) */;
     schema_t *schema = &(table->sc);
 
-    int row_num = 0;
-    while (row_num < table->num_rows) {
-        std::unordered_map<hash_size_t, int> counter;
+    
+    // For each datablock
+    
+    for (int row_num = 0, dblk_num = 0; row_num < table->num_rows; dblk_num++) {
+        // For each row
+        std::unordered_map<hash_value_t, int> counter;
         for (int i = 0; i < rows_per_dblk; ++i) {
             row_t row;
             if (read_row(table, row_num++, &row)) {
@@ -140,36 +142,41 @@ int collect_metadata(
             } else {
                 val = std::string((char *)get_column(schema, column, &row));
             }
-            // Probably there's more secured/better way to get hash
-            const hash_size_t hash = std::hash<std::string>{}(val);
+            // TODO: use SGX libs to get secured hash
+            const hash_value_t hash = std::hash<std::string>{}(val);
             counter[hash]++;
-            (*total_occurances)[hash]++;
         }
-
-        std::vector<std::pair<hash_size_t, int>> sorted_counter;
-        for (const auto &it : counter) {
-            sorted_counter.emplace_back(std::move(it));
+        // Populate metadata
+        for (const auto& pair : counter) {
+            auto it = metadata->find(pair.first);
+            if (it == metadata->end()) {
+                const auto res = metadata->emplace(pair.first, (metadata_value_t){pair.first, 0, {}});
+                if (res.second == false) {
+                    ERR("Failed to insert pair into metadata");
+                    return -1;
+                }
+                it = res.first;
+            }
+            it->second.count += pair.second;
+            it->second.dblks.emplace_back(dblk_num, pair.second);
         }
-        std::sort(
-            sorted_counter.begin(), sorted_counter.end(),
-            [](const auto &a, const auto &b) { return a.second > b.second; });
-        metadatas->push_back(std::move(sorted_counter));
     }
     return 0;
 }
 
-int pack_bins(std::unordered_map<hash_size_t, int> *total_occurances,
-              const std::vector<std::vector<std::pair<hash_size_t, int>>> &metadatas,
+int pack_bins(std::unordered_map<hash_value_t, int> *total_occurances,
+              const metadata_t &metadatas,
               std::vector<bin_t> *bins) {
-    std::unordered_map<hash_size_t, int> last_seen; // <val, bin>
+    // TODO: get rid of this
+    return 0;
+    std::unordered_map<hash_value_t, int> last_seen; // <val, bin>
     for (auto &metadata : metadatas) {
-        std::unordered_map<hash_size_t, int> curr_seen;
+        std::unordered_map<hash_value_t, int> curr_seen;
         row_t row;
-        for (const auto &kv : metadata) {
+        for (const auto &kv : metadata.second.dblks) {
             // Get metadata
-            const hash_size_t val = kv.first;
+            const int dblk_num = kv.first;
             const int count = kv.second;
-            total_occurances->at(val) -= count;
 #ifndef NDEBUG
             if (total_occurances->at(val) < 0) {
                 ERR("Total occurance %d of %s is smaller than its current "
@@ -189,14 +196,6 @@ int pack_bins(std::unordered_map<hash_size_t, int> *total_occurances,
 
         last_seen.swap(curr_seen);
     }
-
-#ifndef NDEBUG
-    if (!total_occurances->empty()) {
-        ERR("There are %d joining attributes that are not packed into a bin\n",
-            total_occurances->size());
-        return -1;
-    }
-#endif
 
     return 0;
 }
