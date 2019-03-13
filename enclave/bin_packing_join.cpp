@@ -24,6 +24,13 @@
             return x;                                                          \
     }
 
+#ifdef MAX_HEAP_SIZE
+const size_t max_heap_size = MAX_HEAP_SIZE;
+#else
+const size_t max_heap_size = 7E7;
+#endif
+const size_t usable_heap_size = max_heap_size / 2;
+
 // Assuming only two table are joining
 // Assuming only one joining column
 // TODO(tianjiao): support multi column joining
@@ -44,9 +51,13 @@ int ecall_bin_packing_join(int db_id, join_condition_t *join_cond,
         return -2;
     }
 
-
-    // Each table stores the metadata
-    std::vector<std::vector<std::pair<hash_size_t, int>>> metadatas_left, metadatas_right;
+    // Determine size of data blocks
+    const size_t dblk_size = usable_heap_size /
+                             (db->tables[left_table_id]->num_rows +
+                              db->tables[right_table_id]->num_rows) /
+                             MAX_ROW_SIZE;
+    std::vector<std::vector<std::pair<hash_size_t, int>>> metadatas_left,
+        metadatas_right;
 
     do {
 #if defined(REPORT_BIN_PACKING_JOIN_STATS)
@@ -68,8 +79,8 @@ int ecall_bin_packing_join(int db_id, join_condition_t *join_cond,
         // }
 
         if (collect_metadata(db_id, join_cond->table_right,
-                             join_cond->fields_right[0],
-                             &total_occurances, &metadatas_right)) {
+                             join_cond->fields_right[0], dblk_size, &total_occurances,
+                             &metadatas_right)) {
             ERR("Failed to collect metadata");
             rtn = -1;
             break;
@@ -95,21 +106,13 @@ int ecall_bin_packing_join(int db_id, join_condition_t *join_cond,
 
     // Clean up
 
-
     return rtn;
 }
 
-int collect_metadata(int db_id, int table_id, int column,
-                     std::unordered_map<hash_size_t, int> *total_occurances,
-                     std::vector<std::vector<std::pair<hash_size_t, int>>> *metadatas) {
-
-    // Determine size of data blocks
-#ifdef MAX_HEAP_SIZE
-    const size_t max_heap_size = MAX_HEAP_SIZE;
-#else
-    const size_t max_heap_size = 7E7;
-#endif
-    const size_t dblk_size = max_heap_size / 4;
+int collect_metadata(
+    int db_id, int table_id, int column, const size_t dblk_size,
+    std::unordered_map<hash_size_t, int> *total_occurances,
+    std::vector<std::vector<std::pair<hash_size_t, int>>> *metadatas) {
 
     // Check params
     data_base_t *db = get_db(db_id);
@@ -156,42 +159,44 @@ int collect_metadata(int db_id, int table_id, int column,
 }
 
 int pack_bins(std::unordered_map<hash_size_t, int> *total_occurances,
-              const std::vector<std::vector<std::pair<size_t, int>>> &metadatas,
-              std::vector<std::vector<std::vector<hash_size_t>>> *bins) {
-    std::unordered_map<hash_size_t, int> last_seen;
+              const std::vector<std::vector<std::pair<hash_size_t, int>>> &metadatas,
+              std::vector<bin_t> *bins) {
+    std::unordered_map<hash_size_t, int> last_seen; // <val, bin>
     for (auto &metadata : metadatas) {
         std::unordered_map<hash_size_t, int> curr_seen;
         row_t row;
-        for (const auto& kv : metadata){
+        for (const auto &kv : metadata) {
             // Get metadata
             const hash_size_t val = kv.first;
             const int count = kv.second;
             total_occurances->at(val) -= count;
+#ifndef NDEBUG
             if (total_occurances->at(val) < 0) {
                 ERR("Total occurance %d of %s is smaller than its current "
                     "occurance %d\n",
                     (*total_occurances)[val] + count, val, count);
                 return -1;
             }
-            // Debug only. No need in prod
+
             if (total_occurances->at(val) == 0) {
                 total_occurances->erase(val);
             }
+#endif
 
             // Fit it into the cell
             // Metadata is pre-sorted
-
         }
 
         last_seen.swap(curr_seen);
     }
 
-    // Debug only. No need in prod
+#ifndef NDEBUG
     if (!total_occurances->empty()) {
         ERR("There are %d joining attributes that are not packed into a bin\n",
             total_occurances->size());
         return -1;
     }
+#endif
 
     return 0;
 }
