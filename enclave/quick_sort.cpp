@@ -37,7 +37,25 @@ int ecall_quicksort_table(int db_id, int table_id, int field, int *sorted_id) {
 }
 
 int quicksort_table_parallel(table_t *table, int column, int tid, int num_threads) {
-	return 0;
+	int ret; 
+	data_base_t *db;
+	table_t *s_table;
+
+	/*
+	if (!(db = get_db(db_id)))
+		return -1;
+
+	if ((table_id > (MAX_TABLES - 1)) || !db->tables[table_id])
+		return -2; 
+
+	table = db->tables[table_id];
+
+	ret = quick_sort_table_parallel(db, table, field, &s_table); 
+
+#ifdef CREATE_SORTED_TABLE
+	*sorted_id = s_table->id; 
+#endif*/
+	return ret;
 }
 
 int ecall_quicksort_table_parallel(int db_id, int table_id, int column, int tid, int num_threads)
@@ -150,6 +168,73 @@ int quick_sort_table(data_base_t *db, table_t *tbl, int column, table_t **p_tbl)
 	cycles = end - start;
 	secs = (cycles / cycles_per_sec);
 
+	INFO(" In-place quicksort took %llu cycles (%f sec)\n", cycles, secs);
+#endif
+
+#ifdef CREATE_SORTED_TABLE
+	bflush(*p_tbl);
+#endif
+	//print_table_dbg(tbl, 0, tbl->num_rows);
+
+	ret = verify_sorted_output(tbl, 0, tbl->num_rows, column);
+
+	INFO(" %s, verify_sorted_output returned %d\n", __func__, ret);
+
+	if (ret) {
+		ERR("============================\n");
+		ERR("%s: SORTED OUTPUT INCORRECT \n");
+		ERR("============================\n");
+	}
+	deallocate_memory_for_quicksort();
+	return ret; 	
+}
+
+int quick_sort_table_parallel(data_base_t *db, table_t *tbl, int column, table_t **p_tbl)
+{
+	int ret = 0;
+
+#if defined(REPORT_QSORT_STATS)
+	unsigned long long start, end;
+	unsigned long long cycles;
+	double secs;
+#endif
+
+#ifdef CREATE_SORTED_TABLE
+	std::string s_tbl_name;  
+	schema_t p_sc;
+
+	s_tbl_name = "s:" + tbl->name; 
+
+	ret = create_table(db, s_tbl_name, &p_sc, p_tbl);
+	if (ret) {
+		ERR("create table:%d\n", ret);
+		return ret; 
+	}
+
+	DBG("Created sorted table %s, id:%d\n", 
+            s_tbl_name.c_str(), s_tbl->id); 
+#endif
+
+	ret = allocate_memory_for_quicksort(tbl);
+	if (ret) {
+		ERR("memory allocation failed: %d\n", ret);
+		return ret;
+	}
+
+#if defined(REPORT_QSORT_STATS)
+	start = RDTSC();
+#endif
+	// index runs from 0 to (num_rows - 1)
+	#pragma omp parallel
+    #pragma omp single
+	quickSort_parallel(tbl, column, 0, tbl->num_rows - 1);
+	//#pragma omp taskwait
+
+#if defined(REPORT_QSORT_STATS)
+	end = RDTSC();
+	cycles = end - start;
+	secs = (cycles / cycles_per_sec);
+
 	INFO("In-place quicksort took %llu cycles (%f sec)\n", cycles, secs);
 #endif
 
@@ -173,19 +258,82 @@ int quick_sort_table(data_base_t *db, table_t *tbl, int column, table_t **p_tbl)
  
 void quickSort(table_t *tbl, int column, int start, int end) {
 
+#if defined(REPORT_QSORT_STATS)
+	unsigned long long start_sec, end_sec;
+	unsigned long long cycles;
+	double secs;
+#endif
+
 	if (start >= end) {
 		return;
 	}
 
+#if defined(REPORT_QSORT_STATS)
+	start_sec = RDTSC();
+#endif	
 	int pivot = partition(tbl, column, start, end);
 	if (pivot == -1) {
 		ERR("Sorting failed\n");
 		return;
 	}
-		
+#if defined(REPORT_QSORT_STATS)
+	end_sec = RDTSC();
+	cycles = end_sec - start_sec;
+	secs = (cycles / cycles_per_sec);
+
+	INFO(" Partitioning from %d to %d took %llu cycles (%f sec)\n", start, end, cycles, secs);
+#endif
+
+#if defined(REPORT_QSORT_STATS)
+	start_sec = RDTSC();
+#endif
 	quickSort(tbl, column, start, pivot);
+#if defined(REPORT_QSORT_STATS)
+	end_sec = RDTSC();
+	cycles = end_sec - start_sec;
+	secs = (cycles / cycles_per_sec);
+
+	INFO(" #1 quickSort from %d to %d took %llu cycles (%f sec)\n", start, pivot, cycles, secs);
+#endif
+
+#if defined(REPORT_QSORT_STATS)
+	start_sec = RDTSC();
+#endif
 	quickSort(tbl, column, pivot + 1, end);
+#if defined(REPORT_QSORT_STATS)
+	end_sec = RDTSC();
+	cycles = end_sec - start_sec;
+	secs = (cycles / cycles_per_sec);
+
+	INFO(" #2 quickSort from %d to %d took %llu cycles (%f sec)\n", pivot+1, end, cycles, secs);
+#endif
 }
+
+void quickSort_parallel(table_t *tbl, int column, int start, int end) {
+
+	if (start >= end) {
+		return;
+	}
+	
+	int pivot = partition(tbl, column, start, end);
+	if (pivot == -1) {
+		ERR("Sorting failed\n");
+		return;
+	}
+	
+	//omp_set_nested(1);
+	//#pragma omp parallel sections num_threads(16)
+	{
+		#pragma omp task
+		//#pragma omp section	
+		quickSort(tbl, column, start, pivot);
+		#pragma omp task
+		//#pragma omp section
+		quickSort(tbl, column, pivot + 1, end);
+	}
+}
+
+
 
 int partition(table_t *tbl, int column, int start, int end) {
 
