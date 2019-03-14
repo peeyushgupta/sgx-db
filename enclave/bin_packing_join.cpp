@@ -28,9 +28,10 @@
 #ifdef MAX_HEAP_SIZE
 const size_t max_heap_size = MAX_HEAP_SIZE;
 #else
-const size_t max_heap_size = 7E7;
+const size_t max_heap_size = 7E7; // 70MB
 #endif
-const size_t usable_heap_size = max_heap_size / 2;
+// TODO: make it full size
+const size_t usable_heap_size = max_heap_size / 4;
 
 // Assuming only two table are joining
 // Assuming only one joining column
@@ -53,9 +54,7 @@ int ecall_bin_packing_join(int db_id, join_condition_t *join_cond,
     }
 
     // Determine size of data blocks
-    const size_t dblk_size =
-        usable_heap_size / (db->tables[left_table_id]->num_rows +
-                            db->tables[right_table_id]->num_rows);
+    const size_t dblk_size = usable_heap_size;
     metadata_t metadatas_left, metadatas_right;
 
     do {
@@ -134,7 +133,10 @@ int collect_metadata(int db_id, int table_id, int column,
 
     table_t *table = db->tables[table_id];
     // TODO: fix this
-    const int rows_per_dblk = 1000;
+    const int rows_per_dblk = dblk_size / MAX_ROW_SIZE;
+    if (rows_per_dblk <= 0) {
+        ERR("Usable SGX memory is smaller than one row\n");
+    }
     schema_t *schema = &(table->sc);
 
     // For each datablock
@@ -182,18 +184,19 @@ int collect_metadata(int db_id, int table_id, int column,
 typedef std::vector<std::pair<int, std::vector<hash_value_t>>> temp_bin_t;
 // Attempt to merge `b` into `a`. Nothing happens and return false if failed.
 bool mergeBins(temp_bin_t *a, const temp_bin_t *b, const int cell_size) {
-    temp_bin_t tmp = *a;
     assert(a->size() == b->size());
-    for (int i = 0; i < tmp.size(); ++i) {
-        tmp[i].first += (*b)[i].first;
-        if (tmp[i].first > cell_size) {
+    for (int i = 0; i < a->size(); ++i) {
+        if ((*a)[i].first + (*b)[i].first > cell_size) {
             return false;
         }
+    }
+
+    for (int i = 0; i < a->size(); ++i) {
+        (*a)[i].first += (*b)[i].first;
 
         std::copy((*b)[i].second.begin(), (*b)[i].second.end(),
-                  std::back_inserter(tmp[i].second));
+                  std::back_inserter((*a)[i].second));
     }
-    std::swap(*a, tmp);
     return true;
 }
 
@@ -201,15 +204,21 @@ bool mergeBins(temp_bin_t *a, const temp_bin_t *b, const int cell_size) {
 int pack_bins(std::unordered_map<hash_value_t, int> *total_occurances,
               const int dblk_count, const metadata_t &metadata,
               std::vector<bin_t> *bins) {
-    // TODO: fix this
-    const int cell_size = 30;
+    // TODO: The size of the joining value may not equal to MAX_ROW_SIZE
+    const int cell_size = usable_heap_size / dblk_count / MAX_ROW_SIZE;
+    if (cell_size <= 0) {
+        ERR("Too many datablocks created.\n");
+    }
     std::vector<metadata_value_t> sorted_meta;
     // TODO: can be optimized using std::move once the algo is stablized
     std::transform(metadata.cbegin(), metadata.cend(),
                    std::back_inserter(sorted_meta),
                    [](const auto &it) { return it.second; });
+
+    // Do we really need this?
     std::sort(sorted_meta.begin(), sorted_meta.end(),
-              [](const auto &a, const auto &b) { return a.count < b.count; });
+              [](const auto &a, const auto &b) { return a.count > b.count;
+              });
 
     // Sort the count of each value in a cell in addtion to the `bin_t`
 
