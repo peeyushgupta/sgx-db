@@ -29,6 +29,11 @@ int bin_packing_join(int db_id, join_condition_t *join_cond,
     // Determine size of data blocks
     const size_t dblk_size = usable_heap_size;
     const size_t rows_per_dblk = dblk_size / MAX_ROW_SIZE;
+
+#if defined(REPORT_BIN_PACKING_JOIN_STATS)
+    INFO("Datablock size: %lu bytes.\n", dblk_size);
+    INFO("Rows per datablock: %lu rows.\n", rows_per_dblk);
+#endif
     if (rows_per_dblk <= 0) {
         ERR("Usable SGX memory is smaller than one row\n");
     }
@@ -52,7 +57,7 @@ int bin_packing_join(int db_id, join_condition_t *join_cond,
         //     break;
         // }
 
-        if (collect_metadata(csv_right, join_cond->fields_right[0], dblk_size,
+        if (collect_metadata(csv_right, join_cond->fields_right[0], rows_per_dblk,
                              &dblk_cnt, &metadata)) {
             ERR("Failed to collect metadata\n");
             rtn = -1;
@@ -96,40 +101,44 @@ int bin_packing_join(int db_id, join_condition_t *join_cond,
 int collect_metadata(const std::string &filename, int column,
                      const size_t rows_per_dblk, int *dblk_count,
                      metadata_t *metadata) {
-    std::ifstream ifile(filename);
-    std::unordered_map<std::string, int> counter;
-    std::string line;
-    for (int row_num = 0; std::getline(ifile, line); ++row_num) {
-        std::string::size_type start = 0;
-        for (int i = 0; i < column; ++i) {
-            start = line.find(',', start + 1); // Assuming line[0] != ','
-        }
-        if (start == std::string::npos) {
-            ERR("column number %d is larger than the number of elements of %s "
-                "at row %d.\n",
-                column, filename.c_str(), row_num);
-            return -1;
-        }
-        decltype(start) end = line.find(',', start);
-        if (start == end) {
-            ERR("value is empty. file: %s; column: %d; row %d.\n",
-                filename.c_str(), column, row_num);
-            return -1;
-        }
-        counter[line.substr(start, end)]++;
-
-        // Populate the the metadata after reading the last row of this
-        // datablock
-        if ((row_num + 1) % rows_per_dblk) {
-            for (const auto &pair : counter) {
-                (*metadata)[pair.first].count += pair.second;
-                (*metadata)[pair.first].dblks.emplace_back(*dblk_count,
-                                                           pair.second);
+    std::ifstream ifile(filename); 
+    int row_num = 0;
+    for (std::string line; ifile; ++(*dblk_count)) {
+        std::unordered_map<std::string, int> counter;
+        for (int i = 0; i < rows_per_dblk && std::getline(ifile, line); ++i) {
+            std::string::size_type start = 0;
+            for (int i = 0; i < column; ++i) {
+                start = line.find(',', start + 1); // Assuming line[0] != ','
             }
-            counter.clear();
-            (*dblk_count)++;
+            if (start == std::string::npos) {
+                ERR("column number %d is larger than the number of elements of "
+                    "%s at row %d.\n",
+                    column, filename.c_str(), row_num);
+                return -1;
+            }
+            decltype(start) end = line.find(',', start + 1);
+            if (start == end) {
+                ERR("value is empty. file: %s; column: %d; row %d.\n",
+                    filename.c_str(), column, row_num);
+                return -1;
+            }
+            counter[line.substr(start, end)]++;
+            row_num++;
+        }
+
+        // Populate the the metadata after reading each datablock.
+        for (const auto &pair : counter) {
+            (*metadata)[pair.first].count += pair.second;
+            (*metadata)[pair.first].dblks.emplace_back(*dblk_count,
+                                                       pair.second);
         }
     }
+
+    // Flush the last counter
+#if defined(REPORT_BIN_PACKING_JOIN_STATS)
+    INFO("%d rows read and %d datablocks of metadata collected for %s.\n", row_num, *dblk_count,
+         filename.c_str());
+#endif
 
     return 0;
 }
