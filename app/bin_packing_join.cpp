@@ -49,16 +49,15 @@ int bin_packing_join(int db_id, join_condition_t *join_cond,
 
         int dblk_cnt = 0;
 
-        // if (collect_metadata(db_id, csv_left,
-        //                      join_cond->fields_left[0], metadata_schema,
-        //                      &total_occurances, &metadatas_left)) {
-        //     ERR("Failed to collect metadata");
-        //     rtn = -1;
-        //     break;
-        // }
-
-        if (collect_metadata(csv_right, join_cond->fields_right[0], rows_per_dblk,
+        if (collect_metadata(csv_left, join_cond->fields_left[0], rows_per_dblk,
                              &dblk_cnt, &metadata)) {
+            ERR("Failed to collect metadata\n");
+            rtn = -1;
+            break;
+        }
+
+        if (collect_metadata(csv_right, join_cond->fields_right[0],
+                             rows_per_dblk, &dblk_cnt, &metadata)) {
             ERR("Failed to collect metadata\n");
             rtn = -1;
             break;
@@ -101,7 +100,8 @@ int bin_packing_join(int db_id, join_condition_t *join_cond,
 int collect_metadata(const std::string &filename, int column,
                      const size_t rows_per_dblk, int *dblk_count,
                      metadata_t *metadata) {
-    std::ifstream ifile(filename); 
+    int original_dblk_cnt = *dblk_count;
+    std::ifstream ifile(filename);
     int row_num = 0;
     for (std::string line; ifile; ++(*dblk_count)) {
         std::unordered_map<std::string, int> counter;
@@ -136,8 +136,8 @@ int collect_metadata(const std::string &filename, int column,
 
     // Flush the last counter
 #if defined(REPORT_BIN_PACKING_JOIN_STATS)
-    INFO("%d rows read and %d datablocks of metadata collected for %s.\n", row_num, *dblk_count,
-         filename.c_str());
+    INFO("%d rows read and %d datablocks of metadata collected for %s.\n",
+         row_num, *dblk_count - original_dblk_cnt, filename.c_str());
 #endif
 
     return 0;
