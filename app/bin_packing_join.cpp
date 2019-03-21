@@ -73,7 +73,7 @@ int bin_packing_join(int db_id, join_condition_t *join_cond,
         start = RDTSC_START();
 #endif
 
-        std::vector<std::vector<std::vector<hash_value_t>>> bins;
+        std::vector<bin_t> bins;
         if (pack_bins(dblk_cnt, metadata, &bins)) {
             ERR("Failed to pack bin\n");
             rtn = -1;

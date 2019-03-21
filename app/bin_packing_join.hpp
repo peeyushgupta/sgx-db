@@ -14,8 +14,7 @@ int bin_packing_join(int db_id, join_condition_t *join_cond,
                      const std::string &csv_left, const std::string &csv_right,
                      int *out_tbl_id);
 
-typedef std::size_t hash_value_t;
-typedef std::vector<std::vector<hash_value_t>> bin_t;
+typedef std::vector<std::vector<std::string>> bin_t;
 // The type of a value in the metadata
 // <value, occurances, datablocks_that_it_occurs>
 struct metadata_value_t {
@@ -33,5 +32,7 @@ int collect_metadata(const std::string& filename, int column,
 
 int pack_bins(const int dblk_count, const metadata_t &metadata,
               std::vector<bin_t> *bins);
+
+int verifyBins(const std::vector<bin_t> &bins);
 
 #endif // E_BIN_PACKING_JOIN_HPP
