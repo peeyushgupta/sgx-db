@@ -30,6 +30,7 @@ int collect_metadata(const std::string& filename, int column,
                      const size_t rows_per_dblk, int *dblk_count,
                      metadata_t *metadata);
 
+// Possible optimization: 
 int pack_bins(const int dblk_count, const metadata_t &metadata,
               std::vector<bin_t> *bins);
 

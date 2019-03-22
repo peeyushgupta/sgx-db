@@ -63,6 +63,8 @@ int bin_packing_join(int db_id, join_condition_t *join_cond,
             break;
         }
 
+
+
 #if defined(REPORT_BIN_PACKING_JOIN_STATS)
         end = RDTSCP();
 
@@ -205,6 +207,16 @@ int pack_bins(const int dblk_count, const metadata_t &metadata,
 #if defined(REPORT_BIN_PACKING_JOIN_STATS)
     INFO("%lu bins created with %d cells each bin and %d values each cell\n",
          res.size(), dblk_count, cell_size);
+
+#if defined(REPORT_BIN_PACKING_JOIN_PRINT_BIN)
+    for (const temp_bin_t &bin : res) {
+        for (const auto &cell : bin) {
+            printf("%3d ", cell.first);
+        }
+        printf("\n");
+    }
+#endif
+
 #endif
 
     return 0;
