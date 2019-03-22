@@ -30,7 +30,6 @@ typedef enum schema_type {
 	PADDING = 9,
 } schema_type_t;
 
-
 #if 0 
 struct Column{
     SchemaType ty;
@@ -112,6 +111,7 @@ struct join_condition {
 	unsigned int table_right; 
 	unsigned int fields_left[MAX_CONDITIONS];
 	unsigned int fields_right[MAX_CONDITIONS];
+	unsigned int max_joinability;
 	join_condition_t *next;  /* not supported at the moment */
 };
 
@@ -168,6 +168,7 @@ static inline int get_pinned_row(table_t *table, unsigned int row_num, data_bloc
 
 
 int create_table(data_base_t *db, std::string &name, schema_t *schema, table_t **new_table);
+void free_table(table_t *table); 
 int read_row(table_t *table, unsigned int row_num, row_t *row);
 int write_row_dbg(table_t *table, row_t *row, unsigned int row_num);
 int print_row(schema_t *sc, row_t *row); 
@@ -188,12 +189,15 @@ int project_promote_pad_table(
     int num_project_columns,
     int promote_columns [],
     int num_pad_bytes,
-    table_t **p3_tbl    
+	table_t **p3_tbl,
+	schema_t *p2_schema,
+    schema_t *p3_schema 
 );
 
 int print_table_dbg(table_t *table, int start, int end);
 
-int join_and_write_sorted_table(data_base_t *db, table_t *tbl, int max_joinability, join_condition_t *c, int *join_table_id);
+int join_and_write_sorted_table(data_base_t *db, table_t *tbl, join_condition_t *c, 
+	schema_t* join_sc, int *join_table_id);
 
 void *aligned_malloc(size_t size, size_t alignment);
 void aligned_free(void *aligned_ptr);
@@ -205,25 +209,4 @@ bool compare_rows(schema_t *sc, int column, row_t *row_l, row_t *row_r);
 void *get_column(schema_t *sc, int field, row_t *row);
 void write_column(schema_t *sc, int field, row_t *row, const void *data);
 
-/* Enclave interface */
-#if NO_SGX
-int ecall_create_db(const char *cname, int name_len, int *db_id);
-int ecall_create_table(int db_id, const char *cname, int name_len, schema_t *schema, int *table_id);
-int ecall_insert_row_dbg(int db_id, int table_id, void *row);
-int ecall_flush_table(int db_id, int table_id);
-int ecall_join(int db_id, join_condition_t *c, int *join_tbl_id);
-int ecall_quicksort_table(int db_id, int table_id, int field, int *sorted_id);
-int ecall_merge_and_sort_and_write(int db_id, 
-		int left_table_id, 
-		int *project_columns_left, 
-		int num_project_columns_left,
-		int *promote_columns_left,
-		int num_pad_bytes_left,
-		int right_table_id, 
-		int *project_columns_right, 
-		int num_project_columns_right,
-		int *promote_columns_right,
-		int num_pad_bytes_right,
-		int *write_table_id);
-#endif
 

@@ -1,6 +1,9 @@
 #include <cstdlib>
 #include <cassert>
 #include "util.hpp"
+#include "dbg.hpp"
+ 
+#define ALIGNED_MALLOC_VERBOSE 0
 
 #define ALIGN(x, a)	(((x) + (a)) & ~((a) - 1))
 
@@ -10,12 +13,16 @@ void *aligned_malloc(size_t size, size_t alignment)
 	unsigned int len = ALIGN(size + sizeof(void*), alignment);
 	void *optr = malloc(len);
 	void *aligned_ptr = nullptr;
+	static auto total_allocated = 0u;
 
 	if (!optr) {
-		printf("%s: malloc returned %p for request len %u bytes (size = %zu | alignment = %zu)\n",
-					__func__, optr, len, size, alignment);
+		DBG_ON(ALIGNED_MALLOC_VERBOSE, "malloc returned %p for request len %u bytes (size = %zu | alignment = %zu) "
+			" failed after allocating %u bytes\n",
+					optr, len, size, alignment, total_allocated);
 		return nullptr;
 	}
+
+	total_allocated += len;
 	// handle 2 cases
 	// 1) returned pointer is already aligned
 	// 2) returned pointer is not aligned
@@ -33,5 +40,6 @@ void *aligned_malloc(size_t size, size_t alignment)
 void aligned_free(void *aligned_ptr)
 {
 	void *optr = (void*)(*((unsigned long long*)aligned_ptr - 1));
+	DBG_ON(ALIGNED_MALLOC_VERBOSE, "aligned_free %p\n", optr);
 	free(optr);
 }
