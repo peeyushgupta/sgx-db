@@ -19,6 +19,8 @@ enclave/enclave_t.h
 udata
 rankings
 join:*
+p3:*
+append:*
 .config_HW_RELEASE_x64
 core
 .vscode/
