@@ -63,9 +63,13 @@ int main(){
 
 	/* Launch a collection of tests inside that require
 	   rankings and udata tables */
+#if defined(TEST_RANKINGS)
 	test_rankings(eid);
+#endif
 	
+#if defined(TEST_MERGE_SORT_WRITE)
 	test_merge_sort_write(eid);
+#endif
 
 	/* Destroy the enclave */
 	sgx_destroy_enclave(eid);
