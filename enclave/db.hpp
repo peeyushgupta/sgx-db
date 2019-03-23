@@ -207,6 +207,4 @@ int delete_table(data_base_t *db, table_t *table);
 data_base_t *get_db(unsigned int id);
 bool compare_rows(schema_t *sc, int column, row_t *row_l, row_t *row_r);
 void *get_column(schema_t *sc, int field, row_t *row);
-void write_column(schema_t *sc, int field, row_t *row, const void *data);
-
 
