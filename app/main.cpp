@@ -63,10 +63,11 @@ int main(){
 
 	/* Launch a collection of tests inside that require
 	   rankings and udata tables */
+#if defined(TEST_RANKINGS)
 	test_rankings(eid);
+#endif
 	
-	// TODO: Use a better flag here
-#ifndef TEST_BIN_PACKING_JOIN
+#if defined(TEST_MERGE_SORT_WRITE)
 	test_merge_sort_write(eid);
 #endif
 
