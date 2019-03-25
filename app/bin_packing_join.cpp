@@ -96,6 +96,9 @@ int bin_packing_join(int db_id, join_condition_t *join_cond,
 
     // Clean up
 
+
+    // TODO: remove this line
+    *out_tbl_id = 1024;
     return rtn;
 }
 
