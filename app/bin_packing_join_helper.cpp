@@ -63,8 +63,6 @@ int bin_packing_join(int db_id, join_condition_t *join_cond,
             break;
         }
 
-
-
 #if defined(REPORT_BIN_PACKING_JOIN_STATS)
         end = RDTSCP();
 
@@ -88,14 +86,26 @@ int bin_packing_join(int db_id, join_condition_t *join_cond,
         cycles = end - start;
         secs = (cycles / cycles_per_sec);
 
-        INFO("Pack bins took %llu cycles (%f sec)\n", cycles, secs);
+        INFO("Bin information collection took %llu cycles (%f sec)\n", cycles,
+             secs);
+        start = RDTSCP();
+#endif
+
+        int num_bins = 0;
+
+#if defined(REPORT_BIN_PACKING_JOIN_STATS)
+        end = RDTSC_START();
+
+        cycles = end - start;
+        secs = (cycles / cycles_per_sec);
+
+        INFO("Fill bins took %llu cycles (%f sec)\n", cycles, secs);
         start = RDTSCP();
 #endif
 
     } while (0);
 
     // Clean up
-
 
     // TODO: remove this line
     *out_tbl_id = 1024;
@@ -133,9 +143,11 @@ int collect_metadata(const std::string &filename, int column,
 
         // Populate the the metadata after reading each datablock.
         for (const auto &pair : counter) {
-            (*metadata)[pair.first].count += pair.second;
-            (*metadata)[pair.first].dblks.emplace_back(*dblk_count,
-                                                       pair.second);
+            metadata_value_t *metadata_value = &((*metadata)[pair.first]);
+            metadata_value->count += pair.second;
+            metadata_value->max_cnt =
+                std::max(metadata_value->max_cnt, pair.second);
+            metadata_value->dblks.emplace_back(*dblk_count, pair.second);
         }
     }
 
@@ -182,7 +194,10 @@ int pack_bins(const int dblk_count, const metadata_t &metadata,
 
     // Do we really need this?
     std::sort(sorted_meta.begin(), sorted_meta.end(),
-              [](const auto &a, const auto &b) { return a.count > b.count; });
+              [](const auto &a, const auto &b) {
+                  return std::tie(a.max_cnt, a.count) >
+                         std::tie(b.max_cnt, b.count);
+              });
 
     // Sort the count of each value in a cell in addtion to the `bin_t`
 
@@ -194,7 +209,7 @@ int pack_bins(const int dblk_count, const metadata_t &metadata,
         bin_t bin(dblk_count);
         for (const auto &pair : dblks) {
             bin[pair.first].first += pair.second;
-            bin[pair.first].second.push_back(it.first);
+            bin[pair.first].second.emplace_back(it.first, pair.second);
         }
         bool merged =
             std::any_of(res.begin(), res.end(), [&bin, cell_size](auto &b) {

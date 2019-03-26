@@ -13,11 +13,12 @@ int bin_packing_join(int db_id, join_condition_t *join_cond,
                      int *out_tbl_id);
 
 // A vector of <size, values>
-typedef std::vector<std::pair<int, std::vector<std::string>>> bin_t;
+typedef std::vector<std::pair<int, std::vector<std::pair<std::string, int>>>> bin_t;
 // The type of a value in the metadata
 // <value, occurances, datablocks_that_it_occurs>
 struct metadata_value_t {
     int count;
+    int max_cnt;    // the max count of this value among different datablocks
     std::vector<std::pair<int, int>> dblks; // <dblk_num, count>
 };
 typedef std::unordered_map<std::string, metadata_value_t> metadata_t;
