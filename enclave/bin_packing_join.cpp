@@ -3,6 +3,8 @@
 #include <cassert>
 
 #include "db.hpp"
+#include "util.hpp"
+
 #if defined(NO_SGX)
 #include "env.hpp"
 #else
