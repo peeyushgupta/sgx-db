@@ -22,6 +22,8 @@ struct metadata_value_t {
 };
 typedef std::unordered_map<std::string, metadata_value_t> metadata_t;
 
+// Bin Packing Phase 1: metadata collection
+// Collect information about each datablock
 // Assuming only two table are joining
 // Assuming only one joining column
 // Assuming the corresponding tables are already created in the enclave.
@@ -29,7 +31,9 @@ int collect_metadata(const std::string& filename, int column,
                      const size_t rows_per_dblk, int *dblk_count,
                      metadata_t *metadata);
 
-// Possible optimization: 
+// Bin Packing Phase 2: bin information collection
+// Figure out which value goes into which cell based on the metadata
+// Possible optimization: remove empty attributes; only merge adjency bins
 int pack_bins(const int dblk_count, const metadata_t &metadata,
               std::vector<bin_t> *bins);
 
