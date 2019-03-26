@@ -1,9 +1,7 @@
 // Implementation of the bin-packing based join algorithm
 // The first two phases, metadata collection and bin information creation, are
 // assumed to be done in client side.
-
-#ifndef E_BIN_PACKING_JOIN_HPP
-#define E_BIN_PACKING_JOIN_HPP
+#pragma once
 
 #include "db.hpp"
 #include <string>
@@ -14,7 +12,8 @@ int bin_packing_join(int db_id, join_condition_t *join_cond,
                      const std::string &csv_left, const std::string &csv_right,
                      int *out_tbl_id);
 
-typedef std::vector<std::vector<std::string>> bin_t;
+// A vector of <size, values>
+typedef std::vector<std::pair<int, std::vector<std::string>>> bin_t;
 // The type of a value in the metadata
 // <value, occurances, datablocks_that_it_occurs>
 struct metadata_value_t {
@@ -35,5 +34,3 @@ int pack_bins(const int dblk_count, const metadata_t &metadata,
               std::vector<bin_t> *bins);
 
 int verifyBins(const std::vector<bin_t> &bins);
-
-#endif // E_BIN_PACKING_JOIN_HPP

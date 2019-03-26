@@ -1,0 +1,4 @@
+#ifndef E_BIN_PACKING_JOIN_HPP
+#define E_BIN_PACKING_JOIN_HPP
+
+#endif // E_BIN_PACKING_JOIN_HPP

@@ -1,4 +1,4 @@
-#include "bin_packing_join.hpp"
+#include "bin_packing_join_helper.hpp"
 
 #include <algorithm>
 #include <cassert>
@@ -148,10 +148,8 @@ int collect_metadata(const std::string &filename, int column,
     return 0;
 }
 
-// A vector of <size, values>
-typedef std::vector<std::pair<int, std::vector<std::string>>> temp_bin_t;
 // Attempt to merge `b` into `a`. Nothing happens and return false if failed.
-bool mergeBins(temp_bin_t *a, const temp_bin_t *b, const int cell_size) {
+bool mergeBins(bin_t *a, const bin_t *b, const int cell_size) {
     assert(a->size() == b->size());
     for (int i = 0; i < a->size(); ++i) {
         if ((*a)[i].first + (*b)[i].first > cell_size) {
@@ -188,12 +186,12 @@ int pack_bins(const int dblk_count, const metadata_t &metadata,
 
     // Sort the count of each value in a cell in addtion to the `bin_t`
 
-    std::vector<temp_bin_t> res;
-    temp_bin_t last_bin(dblk_count);
+    std::vector<bin_t> res;
+    bin_t last_bin(dblk_count);
 
     for (const auto &it : metadata) {
         auto &dblks = it.second.dblks;
-        temp_bin_t bin(dblk_count);
+        bin_t bin(dblk_count);
         for (const auto &pair : dblks) {
             bin[pair.first].first += pair.second;
             bin[pair.first].second.push_back(it.first);
@@ -212,7 +210,7 @@ int pack_bins(const int dblk_count, const metadata_t &metadata,
          res.size(), dblk_count, cell_size);
 
 #if defined(REPORT_BIN_PACKING_JOIN_PRINT_BIN)
-    for (const temp_bin_t &bin : res) {
+    for (const bin_t &bin : res) {
         for (const auto &cell : bin) {
             printf("%3d ", cell.first);
         }

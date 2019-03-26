@@ -141,7 +141,7 @@ else
 	Urts_Library_Name := sgx_urts
 endif
 
-App_Cpp_Files := app/main.cpp app/apputil.cpp app/env.cpp app/db-tests.cpp app/time.cpp app/bin_packing_join.cpp
+App_Cpp_Files := app/main.cpp app/apputil.cpp app/env.cpp app/db-tests.cpp app/time.cpp app/bin_packing_join_helper.cpp
 App_Include_Paths := -I./ -I./include -I./enclave -I$(SGX_SDK)/include
 
 App_C_Flags := $(SGX_COMMON_CFLAGS) -fPIC -Wno-attributes $(App_Include_Paths)
@@ -188,6 +188,7 @@ Enclave_Cpp_Files := enclave/bcache.cpp \
 			enclave/column_sort.cpp \
 			enclave/bitonic_sort.cpp \
 			enclave/quick_sort.cpp \
+			enclave/bin_packing_join.cpp \
 			enclave/spinlock.cpp \
 			enclave/tests.cpp \
 			enclave/aligned_alloc.cpp \
