@@ -415,7 +415,7 @@ int test_rankings(sgx_enclave_id_t eid) {
 		printf(TXT_FG_YELLOW "Sort join test" TXT_NORMAL ": joining rankings and udata tables \n"); 
 
 #if defined(TEST_BIN_PACKING_JOIN)	
-		ret = bin_packing_join(db_id, &c, "rankings.csv", "uservisits.csv", &join_table_id);
+		ret = bin_packing_join(eid, db_id, &c, "rankings.csv", "uservisits.csv", &join_table_id);
 #else
 		sgx_ret = ecall_join(eid, &ret, db_id, &c, &join_table_id);
 #endif

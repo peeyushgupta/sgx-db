@@ -21,9 +21,9 @@ const size_t max_heap_size = 7E7; // 70MB
 #endif
 const size_t usable_heap_size = max_heap_size / 4;
 
-int bin_packing_join(int db_id, join_condition_t *join_cond,
-                     const std::string &csv_left, const std::string &csv_right,
-                     int *out_tbl_id) {
+int bin_packing_join(sgx_enclave_id_t eid, int db_id,
+                     join_condition_t *join_cond, const std::string &csv_left,
+                     const std::string &csv_right, int *out_tbl_id) {
     int rtn = 0;
 
     // Determine size of data blocks
@@ -49,17 +49,17 @@ int bin_packing_join(int db_id, join_condition_t *join_cond,
 
         int dblk_cnt = 0;
 
-        if (collect_metadata(csv_left, join_cond->fields_left[0], rows_per_dblk,
-                             &dblk_cnt, &metadata)) {
+        rtn = collect_metadata(csv_left, join_cond->fields_left[0],
+                               rows_per_dblk, &dblk_cnt, &metadata);
+        if (rtn) {
             ERR("Failed to collect metadata\n");
-            rtn = -1;
             break;
         }
 
-        if (collect_metadata(csv_right, join_cond->fields_right[0],
-                             rows_per_dblk, &dblk_cnt, &metadata)) {
+        rtn = collect_metadata(csv_right, join_cond->fields_right[0],
+                               rows_per_dblk, &dblk_cnt, &metadata);
+        if (rtn) {
             ERR("Failed to collect metadata\n");
-            rtn = -1;
             break;
         }
 
@@ -74,9 +74,9 @@ int bin_packing_join(int db_id, join_condition_t *join_cond,
 #endif
 
         std::vector<bin_t> bins;
-        if (pack_bins(dblk_cnt, metadata, &bins)) {
+        rtn = pack_bins(dblk_cnt, metadata, &bins);
+        if (rtn) {
             ERR("Failed to pack bin\n");
-            rtn = -1;
             break;
         }
 
@@ -91,7 +91,26 @@ int bin_packing_join(int db_id, join_condition_t *join_cond,
         start = RDTSCP();
 #endif
 
-        int num_bins = 0;
+        int rows_per_cell;
+        int bin_info_tbl_id;
+        rtn = bin_info_to_table(eid, db_id, bins, "join:bp:bin_info", &rows_per_cell, &bin_info_tbl_id);
+        if (rtn) {
+            ERR("Failed to convert bins to table.\n");
+            break;
+        }
+
+#if defined(REPORT_BIN_PACKING_JOIN_STATS)
+        end = RDTSC_START();
+
+        cycles = end - start;
+        secs = (cycles / cycles_per_sec);
+
+        INFO("Bin information to table took %llu cycles (%f sec)\n", cycles,
+             secs);
+        start = RDTSCP();
+#endif
+
+        // HERE GOES FILL BIN
 
 #if defined(REPORT_BIN_PACKING_JOIN_STATS)
         end = RDTSC_START();
@@ -108,7 +127,7 @@ int bin_packing_join(int db_id, join_condition_t *join_cond,
     // Clean up
 
     // TODO: remove this line
-    *out_tbl_id = 1024;
+    *out_tbl_id = 1 << 30;
     return rtn;
 }
 
@@ -235,5 +254,78 @@ int pack_bins(const int dblk_count, const metadata_t &metadata,
 
 #endif
 
+    bins->swap(res);
     return 0;
+}
+
+int bin_info_to_table(sgx_enclave_id_t eid, int db_id,
+                      const std::vector<bin_t> &bins,
+                      const std::string &tbl_name, int *rows_per_cell,
+                      int *bin_info_tbl_id) {
+
+    schema_t sc;
+    sc.num_fields = 1;
+    sc.offsets[0] = 0;
+    sc.sizes[0] = 1 << 10;
+    sc.types[0] = TINYTEXT;
+    sc.row_data_size = 1 << 10;
+
+    sgx_status_t sgx_ret;
+    int ret;
+    sgx_ret = ecall_create_table(eid, &ret, db_id, tbl_name.c_str(),
+                                 tbl_name.length(), &sc, bin_info_tbl_id);
+    if (sgx_ret || ret) {
+        ERR("create table error:%d (sgx ret:%d)\n", ret, sgx_ret);
+        return -1;
+    }
+
+    // Calculate the number of rows per cell
+    *rows_per_cell = 0;
+    for (const bin_t &bin : bins) {
+        for (const auto &cell : bin) {
+            *rows_per_cell = std::max(*rows_per_cell, cell.first);
+        }
+    }
+    if (*rows_per_cell <= 0) {
+        ERR("All cells are empty: %d.\n", *rows_per_cell);
+        return -1;
+    }
+
+    row_t row;
+    row.header.from = *bin_info_tbl_id;
+    for (const bin_t &bin : bins) {
+        row.header.fake = false;
+
+        for (const auto &cell : bin) {
+            // Write real rows
+            for (const auto &entry : cell.second) {
+                strncpy((char *)&(&row)[sc.offsets[0]], entry.first.c_str(),
+                        entry.first.size());
+                // printf("%s\n", entry.first.c_str());
+                sgx_ret = ecall_insert_row_dbg(eid, &ret, db_id,
+                                               *bin_info_tbl_id, &row);
+                if (sgx_ret || ret) {
+                    ERR("insert fake row error:%d (sgx ret:%d)\n", ret,
+                        sgx_ret);
+                    return -1;
+                }
+            }
+
+            // Write pad enteries;
+            row.header.fake = true;
+            for (int i = cell.second.size(); i < *rows_per_cell; ++i) {
+                sgx_ret = ecall_insert_row_dbg(eid, &ret, db_id,
+                                               *bin_info_tbl_id, &row);
+                if (sgx_ret || ret) {
+                    ERR("insert row error:%d (sgx ret:%d)\n", ret, sgx_ret);
+                    return -1;
+                }
+            }
+        }
+    }
+
+    int rtv;
+    ecall_print_table_dbg(eid, &rtv, db_id, *bin_info_tbl_id, 0, 100);
+
+    return rtv;
 }

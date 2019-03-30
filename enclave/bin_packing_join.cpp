@@ -19,7 +19,7 @@ int ecall_bin_pack_join(int db_id, join_condition_t *c, int *join_tbl_id,
                         int bin_info_tbl_id, int midpoint, int num_bins,
                         int num_rows_per_bin) {
     data_base_t *db = get_db(db_id);
-    table_t *bin_fin_tbl;
+    table_t *bin_info_btl;
     if (!db) {
         ERR("Failed to get database");
         return -1;
@@ -28,10 +28,10 @@ int ecall_bin_pack_join(int db_id, join_condition_t *c, int *join_tbl_id,
         ERR("Failed to get table");
         return -2;
     }
-    bin_fin_tbl = db->tables[bin_info_tbl_id];
+    bin_info_btl = db->tables[bin_info_tbl_id];
 
     std::vector<table_t *> lhs_bins, rhs_bin;
-    // if (fill_bins(bin_fin_tbl, num_bins, num_rows_per_bin, &bins)) {
+    // if (fill_bins(bin_info_btl, num_bins, num_rows_per_bin, &bins)) {
     //     return -3;
     // }
 
