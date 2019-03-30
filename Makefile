@@ -8,6 +8,7 @@ CPU_MHZ=$(shell grep -m1 MHz /proc/cpuinfo | cut -d':' -f2)
 CFLAGS :=-std=c++11 -Wall -g -D_GNU_SOURCE -pthread -lm -fno-pic -O2 
 CFLAGS +=-lprofiler
 CFLAGS +=-fsanitize=address
+SGX_COMMON_CFLAGS +=-Wall -Wno-builtin-declaration-mismatch
 SGX_COMMON_CFLAGS +=-DFREQ="$(CPU_MHZ)"
 SGX_COMMON_CFLAGS +=-DVERBOSE
 SGX_COMMON_CFLAGS +=-DNDEBUG
