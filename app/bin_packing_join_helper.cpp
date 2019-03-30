@@ -141,7 +141,7 @@ int collect_metadata(const std::string &filename, int column,
         std::unordered_map<std::string, int> counter;
         for (int i = 0; i < rows_per_dblk && std::getline(ifile, line); ++i) {
             std::string::size_type start = 0;
-            for (int i = 0; i < column; ++i) {
+            for (int i = 1; i < column; ++i) {
                 start = line.find(',', start + 1); // Assuming line[0] != ','
             }
             if (start == std::string::npos) {
@@ -150,13 +150,13 @@ int collect_metadata(const std::string &filename, int column,
                     column, filename.c_str(), row_num);
                 return -1;
             }
-            decltype(start) end = line.find(',', start + 1);
-            if (start == end) {
+            auto end = line.find(',', start + 1);
+            if (start >= end) {
                 ERR("value is empty. file: %s; column: %d; row %d.\n",
                     filename.c_str(), column, row_num);
                 return -1;
             }
-            counter[line.substr(start, end)]++;
+            counter[line.substr(start, end - start)]++;
             row_num++;
         }
 
