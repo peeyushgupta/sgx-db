@@ -39,8 +39,12 @@ int collect_metadata(const std::string &filename, int column,
 // Bin Packing Phase 2: bin information collection
 // Figure out which value goes into which cell based on the metadata
 // Possible optimization: remove empty attributes; only merge adjency bins
-int pack_bins(const int dblk_count, const metadata_t &metadata,
-              std::vector<bin_t> *bins);
+int bin_info_collection(const int dblk_count, const metadata_t &metadata,
+                        std::vector<bin_t> *bins);
+
+// Bin Packing Phase 2.1: calculate number of rows per bin in the output
+int out_bin_info_collection(const std::vector<bin_t> &bins, int midpoint,
+                            int *num_rows_per_out_bin);
 
 // Bin Packing Phase 2.5: bin information to table
 // Convert the bin information that we collected in Phase 2 into a table so we

@@ -55,6 +55,7 @@ int bin_packing_join(sgx_enclave_id_t eid, int db_id,
             ERR("Failed to collect metadata\n");
             break;
         }
+        int midpoint = dblk_cnt;
 
         rtn = collect_metadata(csv_right, join_cond->fields_right[0],
                                rows_per_dblk, &dblk_cnt, &metadata);
@@ -74,7 +75,7 @@ int bin_packing_join(sgx_enclave_id_t eid, int db_id,
 #endif
 
         std::vector<bin_t> bins;
-        rtn = pack_bins(dblk_cnt, metadata, &bins);
+        rtn = bin_info_collection(dblk_cnt, metadata, &bins);
         if (rtn) {
             ERR("Failed to pack bin\n");
             break;
@@ -91,9 +92,28 @@ int bin_packing_join(sgx_enclave_id_t eid, int db_id,
         start = RDTSCP();
 #endif
 
+        int num_rows_per_out_bin;
+        rtn = out_bin_info_collection(bins, midpoint, &num_rows_per_out_bin);
+        if (rtn) {
+            ERR("Failed to collect output bin information.\n");
+            break;
+        }
+
+#if defined(REPORT_BIN_PACKING_JOIN_STATS)
+        end = RDTSC_START();
+
+        cycles = end - start;
+        secs = (cycles / cycles_per_sec);
+
+        INFO("Output-bin information collection took %llu cycles (%f sec)\n",
+             cycles, secs);
+        start = RDTSCP();
+#endif
+
         int rows_per_cell;
         int bin_info_tbl_id;
-        rtn = bin_info_to_table(eid, db_id, bins, "join:bp:bin_info", &rows_per_cell, &bin_info_tbl_id);
+        rtn = bin_info_to_table(eid, db_id, bins, "join:bp:bin_info",
+                                &rows_per_cell, &bin_info_tbl_id);
         if (rtn) {
             ERR("Failed to convert bins to table.\n");
             break;
@@ -110,7 +130,7 @@ int bin_packing_join(sgx_enclave_id_t eid, int db_id,
         start = RDTSCP();
 #endif
 
-        // HERE GOES FILL BIN
+        // Perform Phase 2 and Phase 3 inside the enclave
 
 #if defined(REPORT_BIN_PACKING_JOIN_STATS)
         end = RDTSC_START();
@@ -142,7 +162,7 @@ int collect_metadata(const std::string &filename, int column,
         for (int i = 0; i < rows_per_dblk && std::getline(ifile, line); ++i) {
             std::string::size_type start = 0;
             for (int i = 1; i < column; ++i) {
-                start = line.find(',', start + 1); // Assuming line[0] != ','
+                start = line.find(',', start) + 1; // Assuming line[0] != ','
             }
             if (start == std::string::npos) {
                 ERR("column number %d is larger than the number of elements of "
@@ -150,7 +170,7 @@ int collect_metadata(const std::string &filename, int column,
                     column, filename.c_str(), row_num);
                 return -1;
             }
-            auto end = line.find(',', start + 1);
+            auto end = line.find(',', start);
             if (start >= end) {
                 ERR("value is empty. file: %s; column: %d; row %d.\n",
                     filename.c_str(), column, row_num);
@@ -198,8 +218,8 @@ bool mergeBins(bin_t *a, const bin_t *b, const int cell_size) {
 }
 
 // Sort metadata and pack bins
-int pack_bins(const int dblk_count, const metadata_t &metadata,
-              std::vector<bin_t> *bins) {
+int bin_info_collection(const int dblk_count, const metadata_t &metadata,
+                        std::vector<bin_t> *bins) {
     const int cell_size = usable_heap_size / dblk_count / MAX_ROW_SIZE;
     if (cell_size <= 0) {
         ERR("Too many datablocks created.\n");
@@ -255,6 +275,49 @@ int pack_bins(const int dblk_count, const metadata_t &metadata,
 #endif
 
     bins->swap(res);
+    return 0;
+}
+
+int out_bin_info_collection(const std::vector<bin_t> &bins, int midpoint,
+                            int *num_rows_per_out_bin) {
+    if (bins.empty()) {
+        ERR("Bin can't be empty");
+        return -1;
+    }
+    *num_rows_per_out_bin = 0;
+
+    for (const bin_t &bin : bins) {
+        int sum = 0;
+        std::unordered_map<std::string, int> lhs, rhs;
+        for (int i = 0; i < midpoint; ++i) {
+            const auto &cell = bin[i].second;
+            for (const auto &value : cell) {
+                lhs.emplace(value);
+            }
+        }
+        for (int i = midpoint; i < bin.size(); ++i) {
+            const auto &cell = bin[i].second;
+            for (const auto &value : cell) {
+                rhs.emplace(value);
+            }
+        }
+
+        for (const auto &value : rhs) {
+            sum += value.second * lhs[value.first];
+        }
+        *num_rows_per_out_bin = std::max(*num_rows_per_out_bin, sum);
+    }
+
+#if defined(REPORT_BIN_PACKING_JOIN_STATS)
+    INFO("There will be %d rows in each output bin.\n", *num_rows_per_out_bin);
+#endif
+
+    if (*num_rows_per_out_bin <= 0) {
+        ERR("num_rows_per_out_bin %d should be greater than 0.\n",
+            *num_rows_per_out_bin);
+        return -1;
+    }
+
     return 0;
 }
 
@@ -324,8 +387,7 @@ int bin_info_to_table(sgx_enclave_id_t eid, int db_id,
         }
     }
 
-    int rtv;
-    ecall_print_table_dbg(eid, &rtv, db_id, *bin_info_tbl_id, 0, 100);
+    // ecall_print_table_dbg(eid, &ret, db_id, *bin_info_tbl_id, 0, 100);
 
-    return rtv;
+    return ret;
 }
