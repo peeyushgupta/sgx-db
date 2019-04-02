@@ -134,6 +134,10 @@ int bin_packing_join(sgx_enclave_id_t eid, int db_id,
         sgx_status_t sgx_ret = ecall_bin_pack_join(
             eid, &rtn, db_id, join_cond, out_tbl_id, num_rows_per_out_bin,
             bin_info_tbl_id, midpoint, bins.size(), rows_per_cell);
+        if (sgx_ret || rtn) {
+            ERR("Bin packing join error:%d (sgx ret:%d)\n", rtn, sgx_ret);
+            return rtn;
+        }
 
 #if defined(REPORT_BIN_PACKING_JOIN_STATS)
         end = RDTSC_START();
@@ -262,7 +266,7 @@ int bin_info_collection(const int dblk_count, const metadata_t &metadata,
 
 #if defined(REPORT_BIN_PACKING_JOIN_STATS)
     INFO("%lu bins created with %d cells each bin and %d values each cell. "
-         "Expect to have bin info table with %d rows.\n",
+         "Expect to have bin info table with %lu rows.\n",
          res.size(), dblk_count, cell_size,
          res.size() * dblk_count * cell_size);
 
