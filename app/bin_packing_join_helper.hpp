@@ -48,7 +48,8 @@ int out_bin_info_collection(const std::vector<bin_t> &bins, int midpoint,
 
 // Bin Packing Phase 2.5: bin information to table
 // Convert the bin information that we collected in Phase 2 into a table so we
-// can read it within the enclave in Phase 3
+// can read it within the enclave in Phase 3.
+// The data is written in row-major order
 int bin_info_to_table(sgx_enclave_id_t eid, int db_id,
                       const std::vector<bin_t> &bins,
                       const std::string &tbl_name, int *rows_per_cell,

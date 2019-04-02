@@ -130,7 +130,10 @@ int bin_packing_join(sgx_enclave_id_t eid, int db_id,
         start = RDTSCP();
 #endif
 
-        // Perform Phase 2 and Phase 3 inside the enclave
+        // Perform Phase 3 and Phase 4 inside the enclave
+        sgx_status_t sgx_ret = ecall_bin_pack_join(
+            eid, &rtn, db_id, join_cond, out_tbl_id, num_rows_per_out_bin,
+            bin_info_tbl_id, midpoint, bins.size(), rows_per_cell);
 
 #if defined(REPORT_BIN_PACKING_JOIN_STATS)
         end = RDTSC_START();
@@ -238,8 +241,6 @@ int bin_info_collection(const int dblk_count, const metadata_t &metadata,
                          std::tie(b.max_cnt, b.count);
               });
 
-    // Sort the count of each value in a cell in addtion to the `bin_t`
-
     std::vector<bin_t> res;
     bin_t last_bin(dblk_count);
 
@@ -260,8 +261,10 @@ int bin_info_collection(const int dblk_count, const metadata_t &metadata,
     }
 
 #if defined(REPORT_BIN_PACKING_JOIN_STATS)
-    INFO("%lu bins created with %d cells each bin and %d values each cell\n",
-         res.size(), dblk_count, cell_size);
+    INFO("%lu bins created with %d cells each bin and %d values each cell. "
+         "Expect to have bin info table with %d rows.\n",
+         res.size(), dblk_count, cell_size,
+         res.size() * dblk_count * cell_size);
 
 #if defined(REPORT_BIN_PACKING_JOIN_PRINT_BIN)
     for (const bin_t &bin : res) {
@@ -274,6 +277,7 @@ int bin_info_collection(const int dblk_count, const metadata_t &metadata,
 
 #endif
 
+    // TODO: remove this line once the algo is stable
     bins->swap(res);
     return 0;
 }
@@ -356,27 +360,16 @@ int bin_info_to_table(sgx_enclave_id_t eid, int db_id,
 
     row_t row;
     row.header.from = *bin_info_tbl_id;
-    for (const bin_t &bin : bins) {
-        row.header.fake = false;
-
-        for (const auto &cell : bin) {
-            // Write real rows
-            for (const auto &entry : cell.second) {
-                strncpy((char *)&(&row)[sc.offsets[0]], entry.first.c_str(),
-                        entry.first.size());
-                // printf("%s\n", entry.first.c_str());
-                sgx_ret = ecall_insert_row_dbg(eid, &ret, db_id,
-                                               *bin_info_tbl_id, &row);
-                if (sgx_ret || ret) {
-                    ERR("insert fake row error:%d (sgx ret:%d)\n", ret,
-                        sgx_ret);
-                    return -1;
+    for (int j = 0; j < bins[0].size(); ++j) {
+        for (int i = 0; i < bins.size(); ++i) {
+            const auto &cell = bins[i][j].second;
+            for (int k = 0; k < *rows_per_cell; ++k) {
+                row.header.fake = true;
+                if (k < cell.size()) {
+                    row.header.fake = false;
+                    strncpy((char *)&(&row)[sc.offsets[0]],
+                            cell[k].first.c_str(), cell[k].first.size());
                 }
-            }
-
-            // Write pad enteries;
-            row.header.fake = true;
-            for (int i = cell.second.size(); i < *rows_per_cell; ++i) {
                 sgx_ret = ecall_insert_row_dbg(eid, &ret, db_id,
                                                *bin_info_tbl_id, &row);
                 if (sgx_ret || ret) {
