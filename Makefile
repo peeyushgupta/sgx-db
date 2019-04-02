@@ -8,7 +8,7 @@ CPU_MHZ=$(shell grep -m1 MHz /proc/cpuinfo | cut -d':' -f2)
 CFLAGS :=-std=c++11 -Wall -g -D_GNU_SOURCE -pthread -lm -fno-pic -O2 
 CFLAGS +=-lprofiler
 CFLAGS +=-fsanitize=address
-SGX_COMMON_CFLAGS +=-Wall -Wno-builtin-declaration-mismatch
+SGX_COMMON_CFLAGS +=-Wall -Wno-builtin-declaration-mismatch -Wno-sign-compare
 SGX_COMMON_CFLAGS +=-DFREQ="$(CPU_MHZ)"
 SGX_COMMON_CFLAGS +=-DVERBOSE
 SGX_COMMON_CFLAGS +=-DNDEBUG
@@ -159,7 +159,7 @@ else
         App_C_Flags += -DNDEBUG -UEDEBUG -UDEBUG
 endif
 
-App_Cpp_Flags := $(App_C_Flags) -std=c++14
+App_Cpp_Flags := $(App_C_Flags) -std=c++17
 App_Link_Flags := $(SGX_COMMON_CFLAGS) -L$(SGX_LIBRARY_PATH) -l$(Urts_Library_Name) -lpthread 
 
 ifneq ($(SGX_MODE), HW)
@@ -204,7 +204,7 @@ else
 endif
 
 Enclave_C_Flags += $(Enclave_Include_Paths)
-Enclave_Cpp_Flags := -DNDEBUG $(Enclave_C_Flags) -std=c++14 -nostdinc++ $(AVX_CFLAGS)
+Enclave_Cpp_Flags := -DNDEBUG $(Enclave_C_Flags) -std=c++17 -nostdinc++ $(AVX_CFLAGS)
 
 # To generate a proper enclave, it is recommended to follow below guideline to link the trusted libraries:
 #    1. Link sgx_trts with the `--whole-archive' and `--no-whole-archive' options,
