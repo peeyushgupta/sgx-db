@@ -15,7 +15,7 @@ int bin_packing_join(sgx_enclave_id_t eid, int db_id,
                      join_condition_t *join_cond, const std::string &csv_left,
                      const std::string &csv_right, int *out_tbl_id);
 
-// A vector of <size, values>
+// [cell_t<size_of_cell, [value_t<value, occurances>]>]
 typedef std::vector<std::pair<int, std::vector<std::pair<std::string, int>>>>
     bin_t;
 // The type of a value in the metadata
