@@ -11,7 +11,6 @@ CFLAGS +=-fsanitize=address
 SGX_COMMON_CFLAGS +=-Wall -Wno-builtin-declaration-mismatch -Wno-sign-compare
 SGX_COMMON_CFLAGS +=-DFREQ="$(CPU_MHZ)"
 SGX_COMMON_CFLAGS +=-DVERBOSE
-SGX_COMMON_CFLAGS +=-DNDEBUG
 SGX_COMMON_CFLAGS +=-DREPORT_JOIN_STATS
 #SGX_COMMON_CFLAGS +=-DCOLUMNSORT_DBG
 #SGX_COMMON_CFLAGS +=-DCOLUMNSORT_COMPARE_TABLES
@@ -204,7 +203,19 @@ else
 endif
 
 Enclave_C_Flags += $(Enclave_Include_Paths)
-Enclave_Cpp_Flags := -DNDEBUG $(Enclave_C_Flags) -std=c++17 -nostdinc++ $(AVX_CFLAGS)
+Enclave_Cpp_Flags := $(Enclave_C_Flags) -std=c++17 -nostdinc++ $(AVX_CFLAGS)
+
+# Three configuration modes - Debug, prerelease, release(copied and pasted from App Settings)
+#   Debug - Macro DEBUG enabled.
+#   Prerelease - Macro NDEBUG and EDEBUG enabled.
+#   Release - Macro NDEBUG enabled.
+ifeq ($(SGX_DEBUG), 1)
+        Enclave_Cpp_Flags += -DDEBUG -UNDEBUG -UEDEBUG
+else ifeq ($(SGX_PRERELEASE), 1)
+        Enclave_Cpp_Flags += -DNDEBUG -DEDEBUG -UDEBUG
+else
+        Enclave_Cpp_Flags += -DNDEBUG -UEDEBUG -UDEBUG
+endif
 
 # To generate a proper enclave, it is recommended to follow below guideline to link the trusted libraries:
 #    1. Link sgx_trts with the `--whole-archive' and `--no-whole-archive' options,

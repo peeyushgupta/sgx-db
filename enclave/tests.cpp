@@ -7,6 +7,7 @@
 #include "enclave_t.h"
 #endif
 #include "db.hpp"
+#include <cassert>
 #include <string.h>
 #include "column_sort.hpp"
 using namespace std;
@@ -307,7 +308,7 @@ int test_project_schema() {
     columns = new int[3];
     columns[0] = 0; columns[1] = 1; columns[2] = 2;
     project_schema(&sc_old, columns, 3, &sc_new);
-    assert(sc_new.row_size == sc_old.row_size);
+    assert(sc_new.row_data_size == sc_old.row_data_size);
     assert(sc_new.num_fields == 3);
     for(int i = 0; i < 3; i++)
     {
@@ -319,7 +320,7 @@ int test_project_schema() {
     columns = new int[2];
     columns[0] = 0; columns[1] = 2;
     project_schema(&sc_old, columns, 2, &sc_new);
-    assert(sc_new.row_size == sc_old.sizes[0] + sc_old.sizes[2]);
+    assert(sc_new.row_data_size == sc_old.sizes[0] + sc_old.sizes[2]);
     assert(sc_new.num_fields == 2);
 
     assert_schemas_entries_same(sc_new, sc_old, 0, 0);
@@ -328,7 +329,7 @@ int test_project_schema() {
     // columns 0 and 1
     columns[1] = 1;
     project_schema(&sc_old, columns, 2, &sc_new);
-    assert(sc_new.row_size == sc_old.sizes[0] + sc_old.sizes[1]);
+    assert(sc_new.row_data_size == sc_old.sizes[0] + sc_old.sizes[1]);
     assert(sc_new.num_fields == 2);
 
     assert_schemas_entries_same(sc_new, sc_old, 0, 0);
@@ -337,7 +338,7 @@ int test_project_schema() {
     // columns 2 and 0
     columns[0] = 2; columns[1] = 0;
     project_schema(&sc_old, columns, 2, &sc_new);
-    assert(sc_new.row_size == sc_old.sizes[2] + sc_old.sizes[0]);
+    assert(sc_new.row_data_size == sc_old.sizes[2] + sc_old.sizes[0]);
     assert(sc_new.num_fields == 2);
 
     assert_schemas_entries_same(sc_new, sc_old, 0, 2);
