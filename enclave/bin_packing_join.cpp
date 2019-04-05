@@ -21,7 +21,7 @@ int ecall_bin_pack_join(int db_id, join_condition_t *join_cond,
                         int *join_tbl_id, int num_rows_per_out_bin,
                         int bin_info_tbl_id, int midpoint, int num_bins,
                         int rows_per_cell) {
-    int rtn;
+    int rtn = 0;
     data_base_t *db = get_db(db_id);
     table_t *bin_info_btl;
     if (!db) {
@@ -44,11 +44,12 @@ int ecall_bin_pack_join(int db_id, join_condition_t *join_cond,
     //     return -3;
     // }
 
-    return 0;
+    return rtn;
 }
 
-int fill_bins(data_base_t *db, table_t * data_table, table_t *bin_info_table, int num_bins,
-              int num_rows_per_bin, schema_t *bin_sc,
+int fill_bins(data_base_t *db, table_t *data_table, int rows_per_dblk,
+              table_t *bin_info_table, int num_bins, int num_rows_per_bin,
+              schema_t *bin_sc, int column_offset,
               std::vector<table_t *> *bins) {
     for (int i = 0; i < num_bins; ++i) {
         std::string bin_name = "join:bp:bin_";
@@ -59,11 +60,14 @@ int fill_bins(data_base_t *db, table_t * data_table, table_t *bin_info_table, in
     }
     assert(bins->size() == num_bins);
 
-    // Load one datablock of bin information into the memory at a time
-    // TODO: parallelize this in per dblk level
-    int dblk_size = num_bins * num_rows_per_bin;
-
+    // Load one datablock of bin information into the memory at a time.
+    // For each datablock, data will be stored in temp_bins before we flush them
+    // to the actual bins for security measure.
+    // TODO: parallelize this in per dblk level.
     int dblk_cnt = 0;
+    int data_row_num = 0;
+    typedef std::vector<std::string> temp_bin_t;
+    std::vector<temp_bin_t> temp_bins(num_bins);
     // For each datablock
     for (int row_num = 0; row_num < bin_info_table->num_rows; ++dblk_cnt) {
         // Load bin information
@@ -75,22 +79,32 @@ int fill_bins(data_base_t *db, table_t * data_table, table_t *bin_info_table, in
             // For each value
             for (int i = 0; i < num_rows_per_bin; ++i) {
                 row_t row;
+                assert(row_num < bin_info_table->num_rows);
                 if (read_row(bin_info_table, row_num++, &row)) {
                     ERR("Failed to read row");
                     return -1;
                 }
-                std::string value((char*)get_column(&(bin_info_table->sc), 0, &row));
+                std::string value(
+                    (char *)get_column(&(bin_info_table->sc), 0, &row));
                 const auto it = placement.find(value);
-                if (it != placement.end()) {
-                    ERR("Value %s already existed in another bin %d\n", value.c_str(), it->second);
-                }
+                assert(it == placement.end());
                 placement[value] = cell_num;
             }
         }
 
         // Scan the data table and fill bin according to the bin information
-        for (int data_row_num = 0; data_row_num < NULL /* we want the dblk_size of the actual table */ ; ++data_row_num) {
-
+        for (int i = 0; i < rows_per_dblk; ++i) {
+            row_t row;
+            assert(data_row_num < data_table->num_rows);
+            if (read_row(data_table, data_row_num++, &row)) {
+                ERR("Failed to read row");
+                return -1;
+            }
+            std::string value(
+                (char *)get_column(&(bin_info_table->sc), 0, &row));
+            const auto it = placement.find(value);
+            assert(it != placement.end());
+            temp_bins.emplace_back(std::move(value));
         }
     }
 
