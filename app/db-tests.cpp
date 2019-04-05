@@ -408,8 +408,8 @@ int test_rankings(sgx_enclave_id_t eid) {
 		c.num_conditions = 1; 
 		c.table_left = rankings_table_id; 
 		c.table_right = udata_table_id; 
-		c.fields_left[0] = 1;
-		c.fields_right[0] = 2;
+		c.fields_left[0] = 0;
+		c.fields_right[0] = 1;
 		
 		printf(TXT_FG_YELLOW "Sort join test" TXT_NORMAL ": joining rankings and udata tables \n"); 
 
