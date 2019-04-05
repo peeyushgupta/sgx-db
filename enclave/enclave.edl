@@ -41,12 +41,14 @@ enclave {
 		public int ecall_print_table_dbg(int db_id, int table_id, int start, int end);
 		public int ecall_bin_pack_join(int db_id,
 			[user_check]join_condition_t *join_cond,
-			[out] int *join_tbl_id,
+			int rows_per_dblk,
 			int num_rows_per_out_bin,
-			int bin_info_tid,
+			int bin_info_tbl_id,
 			int midpoint,
 			int num_bins,
-			int rows_per_cell);
+			int rows_per_cell,
+			[out] int *join_tbl_id,
+			int rows_per_out_bin);
 
 		public int ecall_promote_table_dbg(int db_id, int table_id, int column, [out] int *promoted_table_id);
 		public int ecall_column_sort_table_dbg(int db_id, int table_id, int column);

@@ -14,10 +14,10 @@
 
 using namespace std;
 #define OCALL_TEST_LENGTH 10000
-#define RANKINGS_TABLE_SIZE	(10)
-//#define RANKINGS_TABLE_SIZE	(360000)
-#define UVISITS_TABLE_SIZE	(20)
-//#define UVISITS_TABLE_SIZE	(350000)
+// #define RANKINGS_TABLE_SIZE	(10)
+#define RANKINGS_TABLE_SIZE	(360000)
+// #define UVISITS_TABLE_SIZE	(20)
+#define UVISITS_TABLE_SIZE	(350000)
 
 #define RANDINT_TABLE_SIZE	256
 
@@ -409,8 +409,8 @@ int test_rankings(sgx_enclave_id_t eid) {
 		c.num_conditions = 1; 
 		c.table_left = rankings_table_id; 
 		c.table_right = udata_table_id; 
-		c.fields_left[0] = 1;
-		c.fields_right[0] = 2;
+		c.fields_left[0] = 0;
+		c.fields_right[0] = 1;
 		
 		printf(TXT_FG_YELLOW "Sort join test" TXT_NORMAL ": joining rankings and udata tables \n"); 
 

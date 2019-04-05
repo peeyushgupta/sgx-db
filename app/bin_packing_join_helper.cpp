@@ -48,9 +48,10 @@ int bin_packing_join(sgx_enclave_id_t eid, int db_id,
 #endif
 
         int dblk_cnt = 0;
-
+        DBG("%s %d\n", csv_left.c_str(), join_cond->fields_left[0]);
         rtn = collect_metadata(csv_left, join_cond->fields_left[0],
                                rows_per_dblk, &dblk_cnt, &metadata);
+        DBG("%d\n", join_cond->fields_left[0]);
         if (rtn) {
             ERR("Failed to collect metadata\n");
             break;
@@ -131,9 +132,11 @@ int bin_packing_join(sgx_enclave_id_t eid, int db_id,
 #endif
 
         // Perform Phase 3 and Phase 4 inside the enclave
+        DBG("%d\n", join_cond->fields_left[0]);
         sgx_status_t sgx_ret = ecall_bin_pack_join(
-            eid, &rtn, db_id, join_cond, out_tbl_id, num_rows_per_out_bin,
-            bin_info_tbl_id, midpoint, bins.size(), rows_per_cell);
+            eid, &rtn, db_id, join_cond, rows_per_dblk, num_rows_per_out_bin,
+            bin_info_tbl_id, midpoint, bins.size(), rows_per_cell, out_tbl_id,
+            num_rows_per_out_bin);
         if (sgx_ret || rtn) {
             ERR("Bin packing join error:%d (sgx ret:%d)\n", rtn, sgx_ret);
             return rtn;
@@ -168,7 +171,7 @@ int collect_metadata(const std::string &filename, int column,
         std::unordered_map<std::string, int> counter;
         for (int i = 0; i < rows_per_dblk && std::getline(ifile, line); ++i) {
             std::string::size_type start = 0;
-            for (int i = 1; i < column; ++i) {
+            for (int i = 0; i < column; ++i) {
                 start = line.find(',', start) + 1; // Assuming line[0] != ','
             }
             if (start == std::string::npos) {
