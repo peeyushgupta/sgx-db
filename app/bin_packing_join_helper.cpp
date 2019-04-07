@@ -375,7 +375,7 @@ int bin_info_to_table(sgx_enclave_id_t eid, int db_id,
                 if (k < cell.size()) {
                     row.header.fake = false;
                     strncpy((char *)&(&row)[sc.offsets[0]],
-                            cell[k].first.c_str(), cell[k].first.size());
+                            cell[k].first.c_str(), sc.sizes[0]);
                 }
                 sgx_ret = ecall_insert_row_dbg(eid, &ret, db_id,
                                                *bin_info_tbl_id, &row);
@@ -386,8 +386,6 @@ int bin_info_to_table(sgx_enclave_id_t eid, int db_id,
             }
         }
     }
-
-    // ecall_print_table_dbg(eid, &ret, db_id, *bin_info_tbl_id, 0, 100);
 
     return ret;
 }

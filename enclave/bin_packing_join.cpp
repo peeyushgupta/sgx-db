@@ -55,7 +55,7 @@ int ecall_bin_pack_join(int db_id, join_condition_t *join_cond,
 #endif
 
     std::vector<table_t *> lhs_bins, rhs_bin;
-    DBG("%s %d\n", lhs_tbl->name.c_str(), join_cond->fields_left[0]);
+    DBG("num rows %d\n", bin_info_btl->num_rows);
     rtn = fill_bins(db, lhs_tbl, join_cond->fields_left[0], rows_per_dblk,
                     bin_info_btl, num_bins, rows_per_cell, &(lhs_tbl->sc),
                     &lhs_bins);
@@ -71,6 +71,7 @@ int fill_bins(data_base_t *db, table_t *data_table, int column,
               const int rows_per_dblk, table_t *bin_info_table,
               const int num_bins, const int rows_per_cell, schema_t *bin_sc,
               std::vector<table_t *> *bins) {
+    return 0;
     for (int i = 0; i < num_bins; ++i) {
         std::string bin_name = "join:bp:bin_";
         bin_name += std::to_string(i);
@@ -89,33 +90,47 @@ int fill_bins(data_base_t *db, table_t *data_table, int column,
     typedef std::vector<row_t> temp_bin_t;
     std::vector<temp_bin_t> temp_bins(num_bins);
     // For each datablock
+    DBG("%d\n", bin_info_table->num_rows);
     for (int row_num = 0; row_num < bin_info_table->num_rows; ++dblk_cnt) {
         // Load bin information
         // This map stores the information about a value should be placed in
         // which cell.
         DBG("info to map\n");
         std::unordered_map<std::string, int> placement;
+        DBG("here u gos\n");
         // For each cell
         for (int cell_num = 0; cell_num < num_bins; ++cell_num) {
             // For each value
+            // DBG("outer\n");
             for (int i = 0; i < rows_per_cell; ++i) {
+                DBG("inner\n");
                 row_t row;
+                DBG("read row\n");
                 assert(row_num < bin_info_table->num_rows);
                 if (read_row(bin_info_table, row_num++, &row)) {
                     ERR("Failed to read row");
                     return -1;
                 }
+                DBG("read value\n");
+                
+                // TODO: we need to fake this
+                if (row.header.fake) {
+                    continue;
+                }
                 std::string value(
                     (char *)get_column(&(bin_info_table->sc), 0, &row));
+                DBG("dblk %d, row %d, cell %d, i %d, fake %d, value %s\n", dblk_cnt, row_num, cell_num, i, row.header.fake, value.c_str());
 #ifndef NDEBUG
                 const auto it = placement.find(value);
                 assert(it == placement.end());
 #endif
                 placement[value] = cell_num;
+                DBG("done with ya %d\n", cell_num);
             }
         }
 
         DBG("fill bin\n");
+        /*
         // Scan the data table and fill bin according to the bin information
         for (int i = 0; i < rows_per_dblk; ++i) {
             row_t row;
@@ -147,6 +162,7 @@ int fill_bins(data_base_t *db, table_t *data_table, int column,
                 insert_row_dbg((*bins)[i], &row);
             }
         }
+        */
     }
 
     return 0;
