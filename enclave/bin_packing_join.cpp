@@ -1,5 +1,6 @@
 #include "bin_packing_join.hpp"
 
+#include <bitset>
 #include <cassert>
 #include <unordered_map>
 
@@ -39,13 +40,13 @@ int ecall_bin_pack_join(int db_id, join_condition_t *join_cond,
     bin_info_btl = db->tables[bin_info_tbl_id];
     int lhs_tbl_id = join_cond->table_left;
     if ((lhs_tbl_id > (MAX_TABLES - 1)) || !db->tables[lhs_tbl_id]) {
-        ERR("Failed to get lhs table");
+        ERR("Failed to get lhs table\n");
         return -2;
     }
     lhs_tbl = db->tables[lhs_tbl_id];
     int rhs_tbl_id = join_cond->table_right;
     if ((rhs_tbl_id > (MAX_TABLES - 1)) || !db->tables[rhs_tbl_id]) {
-        ERR("Failed to get lhs table");
+        ERR("Failed to get rhs table\n");
         return -2;
     }
     rhs_tbl = db->tables[rhs_tbl_id];
@@ -55,12 +56,11 @@ int ecall_bin_pack_join(int db_id, join_condition_t *join_cond,
 #endif
 
     std::vector<table_t *> lhs_bins, rhs_bin;
-    DBG("num rows %d\n", bin_info_btl->num_rows);
     rtn = fill_bins(db, lhs_tbl, join_cond->fields_left[0], rows_per_dblk,
                     bin_info_btl, num_bins, rows_per_cell, &(lhs_tbl->sc),
                     &lhs_bins);
     if (rtn) {
-        ERR("Failed to fill lhs bins");
+        ERR("Failed to fill lhs bins\n");
         return -2;
     }
 
@@ -106,7 +106,7 @@ int fill_bins(data_base_t *db, table_t *data_table, int column,
                     ERR("Failed to read row");
                     return -1;
                 }
-                
+
                 // TODO: we need to fake this
                 if (row.header.fake) {
                     continue;
@@ -114,12 +114,18 @@ int fill_bins(data_base_t *db, table_t *data_table, int column,
                 std::string value(
                     (char *)get_column(&(bin_info_table->sc), 0, &row));
                 byte_read_info += value.length();
-                // DBG("dblk %d, row %d, cell %d, i %d, fake %d, value %s\n", dblk_cnt, row_num, cell_num, i, row.header.fake, value.c_str());
-#ifndef NDEBUG
-                // const auto it = placement.find(value);
-                // assert(it == placement.end());
+#if !defined(NDEBUG)
+                const auto &it = placement.find(value);
+                if (it != placement.end()) {
+                    ERR("Value \"%s\" is appeared in the datablock %d twice at "
+                        "cell %d row %d\n",
+                        value.c_str(), dblk_cnt, cell_num, i);
+                    return -1;
+                }
 #endif
-                placement[value] = cell_num;
+                if (!value.empty()) {
+                    placement[value] = cell_num;
+                }
             }
         }
 
@@ -135,19 +141,21 @@ int fill_bins(data_base_t *db, table_t *data_table, int column,
             }
             std::string value(
                 (char *)get_column(&(data_table->sc), column, &row));
-#ifndef NDEBUG
-            // const auto it = placement.find(value);
-            // assert(it != placement.end());
-            // assert(it->second >= 0);
-            // assert(it->second < temp_bins.size());
+#if !defined(NDEBUG)
+            const auto it = placement.find(value);
+            assert(it != placement.end());
+            assert(it->second >= 0);
+            assert(it->second < temp_bins.size());
 #endif
-            const auto& key = placement[value];
-            auto& bin = temp_bins[key];
+            const auto &key = placement[value];
+            auto &bin = temp_bins[key];
             try {
                 bin.push_back(row);
                 byte_read_bin += sizeof(row);
             } catch (const std::bad_alloc &) {
-                DBG("dblk %d, i %d, row_num %d, byte_info %d, byte_bin %d\n", dblk_cnt, i, data_row_num, byte_read_info, byte_read_bin);
+                DBG("Not enough memory: dblk %d, i %d, row_num %d, byte_info "
+                    "%d, byte_bin %d\n",
+                    dblk_cnt, i, data_row_num, byte_read_info, byte_read_bin);
                 return -1;
             }
         }

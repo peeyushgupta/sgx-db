@@ -48,10 +48,8 @@ int bin_packing_join(sgx_enclave_id_t eid, int db_id,
 #endif
 
         int dblk_cnt = 0;
-        DBG("%s %d\n", csv_left.c_str(), join_cond->fields_left[0]);
         rtn = collect_metadata(csv_left, join_cond->fields_left[0],
                                rows_per_dblk, &dblk_cnt, &metadata);
-        DBG("%d\n", join_cond->fields_left[0]);
         if (rtn) {
             ERR("Failed to collect metadata\n");
             break;
@@ -371,11 +369,11 @@ int bin_info_to_table(sgx_enclave_id_t eid, int db_id,
         for (int i = 0; i < bins.size(); ++i) {
             const auto &cell = bins[i][j].second;
             for (int k = 0; k < *rows_per_cell; ++k) {
-                row.header.fake = true;
                 if (k < cell.size()) {
-                    row.header.fake = false;
                     strncpy((char *)&(&row)[sc.offsets[0]],
                             cell[k].first.c_str(), sc.sizes[0]);
+                } else {
+                    memset(&row, 0x0, sizeof(row));
                 }
                 sgx_ret = ecall_insert_row_dbg(eid, &ret, db_id,
                                                *bin_info_tbl_id, &row);
