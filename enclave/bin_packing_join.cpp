@@ -1,7 +1,6 @@
 #include "bin_packing_join.hpp"
 
 #include <bitset>
-#include <cassert>
 #include <cstring>
 #include <unordered_map>
 
@@ -79,7 +78,6 @@ int fill_bins(data_base_t *db, table_t *data_table, int column,
         create_table(db, bin_name, bin_sc, &tmp);
         bins->push_back(tmp);
     }
-    assert(bins->size() == num_bins);
 
     // Load one datablock of bin information into the memory at a time.
     // For each datablock, data will be stored in temp_bins before we flush them
@@ -101,7 +99,15 @@ int fill_bins(data_base_t *db, table_t *data_table, int column,
             // DBG("outer\n");
             for (int i = 0; i < rows_per_cell; ++i) {
                 row_t row;
-                assert(row_num < bin_info_table->num_rows);
+#if !defined(NDEBUG)
+                if (row_num >= bin_info_table->num_rows) {
+                    ERR("Reach the end of data table but still have more rows "
+                        "to read\n");
+                    return -1;
+                }
+
+#endif
+
                 if (read_row(bin_info_table, row_num++, &row)) {
                     ERR("Failed to read row");
                     return -1;
@@ -133,10 +139,23 @@ int fill_bins(data_base_t *db, table_t *data_table, int column,
         DBG("fill bin\n");
         typedef std::vector<row_t> temp_bin_t;
         std::vector<temp_bin_t> temp_bins(num_bins);
+        bool data_table_exhausted = false;
         // Scan the data table and fill bin according to the bin information
         for (int i = 0; i < rows_per_dblk; ++i) {
             row_t row;
             assert(data_row_num < data_table->num_rows);
+#if !defined(NDEBUG)
+            if (data_row_num >= data_table->num_rows) {
+                if (data_table_exhausted) {
+                    ERR("Reach the end of data table but still have more rows "
+                        "to read\n");
+                    return -1;
+                } else {
+                    data_table_exhausted = true;
+                    continue;
+                }
+            }
+#endif
             if (read_row(data_table, data_row_num++, &row)) {
                 ERR("Failed to read row");
                 return -1;
