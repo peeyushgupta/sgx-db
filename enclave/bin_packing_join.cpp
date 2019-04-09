@@ -57,7 +57,7 @@ int ecall_bin_pack_join(int db_id, join_condition_t *join_cond,
 
     std::vector<table_t *> lhs_bins, rhs_bin;
     rtn = fill_bins(db, lhs_tbl, join_cond->fields_left[0], rows_per_dblk,
-                    bin_info_btl, num_bins, rows_per_cell, &(lhs_tbl->sc),
+                    bin_info_btl, 0, midpoint, num_bins, rows_per_cell, &(lhs_tbl->sc),
                     &lhs_bins);
     if (rtn) {
         ERR("Failed to fill lhs bins\n");
@@ -69,7 +69,8 @@ int ecall_bin_pack_join(int db_id, join_condition_t *join_cond,
 
 int fill_bins(data_base_t *db, table_t *data_table, int column,
               const int rows_per_dblk, table_t *bin_info_table,
-              const int num_bins, const int rows_per_cell, schema_t *bin_sc,
+              const int start_dblk, const int end_dblk, const int num_bins,
+              const int rows_per_cell, schema_t *bin_sc,
               std::vector<table_t *> *bins) {
     for (int i = 0; i < num_bins; ++i) {
         std::string bin_name = "join:bp:bin_";
@@ -85,12 +86,19 @@ int fill_bins(data_base_t *db, table_t *data_table, int column,
     // TODO: parallelize this in per dblk level.
     int dblk_cnt = 0;
     int data_row_num = 0;
+    const int start_row = start_dblk * num_bins * rows_per_cell;
+    const int end_row = end_dblk * num_bins * rows_per_cell;
+#if defined(REPORT_BIN_PACKING_JOIN_STATS)
+    INFO("Reading bin info table from row %d to %d\n", start_row, end_row);
+#endif
+#if !defined(NDEBUG)
+    bool data_table_exhausted = false;
+#endif
     // For each datablock
-    for (int row_num = 0; row_num < bin_info_table->num_rows; ++dblk_cnt) {
+    for (int row_num = start_row; row_num < end_row; ++dblk_cnt) {
         // Load bin information
         // This map stores the information about a value should be placed in
         // which cell.
-        DBG("info bin\n");
         std::unordered_map<std::string, int> placement;
         int byte_read_info = 0;
         // For each cell
@@ -136,26 +144,28 @@ int fill_bins(data_base_t *db, table_t *data_table, int column,
         }
 
         int byte_read_bin = 0;
-        DBG("fill bin\n");
         typedef std::vector<row_t> temp_bin_t;
         std::vector<temp_bin_t> temp_bins(num_bins);
-        bool data_table_exhausted = false;
         // Scan the data table and fill bin according to the bin information
         for (int i = 0; i < rows_per_dblk; ++i) {
             row_t row;
-            assert(data_row_num < data_table->num_rows);
-#if !defined(NDEBUG)
+
             if (data_row_num >= data_table->num_rows) {
+#if !defined(NDEBUG)
                 if (data_table_exhausted) {
                     ERR("Reach the end of data table but still have more rows "
-                        "to read\n");
+                        "to read. Data table: dblk %d, curr_row %d, "
+                        "rows_per_dblk. Info table: total rows %d, curr_row "
+                        "%d %d\n",
+                        dblk_cnt, i, rows_per_dblk, bin_info_table->num_rows,
+                        row_num, 1);
                     return -1;
-                } else {
-                    data_table_exhausted = true;
-                    continue;
                 }
-            }
+                data_table_exhausted = true;
 #endif
+                break;
+            }
+
             if (read_row(data_table, data_row_num++, &row)) {
                 ERR("Failed to read row");
                 return -1;
@@ -188,7 +198,6 @@ int fill_bins(data_base_t *db, table_t *data_table, int column,
 
         row_t empty_row;
         memset(&empty_row, 0x0, sizeof(empty_row));
-        DBG("flush bin\n");
         // Flush temp_bins to bins
         for (int i = 0; i < temp_bins.size(); ++i) {
             temp_bin_t *temp_bin = &temp_bins[i];

@@ -19,7 +19,8 @@
 // TODO: parallelize this
 int fill_bins(data_base_t *db, table_t *data_table, int column,
               const int rows_per_dblk, table_t *bin_info_table,
-              const int num_bins, const int rows_per_cell, schema_t *bin_sc,
+              const int start_dblk, const int end_dblk, const int num_bins,
+              const int rows_per_cell, schema_t *bin_sc,
               std::vector<table_t *> *bins);
 // Helper for fill_bins
 // Fill one bin. The information of the bin is located at
