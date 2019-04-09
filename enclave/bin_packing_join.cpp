@@ -87,13 +87,12 @@ int fill_bins(data_base_t *db, table_t *data_table, int column,
     // TODO: parallelize this in per dblk level.
     int dblk_cnt = 0;
     int data_row_num = 0;
-    typedef std::vector<row_t> temp_bin_t;
-    std::vector<temp_bin_t> temp_bins(num_bins);
     // For each datablock
     for (int row_num = 0; row_num < bin_info_table->num_rows; ++dblk_cnt) {
         // Load bin information
         // This map stores the information about a value should be placed in
         // which cell.
+        DBG("info bin\n");
         std::unordered_map<std::string, int> placement;
         int byte_read_info = 0;
         // For each cell
@@ -132,6 +131,8 @@ int fill_bins(data_base_t *db, table_t *data_table, int column,
 
         int byte_read_bin = 0;
         DBG("fill bin\n");
+        typedef std::vector<row_t> temp_bin_t;
+        std::vector<temp_bin_t> temp_bins(num_bins);
         // Scan the data table and fill bin according to the bin information
         for (int i = 0; i < rows_per_dblk; ++i) {
             row_t row;
@@ -144,9 +145,14 @@ int fill_bins(data_base_t *db, table_t *data_table, int column,
                 (char *)get_column(&(data_table->sc), column, &row));
 #if !defined(NDEBUG)
             const auto it = placement.find(value);
-            assert(it != placement.end());
-            assert(it->second >= 0);
-            assert(it->second < temp_bins.size());
+            if (it == placement.end()) {
+                ERR("Failed to find bin info for '%s'\n", value.c_str());
+                return -1;
+            }
+            if (it->second < 0 || it->second >= temp_bins.size()) {
+                ERR("Bin index out of bound: %d\n", it->second);
+                return -1;
+            }
 #endif
             const auto &key = placement[value];
             auto &bin = temp_bins[key];
@@ -163,6 +169,7 @@ int fill_bins(data_base_t *db, table_t *data_table, int column,
 
         row_t empty_row;
         memset(&empty_row, 0x0, sizeof(empty_row));
+        DBG("flush bin\n");
         // Flush temp_bins to bins
         for (int i = 0; i < temp_bins.size(); ++i) {
             temp_bin_t *temp_bin = &temp_bins[i];
