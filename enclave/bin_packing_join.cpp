@@ -71,7 +71,6 @@ int fill_bins(data_base_t *db, table_t *data_table, int column,
               const int rows_per_dblk, table_t *bin_info_table,
               const int num_bins, const int rows_per_cell, schema_t *bin_sc,
               std::vector<table_t *> *bins) {
-    return 0;
     for (int i = 0; i < num_bins; ++i) {
         std::string bin_name = "join:bp:bin_";
         bin_name += std::to_string(i);
@@ -90,28 +89,23 @@ int fill_bins(data_base_t *db, table_t *data_table, int column,
     typedef std::vector<row_t> temp_bin_t;
     std::vector<temp_bin_t> temp_bins(num_bins);
     // For each datablock
-    DBG("%d\n", bin_info_table->num_rows);
     for (int row_num = 0; row_num < bin_info_table->num_rows; ++dblk_cnt) {
         // Load bin information
         // This map stores the information about a value should be placed in
         // which cell.
-        DBG("info to map\n");
         std::unordered_map<std::string, int> placement;
-        DBG("here u gos\n");
+        int byte_read_info = 0;
         // For each cell
         for (int cell_num = 0; cell_num < num_bins; ++cell_num) {
             // For each value
             // DBG("outer\n");
             for (int i = 0; i < rows_per_cell; ++i) {
-                DBG("inner\n");
                 row_t row;
-                DBG("read row\n");
                 assert(row_num < bin_info_table->num_rows);
                 if (read_row(bin_info_table, row_num++, &row)) {
                     ERR("Failed to read row");
                     return -1;
                 }
-                DBG("read value\n");
                 
                 // TODO: we need to fake this
                 if (row.header.fake) {
@@ -119,38 +113,43 @@ int fill_bins(data_base_t *db, table_t *data_table, int column,
                 }
                 std::string value(
                     (char *)get_column(&(bin_info_table->sc), 0, &row));
-                DBG("dblk %d, row %d, cell %d, i %d, fake %d, value %s\n", dblk_cnt, row_num, cell_num, i, row.header.fake, value.c_str());
+                byte_read_info += value.length();
+                // DBG("dblk %d, row %d, cell %d, i %d, fake %d, value %s\n", dblk_cnt, row_num, cell_num, i, row.header.fake, value.c_str());
 #ifndef NDEBUG
-                const auto it = placement.find(value);
-                assert(it == placement.end());
+                // const auto it = placement.find(value);
+                // assert(it == placement.end());
 #endif
                 placement[value] = cell_num;
-                DBG("done with ya %d\n", cell_num);
             }
         }
 
+        int byte_read_bin = 0;
         DBG("fill bin\n");
-        /*
         // Scan the data table and fill bin according to the bin information
         for (int i = 0; i < rows_per_dblk; ++i) {
             row_t row;
             assert(data_row_num < data_table->num_rows);
-            DBG("Read row %d\n", data_table->num_rows);
             if (read_row(data_table, data_row_num++, &row)) {
                 ERR("Failed to read row");
                 return -1;
             }
-            DBG("Read value %d %d\n", column, data_table->sc.types[column]);
             std::string value(
                 (char *)get_column(&(data_table->sc), column, &row));
-            DBG("value %s\n", value.c_str());
 #ifndef NDEBUG
-            const auto it = placement.find(value);
-            assert(it != placement.end());
-            assert(it->second >= 0);
-            assert(it->second < temp_bins.size());
+            // const auto it = placement.find(value);
+            // assert(it != placement.end());
+            // assert(it->second >= 0);
+            // assert(it->second < temp_bins.size());
 #endif
-            temp_bins[placement[value]].emplace_back(std::move(row));
+            const auto& key = placement[value];
+            auto& bin = temp_bins[key];
+            try {
+                bin.push_back(row);
+                byte_read_bin += sizeof(row);
+            } catch (const std::bad_alloc &) {
+                DBG("dblk %d, i %d, row_num %d, byte_info %d, byte_bin %d\n", dblk_cnt, i, data_row_num, byte_read_info, byte_read_bin);
+                return -1;
+            }
         }
 
         DBG("flush bin\n");
@@ -162,7 +161,6 @@ int fill_bins(data_base_t *db, table_t *data_table, int column,
                 insert_row_dbg((*bins)[i], &row);
             }
         }
-        */
     }
 
     return 0;
