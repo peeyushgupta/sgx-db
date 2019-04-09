@@ -2,6 +2,7 @@
 
 #include <bitset>
 #include <cassert>
+#include <cstring>
 #include <unordered_map>
 
 #include "db.hpp"
@@ -160,13 +161,19 @@ int fill_bins(data_base_t *db, table_t *data_table, int column,
             }
         }
 
-        DBG("flush bin\n");
+        row_t empty_row;
+        memset(&empty_row, 0x0, sizeof(empty_row));
         // Flush temp_bins to bins
         for (int i = 0; i < temp_bins.size(); ++i) {
-            temp_bin_t &temp_bin = temp_bins[i];
-            assert(temp_bin.size() == rows_per_dblk / num_bins);
-            for (row_t &row : temp_bin) {
-                insert_row_dbg((*bins)[i], &row);
+            temp_bin_t *temp_bin = &temp_bins[i];
+            for (int j = 0; j < rows_per_cell; j++) {
+                row_t *row;
+                if (j < temp_bin->size()) {
+                    row = &(*temp_bin)[j];
+                } else {
+                    row = &empty_row;
+                }
+                insert_row_dbg((*bins)[i], row);
             }
         }
     }
