@@ -11,6 +11,8 @@
 // `data_table`: the table that stores the actual data.
 // `rows_per_dblk`: number of rows per datablock in `data_table`.
 // `bin_info_table`: the table that stores the bin information that we collection in Phase 2.
+// `start_dblk`: the first datablock we need to read in `bin_info_table`
+// `end_dblk`: the last datablock we need to read in `bin_info_table`
 // `num_bins`: number of bins.
 // `num_rows_per_bins`: number of rows in a bin in the `bin_info_table`.
 // `bin_sc`: The schema of the bins. We use this to create the actual bins.

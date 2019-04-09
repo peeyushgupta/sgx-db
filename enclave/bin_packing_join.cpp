@@ -55,10 +55,17 @@ int ecall_bin_pack_join(int db_id, join_condition_t *join_cond,
          bin_info_btl->num_rows);
 #endif
 
-    std::vector<table_t *> lhs_bins, rhs_bin;
+    std::vector<table_t *> lhs_bins, rhs_bins;
     rtn = fill_bins(db, lhs_tbl, join_cond->fields_left[0], rows_per_dblk,
-                    bin_info_btl, 0, midpoint, num_bins, rows_per_cell, &(lhs_tbl->sc),
-                    &lhs_bins);
+                    bin_info_btl, 0, midpoint, num_bins, rows_per_cell,
+                    &(lhs_tbl->sc), &lhs_bins);
+    if (rtn) {
+        ERR("Failed to fill lhs bins\n");
+        return -2;
+    }
+    rtn = fill_bins(db, rhs_tbl, join_cond->fields_right[0], rows_per_dblk,
+                    bin_info_btl, midpoint, -1, num_bins, rows_per_cell,
+                    &(rhs_tbl->sc), &rhs_bins);
     if (rtn) {
         ERR("Failed to fill lhs bins\n");
         return -2;
@@ -87,7 +94,8 @@ int fill_bins(data_base_t *db, table_t *data_table, int column,
     int dblk_cnt = 0;
     int data_row_num = 0;
     const int start_row = start_dblk * num_bins * rows_per_cell;
-    const int end_row = end_dblk * num_bins * rows_per_cell;
+    const int end_row = end_dblk < 0 ? bin_info_table->num_rows
+                                     : end_dblk * num_bins * rows_per_cell;
 #if defined(REPORT_BIN_PACKING_JOIN_STATS)
     INFO("Reading bin info table from row %d to %d\n", start_row, end_row);
 #endif
