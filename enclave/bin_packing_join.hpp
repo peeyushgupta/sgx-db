@@ -33,6 +33,6 @@ int fill_bin(table_t *bin_info_table, int begin, int end, int num_bins,
 // Bin Packing Phase 4: join each individual bin
 // For each individual bin, do a hash join, do padding(while pretending not),
 // and write the results out
-int join_bins();
+int join_bins(table_t *lhs_tbl, table_t *rhs_tbl, schema_t *join_sc, table_t *join_tbl);
 
 #endif // E_BIN_PACKING_JOIN_HPP

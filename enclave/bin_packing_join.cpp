@@ -63,6 +63,7 @@ int ecall_bin_pack_join(int db_id, join_condition_t *join_cond,
         ERR("Failed to fill lhs bins\n");
         return -2;
     }
+
     rtn = fill_bins(db, rhs_tbl, join_cond->fields_right[0], rows_per_dblk,
                     bin_info_btl, midpoint, -1, num_bins, rows_per_cell,
                     &(rhs_tbl->sc), &rhs_bins);
@@ -129,7 +130,6 @@ int fill_bins(data_base_t *db, table_t *data_table, int column,
                     return -1;
                 }
 
-                // TODO: we need to fake this
                 if (row.header.fake) {
                     continue;
                 }
@@ -221,5 +221,11 @@ int fill_bins(data_base_t *db, table_t *data_table, int column,
         }
     }
 
+    return 0;
+}
+
+int join_bins(table_t *lhs_tbl, table_t *rhs_tbl, schema_t *join_sc, table_t *join_tbl) {
+    // join_schema();
+    // join_rows();
     return 0;
 }
