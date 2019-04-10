@@ -82,12 +82,16 @@ int ecall_bin_pack_join(int db_id, join_condition_t *join_cond,
     }
     for (int i = 0; i < num_bins; ++i) {
         rtn = join_bins(lhs_bins[i], join_cond->fields_left[0], rhs_bins[i],
-                        join_cond->fields_right[0], &join_sc, join_tbl);
+                        join_cond->fields_right[0], &join_sc, join_tbl,
+                        num_rows_per_out_bin);
         if (rtn) {
             ERR("Failed to join bin %d out of %d\n", i, num_bins);
             return rtn;
         }
     }
+#if defined(REPORT_BIN_PACKING_JOIN_STATS)
+    INFO("%d rows of joined rows is generated.\n", join_tbl->num_rows);
+#endif
 
     return rtn;
 }
@@ -245,7 +249,8 @@ int fill_bins(data_base_t *db, table_t *data_table, int column,
 }
 
 int join_bins(table_t *lhs_tbl, const int lhs_column, table_t *rhs_tbl,
-              const int rhs_column, schema_t *join_sc, table_t *join_tbl) {
+              const int rhs_column, schema_t *join_sc, table_t *join_tbl,
+              const int num_rows_per_out_bin) {
     // Fill in the `mapping`
     // `mapping` map a joining value to rows in the `lhs_tbl`
     std::unordered_map<std::string, std::vector<row_t>> mapping;
@@ -271,6 +276,7 @@ int join_bins(table_t *lhs_tbl, const int lhs_column, table_t *rhs_tbl,
     }
 
     schema_t *rhs_sc = &rhs_tbl->sc;
+    int num_rows_inserted = 0;
     for (int row_num = 0; row_num < rhs_tbl->num_rows; ++row_num) {
         row_t row;
         if (read_row(rhs_tbl, row_num, &row)) {
@@ -288,6 +294,11 @@ int join_bins(table_t *lhs_tbl, const int lhs_column, table_t *rhs_tbl,
                       lhs_sc->row_data_size, &row, rhs_sc->row_data_size, 0);
             insert_row_dbg(join_tbl, &join_row);
         }
+    }
+    row_t empty_row;
+    memset(&empty_row, 0x0, sizeof(empty_row));
+    for (; num_rows_inserted < num_rows_per_out_bin; ++num_rows_inserted) {
+        insert_row_dbg(join_tbl, &empty_row);
     }
 
     return 0;

@@ -10,14 +10,14 @@
 // `db`: the database to store temporary tables .
 // `data_table`: the table that stores the actual data.
 // `rows_per_dblk`: number of rows per datablock in `data_table`.
-// `bin_info_table`: the table that stores the bin information that we collection in Phase 2.
-// `start_dblk`: the first datablock we need to read in `bin_info_table`
-// `end_dblk`: the last datablock we need to read in `bin_info_table`
-// `num_bins`: number of bins.
-// `num_rows_per_bins`: number of rows in a bin in the `bin_info_table`.
-// `bin_sc`: The schema of the bins. We use this to create the actual bins.
-// `column_offset`: Where the two tables are sperated in the `bin_sc`.
-// `bins`: The actual bins, which is the output of Phase 3 and the input of Phase 4.
+// `bin_info_table`: the table that stores the bin information that we
+// collection in Phase 2. `start_dblk`: the first datablock we need to read in
+// `bin_info_table` `end_dblk`: the last datablock we need to read in
+// `bin_info_table` `num_bins`: number of bins. `num_rows_per_bins`: number of
+// rows in a bin in the `bin_info_table`. `bin_sc`: The schema of the bins. We
+// use this to create the actual bins. `column_offset`: Where the two tables are
+// sperated in the `bin_sc`. `bins`: The actual bins, which is the output of
+// Phase 3 and the input of Phase 4.
 // TODO: parallelize this
 // TODO: get `bin_sc` from table
 int fill_bins(data_base_t *db, table_t *data_table, int column,
@@ -35,5 +35,6 @@ int fill_bin(table_t *bin_info_table, int begin, int end, int num_bins,
 // For each individual bin, do a hash join, do padding(while pretending not),
 // and write the results out
 int join_bins(table_t *lhs_tbl, const int lhs_column, table_t *rhs_tbl,
-              const int rhs_column, schema_t *join_sc, table_t *join_tbl);
+              const int rhs_column, schema_t *join_sc, table_t *join_tbl,
+              const int num_rows_per_out_bin);
 #endif // E_BIN_PACKING_JOIN_HPP
