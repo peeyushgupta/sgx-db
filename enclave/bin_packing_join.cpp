@@ -5,6 +5,7 @@
 #include <unordered_map>
 
 #include "db.hpp"
+#include "time.hpp"
 #include "util.hpp"
 
 #if defined(NO_SGX)
@@ -55,6 +56,12 @@ int ecall_bin_pack_join(int db_id, join_condition_t *join_cond,
          bin_info_btl->num_rows);
 #endif
 
+#if defined(REPORT_BIN_PACKING_JOIN_STATS)
+    unsigned long long start, end;
+    unsigned long long cycles;
+    double secs;
+#endif
+
     std::vector<table_t *> lhs_bins, rhs_bins;
     rtn = fill_bins(db, lhs_tbl, join_cond->fields_left[0], rows_per_dblk,
                     bin_info_btl, 0, midpoint, num_bins, rows_per_cell,
@@ -71,6 +78,13 @@ int ecall_bin_pack_join(int db_id, join_condition_t *join_cond,
         ERR("Failed to fill lhs bins\n");
         return rtn;
     }
+
+#if defined(REPORT_BIN_PACKING_JOIN_STATS)
+    end = RDTSC();
+    cycles = end - start;
+    secs = (cycles / cycles_per_sec);
+    INFO("Phase 3: fill bins took %llu cycles (%f sec)\n", cycles, secs);
+#endif
 
     schema_t join_sc;
     join_schema(&join_sc, &lhs_tbl->sc, &rhs_tbl->sc);
@@ -90,6 +104,14 @@ int ecall_bin_pack_join(int db_id, join_condition_t *join_cond,
         }
     }
     *join_tbl_id = join_tbl->id;
+
+#if defined(REPORT_BIN_PACKING_JOIN_STATS)
+    end = RDTSC();
+    cycles = end - start;
+    secs = (cycles / cycles_per_sec);
+    INFO("Phase 4: join bins took %llu cycles (%f sec)\n", cycles, secs);
+#endif
+
 #if defined(REPORT_BIN_PACKING_JOIN_STATS)
     INFO("%d rows of joined rows is generated.\n", join_tbl->num_rows);
 #endif

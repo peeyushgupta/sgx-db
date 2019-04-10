@@ -42,10 +42,10 @@ int bin_packing_join(sgx_enclave_id_t eid, int db_id,
     int bin_info_tbl_id = -1;
     do {
 #if defined(REPORT_BIN_PACKING_JOIN_STATS)
-        unsigned long long start, end;
+        unsigned long long start, end, total_start, total_end;
         unsigned long long cycles;
         double secs;
-        start = RDTSC_START();
+        total_start = start = RDTSC_START();
 #endif
 
         int dblk_cnt = 0;
@@ -70,7 +70,8 @@ int bin_packing_join(sgx_enclave_id_t eid, int db_id,
         cycles = end - start;
         secs = (cycles / cycles_per_sec);
 
-        INFO("Collecting metadata took %llu cycles (%f sec)\n", cycles, secs);
+        INFO("Phase 1: collecting metadata took %llu cycles (%f sec)\n", cycles,
+             secs);
         start = RDTSC_START();
 #endif
 
@@ -87,8 +88,8 @@ int bin_packing_join(sgx_enclave_id_t eid, int db_id,
         cycles = end - start;
         secs = (cycles / cycles_per_sec);
 
-        INFO("Bin information collection took %llu cycles (%f sec)\n", cycles,
-             secs);
+        INFO("Phase 2: cin information collection took %llu cycles (%f sec)\n",
+             cycles, secs);
         start = RDTSCP();
 #endif
 
@@ -105,7 +106,8 @@ int bin_packing_join(sgx_enclave_id_t eid, int db_id,
         cycles = end - start;
         secs = (cycles / cycles_per_sec);
 
-        INFO("Output-bin information collection took %llu cycles (%f sec)\n",
+        INFO("Phase 2.1: output-bin information collection took %llu cycles "
+             "(%f sec)\n",
              cycles, secs);
         start = RDTSCP();
 #endif
@@ -124,8 +126,8 @@ int bin_packing_join(sgx_enclave_id_t eid, int db_id,
         cycles = end - start;
         secs = (cycles / cycles_per_sec);
 
-        INFO("Bin information to table took %llu cycles (%f sec)\n", cycles,
-             secs);
+        INFO("Phase 2.5: bin information to table took %llu cycles (%f sec)\n",
+             cycles, secs);
         start = RDTSCP();
 #endif
 
@@ -141,20 +143,20 @@ int bin_packing_join(sgx_enclave_id_t eid, int db_id,
         }
 
 #if defined(REPORT_BIN_PACKING_JOIN_STATS)
-        end = RDTSC_START();
+        total_end = RDTSC_START();
 
-        cycles = end - start;
+        cycles = total_end - total_start;
         secs = (cycles / cycles_per_sec);
 
-        INFO("Fill bins took %llu cycles (%f sec)\n", cycles, secs);
-        start = RDTSCP();
+        INFO("Finished: Bin-Packing-Based Merge Join takes %llu cycles (%f sec)\n", cycles,
+             secs);
 #endif
 
     } while (0);
 
 #if defined(REPORT_BIN_PACKING_JOIN_STATS)
     if (rtn == 0) {
-        ecall_print_table_dbg(eid, &rtn, db_id, *out_tbl_id, 0, 1 << 20);
+        // ecall_print_table_dbg(eid, &rtn, db_id, *out_tbl_id, 0, 1 << 20);
     }
 #endif
     // Clean up
