@@ -39,6 +39,7 @@ int bin_packing_join(sgx_enclave_id_t eid, int db_id,
     }
     metadata_t metadata;
 
+    int bin_info_tbl_id = -1;
     do {
 #if defined(REPORT_BIN_PACKING_JOIN_STATS)
         unsigned long long start, end;
@@ -110,7 +111,6 @@ int bin_packing_join(sgx_enclave_id_t eid, int db_id,
 #endif
 
         int rows_per_cell;
-        int bin_info_tbl_id;
         rtn = bin_info_to_table(eid, db_id, bins, "join:bp:bin_info",
                                 &rows_per_cell, &bin_info_tbl_id);
         if (rtn) {
@@ -152,10 +152,12 @@ int bin_packing_join(sgx_enclave_id_t eid, int db_id,
 
     } while (0);
 
+#if defined(REPORT_BIN_PACKING_JOIN_STATS)
+    if (rtn == 0) {
+        ecall_print_table_dbg(eid, &rtn, db_id, *out_tbl_id, 0, 1 << 20);
+    }
+#endif
     // Clean up
-
-    // TODO: remove this line
-    *out_tbl_id = 1 << 30;
     return rtn;
 }
 

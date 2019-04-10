@@ -279,7 +279,7 @@ int test_rankings(sgx_enclave_id_t eid) {
 	std::string db_name("rankings-and-udata");
 	std::string table_name("rankings");
 	std::string udata_table_name("udata");
-	int i, db_id, rankings_table_id, udata_table_id, join_table_id, ret; 
+	int i, db_id, rankings_table_id, udata_table_id, join_table_id = -1, ret; 
 	join_condition_t c;
 	sgx_status_t sgx_ret = SGX_ERROR_UNEXPECTED;
 

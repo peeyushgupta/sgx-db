@@ -89,6 +89,7 @@ int ecall_bin_pack_join(int db_id, join_condition_t *join_cond,
             return rtn;
         }
     }
+    *join_tbl_id = join_tbl->id;
 #if defined(REPORT_BIN_PACKING_JOIN_STATS)
     INFO("%d rows of joined rows is generated.\n", join_tbl->num_rows);
 #endif
