@@ -19,6 +19,7 @@
 // `column_offset`: Where the two tables are sperated in the `bin_sc`.
 // `bins`: The actual bins, which is the output of Phase 3 and the input of Phase 4.
 // TODO: parallelize this
+// TODO: get `bin_sc` from table
 int fill_bins(data_base_t *db, table_t *data_table, int column,
               const int rows_per_dblk, table_t *bin_info_table,
               const int start_dblk, const int end_dblk, const int num_bins,
@@ -33,6 +34,6 @@ int fill_bin(table_t *bin_info_table, int begin, int end, int num_bins,
 // Bin Packing Phase 4: join each individual bin
 // For each individual bin, do a hash join, do padding(while pretending not),
 // and write the results out
-int join_bins(table_t *lhs_tbl, table_t *rhs_tbl, schema_t *join_sc, table_t *join_tbl);
-
+int join_bins(table_t *lhs_tbl, const int lhs_column, table_t *rhs_tbl,
+              const int rhs_column, schema_t *join_sc, table_t *join_tbl);
 #endif // E_BIN_PACKING_JOIN_HPP

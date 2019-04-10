@@ -61,7 +61,7 @@ int ecall_bin_pack_join(int db_id, join_condition_t *join_cond,
                     &(lhs_tbl->sc), &lhs_bins);
     if (rtn) {
         ERR("Failed to fill lhs bins\n");
-        return -2;
+        return rtn;
     }
 
     rtn = fill_bins(db, rhs_tbl, join_cond->fields_right[0], rows_per_dblk,
@@ -69,7 +69,24 @@ int ecall_bin_pack_join(int db_id, join_condition_t *join_cond,
                     &(rhs_tbl->sc), &rhs_bins);
     if (rtn) {
         ERR("Failed to fill lhs bins\n");
-        return -2;
+        return rtn;
+    }
+
+    schema_t join_sc;
+    join_schema(&join_sc, &lhs_tbl->sc, &rhs_tbl->sc);
+    std::string join_tbl_name = "join:bp:result";
+    table_t *join_tbl;
+    if (create_table(db, join_tbl_name, &join_sc, &join_tbl)) {
+        ERR("Failed to create table %s\n", join_tbl_name.c_str());
+        return -1;
+    }
+    for (int i = 0; i < num_bins; ++i) {
+        rtn = join_bins(lhs_bins[i], join_cond->fields_left[0], rhs_bins[i],
+                        join_cond->fields_right[0], &join_sc, join_tbl);
+        if (rtn) {
+            ERR("Failed to join bin %d out of %d\n", i, num_bins);
+            return rtn;
+        }
     }
 
     return rtn;
@@ -84,7 +101,10 @@ int fill_bins(data_base_t *db, table_t *data_table, int column,
         std::string bin_name = "join:bp:bin_";
         bin_name += std::to_string(i);
         table_t *tmp;
-        create_table(db, bin_name, bin_sc, &tmp);
+        if (create_table(db, bin_name, bin_sc, &tmp)) {
+            ERR("Failed to create table %s\n", bin_name.c_str());
+            return -1;
+        }
         bins->push_back(tmp);
     }
 
@@ -197,7 +217,7 @@ int fill_bins(data_base_t *db, table_t *data_table, int column,
                 bin.push_back(row);
                 byte_read_bin += sizeof(row);
             } catch (const std::bad_alloc &) {
-                DBG("Not enough memory: dblk %d, i %d, row_num %d, byte_info "
+                ERR("Not enough memory: dblk %d, i %d, row_num %d, byte_info "
                     "%d, byte_bin %d\n",
                     dblk_cnt, i, data_row_num, byte_read_info, byte_read_bin);
                 return -1;
@@ -224,8 +244,51 @@ int fill_bins(data_base_t *db, table_t *data_table, int column,
     return 0;
 }
 
-int join_bins(table_t *lhs_tbl, table_t *rhs_tbl, schema_t *join_sc, table_t *join_tbl) {
-    // join_schema();
-    // join_rows();
+int join_bins(table_t *lhs_tbl, const int lhs_column, table_t *rhs_tbl,
+              const int rhs_column, schema_t *join_sc, table_t *join_tbl) {
+    // Fill in the `mapping`
+    // `mapping` map a joining value to rows in the `lhs_tbl`
+    std::unordered_map<std::string, std::vector<row_t>> mapping;
+    schema_t *lhs_sc = &lhs_tbl->sc;
+    for (int row_num = 0; row_num < lhs_tbl->num_rows; ++row_num) {
+        row_t row;
+        if (read_row(lhs_tbl, row_num, &row)) {
+            ERR("Failed to read row");
+            return -1;
+        }
+        std::string value((char *)get_column(lhs_sc, lhs_column, &row));
+        if (value.empty()) {
+            continue;
+        }
+        try {
+            mapping[value].push_back(row);
+        } catch (const std::bad_alloc &) {
+            ERR("Not enough memory: table_name %s, row_num %d, total_rows "
+                "%d\n",
+                lhs_tbl->name.c_str(), row_num, lhs_tbl->num_rows);
+            return -1;
+        }
+    }
+
+    schema_t *rhs_sc = &rhs_tbl->sc;
+    for (int row_num = 0; row_num < rhs_tbl->num_rows; ++row_num) {
+        row_t row;
+        if (read_row(rhs_tbl, row_num, &row)) {
+            ERR("Failed to read row");
+            return -1;
+        }
+        std::string value((char *)get_column(rhs_sc, rhs_column, &row));
+        if (value.empty()) {
+            continue;
+        }
+
+        row_t join_row;
+        for (row_t &lhs_row : mapping[value]) {
+            join_rows(&join_row, join_sc->row_data_size, &lhs_row,
+                      lhs_sc->row_data_size, &row, rhs_sc->row_data_size, 0);
+            insert_row_dbg(join_tbl, &join_row);
+        }
+    }
+
     return 0;
 }

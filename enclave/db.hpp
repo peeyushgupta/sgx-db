@@ -206,5 +206,9 @@ int unpin_table_dirty(table_t *table);
 int delete_table(data_base_t *db, table_t *table);
 data_base_t *get_db(unsigned int id);
 bool compare_rows(schema_t *sc, int column, row_t *row_l, row_t *row_r);
+int join_schema(schema_t *sc, schema_t *left, schema_t *right);
+int join_rows(row_t *join_row, unsigned int join_row_data_size, row_t *
+		row_left, unsigned int row_left_data_size, row_t * row_right,
+		unsigned int row_right_data_size, unsigned int offset);
 void *get_column(schema_t *sc, int field, row_t *row);
 
