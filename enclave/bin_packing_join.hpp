@@ -36,5 +36,5 @@ int fill_bin(table_t *bin_info_table, int begin, int end, int num_bins,
 // and write the results out
 int join_bins(table_t *lhs_tbl, const int lhs_column, table_t *rhs_tbl,
               const int rhs_column, schema_t *join_sc, table_t *join_tbl,
-              const int num_rows_per_out_bin);
+              const int num_rows_per_out_bin, int bin_id);
 #endif // E_BIN_PACKING_JOIN_HPP

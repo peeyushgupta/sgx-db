@@ -73,6 +73,7 @@ int ecall_bin_pack_join(int db_id, join_condition_t *join_cond,
             break;
         }
 
+        // ERR: contents in `lhs_bins` are corrupted after this call;
         rtn = fill_bins(db, rhs_tbl, join_cond->fields_right[0], rows_per_dblk,
                         bin_info_btl, midpoint, -1, num_bins, rows_per_cell,
                         &(rhs_tbl->sc), &rhs_bins);
@@ -101,7 +102,7 @@ int ecall_bin_pack_join(int db_id, join_condition_t *join_cond,
         for (int i = 0; i < num_bins; ++i) {
             rtn = join_bins(lhs_bins[i], join_cond->fields_left[0], rhs_bins[i],
                             join_cond->fields_right[0], &join_sc, join_tbl,
-                            num_rows_per_out_bin);
+                            num_rows_per_out_bin, i);
             if (rtn) {
                 ERR("Failed to join bin %d out of %d\n", i, num_bins);
                 break;
@@ -176,7 +177,6 @@ int fill_bins(data_base_t *db, table_t *data_table, int column,
         // For each cell
         for (int cell_num = 0; cell_num < num_bins; ++cell_num) {
             // For each value
-            // DBG("outer\n");
             for (int i = 0; i < rows_per_cell; ++i) {
                 row_t row;
 #if !defined(NDEBUG)
@@ -185,7 +185,6 @@ int fill_bins(data_base_t *db, table_t *data_table, int column,
                         "to read\n");
                     return -1;
                 }
-
 #endif
 
                 if (read_row(bin_info_table, row_num++, &row)) {
@@ -193,11 +192,12 @@ int fill_bins(data_base_t *db, table_t *data_table, int column,
                     return -1;
                 }
 
-                if (row.header.fake) {
-                    continue;
-                }
                 std::string value(
                     (char *)get_column(&(bin_info_table->sc), 0, &row));
+                if (value.empty()) {
+                    continue;
+                }
+
                 byte_read_info += value.length();
 #if !defined(NDEBUG)
                 const auto &it = placement.find(value);
@@ -208,19 +208,16 @@ int fill_bins(data_base_t *db, table_t *data_table, int column,
                     return -1;
                 }
 #endif
-                if (!value.empty()) {
-                    placement[value] = cell_num;
-                }
+                placement[value] = cell_num;
             }
         }
 
+        // Scan the data table and fill bin according to the bin information
         int byte_read_bin = 0;
         typedef std::vector<row_t> temp_bin_t;
         std::vector<temp_bin_t> temp_bins(num_bins);
-        // Scan the data table and fill bin according to the bin information
         for (int i = 0; i < rows_per_dblk; ++i) {
             row_t row;
-
             if (data_row_num >= data_table->num_rows) {
 #if !defined(NDEBUG)
                 if (data_table_exhausted) {
@@ -267,9 +264,10 @@ int fill_bins(data_base_t *db, table_t *data_table, int column,
             }
         }
 
+        // Flush temp_bins to bins
         row_t empty_row;
         memset(&empty_row, 0x0, sizeof(empty_row));
-        // Flush temp_bins to bins
+        empty_row.header.fake = true;
         for (int i = 0; i < temp_bins.size(); ++i) {
             temp_bin_t *temp_bin = &temp_bins[i];
             for (int j = 0; j < rows_per_cell; j++) {
@@ -289,7 +287,8 @@ int fill_bins(data_base_t *db, table_t *data_table, int column,
 
 int join_bins(table_t *lhs_tbl, const int lhs_column, table_t *rhs_tbl,
               const int rhs_column, schema_t *join_sc, table_t *join_tbl,
-              const int num_rows_per_out_bin) {
+              const int num_rows_per_out_bin,
+              int bin_id /* TODO: remove `bin_id` */) {
     // Fill in the `mapping`
     // `mapping` map a joining value to rows in the `lhs_tbl`
     std::unordered_map<std::string, std::vector<row_t>> mapping;
