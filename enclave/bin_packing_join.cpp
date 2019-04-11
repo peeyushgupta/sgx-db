@@ -319,6 +319,7 @@ int join_bins(table_t *lhs_tbl, const int lhs_column, table_t *rhs_tbl,
             join_rows(&join_row, join_sc->row_data_size, &lhs_row,
                       lhs_sc->row_data_size, &row, rhs_sc->row_data_size, 0);
             insert_row_dbg(join_tbl, &join_row);
+            num_rows_inserted++;
         }
     }
     row_t empty_row;
