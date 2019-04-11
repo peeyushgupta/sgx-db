@@ -60,6 +60,7 @@ int ecall_bin_pack_join(int db_id, join_condition_t *join_cond,
     unsigned long long start, end;
     unsigned long long cycles;
     double secs;
+    start = RDTSC();
 #endif
 
     std::vector<table_t *> lhs_bins, rhs_bins;
@@ -83,6 +84,7 @@ int ecall_bin_pack_join(int db_id, join_condition_t *join_cond,
     end = RDTSC();
     cycles = end - start;
     secs = (cycles / cycles_per_sec);
+    start = end;
     INFO("Phase 3: fill bins took %llu cycles (%f sec)\n", cycles, secs);
 #endif
 
@@ -109,6 +111,7 @@ int ecall_bin_pack_join(int db_id, join_condition_t *join_cond,
     end = RDTSC();
     cycles = end - start;
     secs = (cycles / cycles_per_sec);
+    start = end;
     INFO("Phase 4: join bins took %llu cycles (%f sec)\n", cycles, secs);
 #endif
 
