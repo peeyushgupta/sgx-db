@@ -64,61 +64,74 @@ int ecall_bin_pack_join(int db_id, join_condition_t *join_cond,
 #endif
 
     std::vector<table_t *> lhs_bins, rhs_bins;
-    rtn = fill_bins(db, lhs_tbl, join_cond->fields_left[0], rows_per_dblk,
-                    bin_info_btl, 0, midpoint, num_bins, rows_per_cell,
-                    &(lhs_tbl->sc), &lhs_bins);
-    if (rtn) {
-        ERR("Failed to fill lhs bins\n");
-        return rtn;
-    }
-
-    rtn = fill_bins(db, rhs_tbl, join_cond->fields_right[0], rows_per_dblk,
-                    bin_info_btl, midpoint, -1, num_bins, rows_per_cell,
-                    &(rhs_tbl->sc), &rhs_bins);
-    if (rtn) {
-        ERR("Failed to fill lhs bins\n");
-        return rtn;
-    }
-
-#if defined(REPORT_BIN_PACKING_JOIN_STATS)
-    end = RDTSC();
-    cycles = end - start;
-    secs = (cycles / cycles_per_sec);
-    start = end;
-    INFO("Phase 3: fill bins took %llu cycles (%f sec)\n", cycles, secs);
-#endif
-
-    schema_t join_sc;
-    join_schema(&join_sc, &lhs_tbl->sc, &rhs_tbl->sc);
-    std::string join_tbl_name = "join:bp:result";
-    table_t *join_tbl;
-    if (create_table(db, join_tbl_name, &join_sc, &join_tbl)) {
-        ERR("Failed to create table %s\n", join_tbl_name.c_str());
-        return -1;
-    }
-    for (int i = 0; i < num_bins; ++i) {
-        rtn = join_bins(lhs_bins[i], join_cond->fields_left[0], rhs_bins[i],
-                        join_cond->fields_right[0], &join_sc, join_tbl,
-                        num_rows_per_out_bin);
+    do {
+        rtn = fill_bins(db, lhs_tbl, join_cond->fields_left[0], rows_per_dblk,
+                        bin_info_btl, 0, midpoint, num_bins, rows_per_cell,
+                        &(lhs_tbl->sc), &lhs_bins);
         if (rtn) {
-            ERR("Failed to join bin %d out of %d\n", i, num_bins);
-            return rtn;
+            ERR("Failed to fill lhs bins\n");
+            break;
         }
+
+        rtn = fill_bins(db, rhs_tbl, join_cond->fields_right[0], rows_per_dblk,
+                        bin_info_btl, midpoint, -1, num_bins, rows_per_cell,
+                        &(rhs_tbl->sc), &rhs_bins);
+        if (rtn) {
+            ERR("Failed to fill lhs bins\n");
+            break;
+        }
+
+#if defined(REPORT_BIN_PACKING_JOIN_STATS)
+        end = RDTSC();
+        cycles = end - start;
+        secs = (cycles / cycles_per_sec);
+        start = end;
+        INFO("Phase 3: fill bins took %llu cycles (%f sec)\n", cycles, secs);
+#endif
+
+        schema_t join_sc;
+        join_schema(&join_sc, &lhs_tbl->sc, &rhs_tbl->sc);
+        std::string join_tbl_name = "join:bp:result";
+        table_t *join_tbl;
+        rtn = create_table(db, join_tbl_name, &join_sc, &join_tbl);
+        if (rtn) {
+            ERR("Failed to create table %s\n", join_tbl_name.c_str());
+            break;
+        }
+        for (int i = 0; i < num_bins; ++i) {
+            rtn = join_bins(lhs_bins[i], join_cond->fields_left[0], rhs_bins[i],
+                            join_cond->fields_right[0], &join_sc, join_tbl,
+                            num_rows_per_out_bin);
+            if (rtn) {
+                ERR("Failed to join bin %d out of %d\n", i, num_bins);
+                break;
+            }
+        }
+        *join_tbl_id = join_tbl->id;
+
+#if defined(REPORT_BIN_PACKING_JOIN_STATS)
+        end = RDTSC();
+        cycles = end - start;
+        secs = (cycles / cycles_per_sec);
+        start = end;
+        INFO("Phase 4: join bins took %llu cycles (%f sec)\n", cycles, secs);
+#endif
+
+#if defined(REPORT_BIN_PACKING_JOIN_STATS)
+        INFO("%d rows of joined rows is generated.\n", join_tbl->num_rows);
+#endif
+
+    } while (false);
+
+    for (const auto &tbl : lhs_bins) {
+        delete_table(db, tbl);
     }
-    *join_tbl_id = join_tbl->id;
+    lhs_bins.clear();
 
-#if defined(REPORT_BIN_PACKING_JOIN_STATS)
-    end = RDTSC();
-    cycles = end - start;
-    secs = (cycles / cycles_per_sec);
-    start = end;
-    INFO("Phase 4: join bins took %llu cycles (%f sec)\n", cycles, secs);
-#endif
-
-#if defined(REPORT_BIN_PACKING_JOIN_STATS)
-    INFO("%d rows of joined rows is generated.\n", join_tbl->num_rows);
-#endif
-
+    for (const auto &tbl : rhs_bins) {
+        delete_table(db, tbl);
+    }
+    rhs_bins.clear();
     return rtn;
 }
 
