@@ -142,7 +142,7 @@ int fill_bins(data_base_t *db, table_t *data_table, int column,
               const int rows_per_cell, schema_t *bin_sc,
               std::vector<table_t *> *bins) {
     for (int i = 0; i < num_bins; ++i) {
-        std::string bin_name = "join:bp:bin_";
+        std::string bin_name = "join:bp:bin_" + data_table->name + "_";
         bin_name += std::to_string(i);
         table_t *tmp;
         if (create_table(db, bin_name, bin_sc, &tmp)) {
