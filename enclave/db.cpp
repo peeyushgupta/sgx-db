@@ -284,6 +284,7 @@ int write_data_block(table *table, unsigned long blk_num, void *buf) {
  */
 
 /* Create data base, returns dbId */
+/* TODO: check for duplicate table name */
 int ecall_create_db(const char *cname, int name_len, int *db_id) {
 
 	data_base *db;
