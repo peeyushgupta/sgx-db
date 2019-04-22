@@ -132,7 +132,6 @@ int bin_packing_join(sgx_enclave_id_t eid, int db_id,
 #endif
 
         // Perform Phase 3 and Phase 4 inside the enclave
-        DBG("%d\n", join_cond->fields_left[0]);
         sgx_status_t sgx_ret = ecall_bin_pack_join(
             eid, &rtn, db_id, join_cond, rows_per_dblk, num_rows_per_out_bin,
             bin_info_tbl_id, midpoint, bins.size(), rows_per_cell, out_tbl_id,
