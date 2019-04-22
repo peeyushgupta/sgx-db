@@ -38,6 +38,7 @@ int obli_fill_bins_per_dblk(table_t *data_table, int column, int *data_row_num,
     int byte_read_info = 0;
     // For each cell
     for (int cell_num = 0; cell_num < num_bins; ++cell_num) {
+        DBG("filling dblk #%d, cell#%d\n", dblk_cnt, cell_num);
         std::vector<std::string> keys;
         // Load each value in `bin_info_table` into `keys`
         for (int i = 0; i < rows_per_cell; ++i) {
