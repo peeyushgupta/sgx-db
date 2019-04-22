@@ -1,11 +1,20 @@
-#include "obliv_bin_packing_join.hpp"
+#include "obli_bin_packing_join.hpp"
 
 #include <cassert>
 #include <cstring>
 #include <vector>
 
+#include "db.hpp"
 #include "bitonic_sort.hpp"
-#include "obli.hpp"
+// #include "obli.hpp"
+#include "time.hpp"
+#include "util.hpp"
+
+#if defined(NO_SGX)
+#include "env.hpp"
+#else
+#include "enclave_t.h"
+#endif
 
 int obliv_fill_bins(data_base_t *db, table_t *data_table, int column, const int rows_per_dblk,
                     table_t *bin_info_table, const int start_dblk, const int end_dblk,
@@ -64,9 +73,6 @@ int obli_fill_bins_per_dblk(table_t *data_table, int column, int *data_row_num,
         // Scan the entire datablock(expensive) and load data
         *data_row_num = initial_data_row_num;
         int initial_bin_row_num = (*bins)[cell_num]->num_rows;
-        int byte_read_bin = 0;
-        typedef std::vector<row_t> temp_bin_t;
-        std::vector<temp_bin_t> temp_bins(num_bins);
         for (int i = 0; i < rows_per_dblk; ++i) {
             row_t data_row;
             if (*data_row_num >= data_table->num_rows) {
@@ -89,11 +95,13 @@ int obli_fill_bins_per_dblk(table_t *data_table, int column, int *data_row_num,
             row_t fake_row;
             memset(&fake_row, 0x0, sizeof(fake_row));
             fake_row.header.fake = true;
-            obli_cswap((u8 *)&data_row, (u8 *)&fake_row, sizeof(row_t), should_not_load);
+            // TODO: add this back
+            // obli_cswap((u8*)&data_row, (u8*)&fake_row, sizeof(row_t), should_not_load);
 
             insert_row_dbg(bins->at(cell_num), &data_row);
         }
-        bitonic_sort_table(db, bins->at(cell_num), column, /* output talbe */);
+
+        recBitonicSort(bins->at(cell_num), initial_bin_row_num, bins->at(cell_num)->num_rows - initial_bin_row_num, column, 1, 0);
     }
 
     *data_row_num = initial_data_row_num + rows_per_dblk;
