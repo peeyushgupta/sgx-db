@@ -1,34 +1,36 @@
 #include "obliv_bin_packing_join.hpp"
 
 #include <cassert>
+#include <cstring>
 #include <vector>
 
+#include "bitonic_sort.hpp"
 #include "obli.hpp"
 
-int obliv_fill_bins(data_base_t *db, table_t *data_table, int column,
-                    const int rows_per_dblk, table_t *bin_info_table,
-                    const int start_dblk, const int end_dblk,
-                    const int num_bins, const int rows_per_cell,
-                    schema_t *bin_sc, std::vector<table_t *> *bins) {
+int obliv_fill_bins(data_base_t *db, table_t *data_table, int column, const int rows_per_dblk,
+                    table_t *bin_info_table, const int start_dblk, const int end_dblk,
+                    const int num_bins, const int rows_per_cell, schema_t *bin_sc,
+                    std::vector<table_t *> *bins) {
     ERR("Unimplemented");
 
     return 0;
 }
 
 int obli_fill_bins_per_dblk(table_t *data_table, int column, int *data_row_num,
-                            const int rows_per_dblk, const int dblk_cnt,
-                            table_t *bin_info_table, int *info_row_num,
-                            const int rows_per_cell, schema_t *bin_sc,
+                            const int rows_per_dblk, const int dblk_cnt, table_t *bin_info_table,
+                            int *info_row_num, const int rows_per_cell, schema_t *bin_sc,
                             std::vector<table_t *> *bins) {
+    // Create a backup for data_row_num since we will use it multiple times
+    const int initial_data_row_num = *data_row_num;
     // Load bin information
     // This map stores the information about a value should be placed in
     // which cell.
     const int num_bins = bins->size();
     int byte_read_info = 0;
-    std::vector<std::string> keys;
     // For each cell
     for (int cell_num = 0; cell_num < num_bins; ++cell_num) {
-        // Load each value in `bin_info_table` into
+        std::vector<std::string> keys;
+        // Load each value in `bin_info_table` into `keys`
         for (int i = 0; i < rows_per_cell; ++i) {
             row_t row;
 #if !defined(NDEBUG)
@@ -43,8 +45,7 @@ int obli_fill_bins_per_dblk(table_t *data_table, int column, int *data_row_num,
                 return -1;
             }
 
-            std::string value(
-                (char *)get_column(&(bin_info_table->sc), 0, &row));
+            std::string value((char *)get_column(&(bin_info_table->sc), 0, &row));
             if (value.empty()) {
                 continue;
             }
@@ -59,73 +60,42 @@ int obli_fill_bins_per_dblk(table_t *data_table, int column, int *data_row_num,
                 return -1;
             }
         }
-    }
 
-    // Scan the data table and fill bin according to the bin information
-    int byte_read_bin = 0;
-    typedef std::vector<row_t> temp_bin_t;
-    std::vector<temp_bin_t> temp_bins(num_bins);
-    for (int i = 0; i < rows_per_dblk; ++i) {
-        row_t row;
-        if (*data_row_num >= data_table->num_rows) {
-            // TODO: make sure that there's no more info_bin to read in the
-            // outer loop if (data_table_exhausted) {
-            //     ERR("Reach the end of data table but still have more rows "
-            //         "to read. Data table: dblk %d, curr_row %d, "
-            //         "rows_per_dblk. Info table: total rows %d, curr_row "
-            //         "%d %d\n",
-            //         dblk_cnt, i, rows_per_dblk, bin_info_table->num_rows,
-            //         row_num, 1);
-            //     return -1;
-            // }
-            break;
-        }
-
-        if (read_row(data_table, (*data_row_num)++, &row)) {
-            ERR("Failed to read row");
-            return -1;
-        }
-        std::string value((char *)get_column(&(data_table->sc), column, &row));
-#if !defined(NDEBUG)
-        const auto it = placement.find(value);
-        if (it == placement.end()) {
-            ERR("Failed to find bin info for '%s'\n", value.c_str());
-            return -1;
-        }
-        if (it->second < 0 || it->second >= temp_bins.size()) {
-            ERR("Bin index out of bound: %d\n", it->second);
-            return -1;
-        }
-#endif
-        const auto &key = placement[value];
-        auto &bin = temp_bins[key];
-        try {
-            bin.push_back(row);
-            byte_read_bin += sizeof(row);
-        } catch (const std::bad_alloc &) {
-            ERR("Not enough memory: dblk %d, i %d, row_num %d, byte_info "
-                "%d, byte_bin %d\n",
-                dblk_cnt, i, data_row_num, byte_read_info, byte_read_bin);
-            return -1;
-        }
-    }
-
-    // Flush temp_bins to bins
-    row_t empty_row;
-    memset(&empty_row, 0x0, sizeof(empty_row));
-    empty_row.header.fake = true;
-    for (int i = 0; i < temp_bins.size(); ++i) {
-        temp_bin_t *temp_bin = &temp_bins[i];
-        for (int j = 0; j < rows_per_cell; j++) {
-            row_t *row;
-            if (j < temp_bin->size()) {
-                row = &(*temp_bin)[j];
-            } else {
-                row = &empty_row;
+        // Scan the entire datablock(expensive) and load data
+        *data_row_num = initial_data_row_num;
+        int initial_bin_row_num = (*bins)[cell_num]->num_rows;
+        int byte_read_bin = 0;
+        typedef std::vector<row_t> temp_bin_t;
+        std::vector<temp_bin_t> temp_bins(num_bins);
+        for (int i = 0; i < rows_per_dblk; ++i) {
+            row_t data_row;
+            if (*data_row_num >= data_table->num_rows) {
+                // TODO: make sure that there's no more info_bin to read in the
+                // outer loop
+                break;
             }
-            insert_row_dbg((*bins)[i], row);
+
+            if (read_row(data_table, (*data_row_num)++, &data_row)) {
+                ERR("Failed to read row");
+                return -1;
+            }
+            std::string value((char *)get_column(&(data_table->sc), column, &data_row));
+            // If we don't want to load this value, make data_row empty
+            // TODO: set header.is_fake instead. it's way cheaper
+            bool should_not_load = false;
+            for (const auto &key : keys) {
+                should_not_load |= (key == value);
+            }
+            row_t fake_row;
+            memset(&fake_row, 0x0, sizeof(fake_row));
+            fake_row.header.fake = true;
+            obli_cswap((u8 *)&data_row, (u8 *)&fake_row, sizeof(row_t), should_not_load);
+
+            insert_row_dbg(bins->at(cell_num), &data_row);
         }
+        bitonic_sort_table(db, bins->at(cell_num), column, /* output talbe */);
     }
 
+    *data_row_num = initial_data_row_num + rows_per_dblk;
     return 0;
 }
