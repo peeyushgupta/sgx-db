@@ -1713,7 +1713,7 @@ int ecall_merge_and_sort_and_write(int db_id,
 	//ret = bitonic_sort_table(db, append_table, field, &s_table);
 	ret = quick_sort_table(db, append_table, field, &s_table);
 	if(ret) {
-		ERR("failed to bitonic sort table %s\n",
+		ERR("failed to quick sort table %s\n",
 			append_table->name.c_str());
 		goto cleanup;
 	}
