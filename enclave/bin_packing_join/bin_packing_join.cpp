@@ -165,9 +165,15 @@ int fill_bins(data_base_t *db, table_t *data_table, int column,
 #if defined(REPORT_BIN_PACKING_JOIN_STATS)
     INFO("Reading bin info table from row %d to %d\n", start_row, end_row);
 #endif
+    decltype(fill_bins_per_dblk) *fill_bins_per_dblk_fn;
+#if defined(TEST_OBLIVIOUS)
+    fill_bins_per_dblk_fn = fill_bins_per_dblk;
+#else
+    fill_bins_per_dblk_fn = obli_fill_bins_per_dblk;
+#endif
     // For each datablock
     for (int info_row_num = start_row; info_row_num < end_row; ++dblk_cnt) {
-        obli_fill_bins_per_dblk(data_table, column, &data_row_num, rows_per_dblk,
+        fill_bins_per_dblk_fn(data_table, column, &data_row_num, rows_per_dblk,
                            dblk_cnt, bin_info_table, &info_row_num,
                            rows_per_cell, bin_sc, bins);
     }
