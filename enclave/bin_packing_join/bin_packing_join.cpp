@@ -166,7 +166,7 @@ int fill_bins(data_base_t *db, table_t *data_table, int column,
     INFO("Reading bin info table from row %d to %d\n", start_row, end_row);
 #endif
     decltype(fill_bins_per_dblk) *fill_bins_per_dblk_fn;
-#if defined(TEST_OBLIVIOUS)
+#if !defined(TEST_OBLIVIOUS)
     fill_bins_per_dblk_fn = fill_bins_per_dblk;
 #else
     fill_bins_per_dblk_fn = obli_fill_bins_per_dblk;
