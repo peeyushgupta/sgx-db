@@ -4,8 +4,9 @@
 #include <cstring>
 #include <vector>
 
-#include "db.hpp"
 #include "bitonic_sort.hpp"
+#include "db.hpp"
+#include "dbg.hpp"
 // #include "obli.hpp"
 #include "time.hpp"
 #include "util.hpp"
@@ -16,18 +17,20 @@
 #include "enclave_t.h"
 #endif
 
-int obliv_fill_bins(data_base_t *db, table_t *data_table, int column, const int rows_per_dblk,
-                    table_t *bin_info_table, const int start_dblk, const int end_dblk,
-                    const int num_bins, const int rows_per_cell, schema_t *bin_sc,
-                    std::vector<table_t *> *bins) {
+int obliv_fill_bins(data_base_t *db, table_t *data_table, int column,
+                    const int rows_per_dblk, table_t *bin_info_table,
+                    const int start_dblk, const int end_dblk,
+                    const int num_bins, const int rows_per_cell,
+                    schema_t *bin_sc, std::vector<table_t *> *bins) {
     ERR("Unimplemented");
 
     return 0;
 }
 
 int obli_fill_bins_per_dblk(table_t *data_table, int column, int *data_row_num,
-                            const int rows_per_dblk, const int dblk_cnt, table_t *bin_info_table,
-                            int *info_row_num, const int rows_per_cell, schema_t *bin_sc,
+                            const int rows_per_dblk, const int dblk_cnt,
+                            table_t *bin_info_table, int *info_row_num,
+                            const int rows_per_cell, schema_t *bin_sc,
                             std::vector<table_t *> *bins) {
     // Create a backup for data_row_num since we will use it multiple times
     const int initial_data_row_num = *data_row_num;
@@ -55,7 +58,8 @@ int obli_fill_bins_per_dblk(table_t *data_table, int column, int *data_row_num,
                 return -1;
             }
 
-            std::string value((char *)get_column(&(bin_info_table->sc), 0, &row));
+            std::string value(
+                (char *)get_column(&(bin_info_table->sc), 0, &row));
             if (value.empty()) {
                 continue;
             }
@@ -86,7 +90,8 @@ int obli_fill_bins_per_dblk(table_t *data_table, int column, int *data_row_num,
                 ERR("Failed to read row");
                 return -1;
             }
-            std::string value((char *)get_column(&(data_table->sc), column, &data_row));
+            std::string value(
+                (char *)get_column(&(data_table->sc), column, &data_row));
             // If we don't want to load this value, make data_row empty
             // TODO: set header.is_fake instead. it's way cheaper
             bool should_not_load = false;
@@ -97,12 +102,15 @@ int obli_fill_bins_per_dblk(table_t *data_table, int column, int *data_row_num,
             memset(&fake_row, 0x0, sizeof(fake_row));
             fake_row.header.fake = true;
             // TODO: add this back
-            // obli_cswap((u8*)&data_row, (u8*)&fake_row, sizeof(row_t), should_not_load);
+            // obli_cswap((u8*)&data_row, (u8*)&fake_row, sizeof(row_t),
+            // should_not_load);
 
             insert_row_dbg(bins->at(cell_num), &data_row);
         }
 
-        recBitonicSort(bins->at(cell_num), initial_bin_row_num, bins->at(cell_num)->num_rows - initial_bin_row_num, column, 1, 0);
+        recBitonicSort(bins->at(cell_num), initial_bin_row_num,
+                       bins->at(cell_num)->num_rows - initial_bin_row_num,
+                       column, 1, 0);
     }
 
     *data_row_num = initial_data_row_num + rows_per_dblk;

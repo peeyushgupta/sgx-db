@@ -5,9 +5,9 @@
 #include <unordered_map>
 
 #include "db.hpp"
+#include "obli_bin_packing_join.hpp"
 #include "time.hpp"
 #include "util.hpp"
-#include "obli_bin_packing_join.hpp"
 
 #if defined(NO_SGX)
 #include "env.hpp"
@@ -174,8 +174,8 @@ int fill_bins(data_base_t *db, table_t *data_table, int column,
     // For each datablock
     for (int info_row_num = start_row; info_row_num < end_row; ++dblk_cnt) {
         fill_bins_per_dblk_fn(data_table, column, &data_row_num, rows_per_dblk,
-                           dblk_cnt, bin_info_table, &info_row_num,
-                           rows_per_cell, bin_sc, bins);
+                              dblk_cnt, bin_info_table, &info_row_num,
+                              rows_per_cell, bin_sc, bins);
     }
 
     return 0;
