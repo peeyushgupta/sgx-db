@@ -535,11 +535,6 @@ void *get_column(schema_t *sc, int field, row_t *row) {
 
 bool compare_rows(schema_t *sc, int column, row_t *row_l, row_t *row_r) {
 	bool res; 
-
-	/* make sure fake touples are always greater */
-	if (row_l->header.fake)
-		return true; 
-
 	switch(sc->types[column]) {
 	case BOOLEAN:
 		res = *(bool*)&row_l->data[sc->offsets[column]] >
@@ -566,6 +561,8 @@ bool compare_rows(schema_t *sc, int column, row_t *row_l, row_t *row_r) {
 	default: 
 		res = false;
 	}
+	res &= !row_r->header.fake;
+	res |= row_l->header.fake;
 	return res;
 }
 
