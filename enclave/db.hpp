@@ -166,6 +166,7 @@ static inline int get_pinned_row(table_t *table, unsigned int row_num, data_bloc
 	return 0; 
 }
 
+int print_schema(schema_t *sc, std::string name);
 
 int create_table(data_base_t *db, std::string &name, schema_t *schema, table_t **new_table);
 void free_table(table_t *table); 

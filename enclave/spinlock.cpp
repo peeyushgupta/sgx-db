@@ -5,6 +5,8 @@
 #include "util.hpp"
 #include "dbg.hpp"
 
+#define BARRIER_VERBOSE 0 
+
 void initlock(struct spinlock *lk, std::string name)
 {
 	lk->name = name;
@@ -118,7 +120,7 @@ void barrier_wait(barrier_t *b, volatile unsigned int *local_sense, unsigned int
 void barrier_wait(barrier_t *b, volatile unsigned int *local_sense, unsigned int tid, unsigned int num_threads) {
 	// flip local_sense
 	*local_sense = !(*local_sense);
-	DBG("%s, tid %d , local_sense %d @ %p | global_sense %d | num_threads"
+	DBG_ON(BARRIER_VERBOSE, "%s, tid %d , local_sense %d @ %p | global_sense %d | num_threads"
 			" %d\n", __func__, tid, *local_sense, local_sense,
 			b->global_sense, num_threads);
 
@@ -129,16 +131,16 @@ void barrier_wait(barrier_t *b, volatile unsigned int *local_sense, unsigned int
 		b->count = 0;
 		b->global_sense = *local_sense;
 
-		DBG("%s, tid %d resetting count = %d | global_sense %d\n",
+		DBG_ON(BARRIER_VERBOSE, "%s, tid %d resetting count = %d | global_sense %d\n",
 				__func__, tid, b->count, b->global_sense);
 
 	} else {
-		DBG("%s, tid %d waiting at global_sense %d | local_sense %d\n",
+		DBG_ON(BARRIER_VERBOSE, "%s, tid %d waiting at global_sense %d | local_sense %d\n",
 				__func__, tid, b->global_sense, *local_sense);
 		// Wait until global_sense is equal to local_sense of the waiting thread
 		while (b->global_sense != *local_sense) ;
 
-		DBG("%s, tid %d leaves barrier global_sense %d | local_sense %d\n",
+		DBG_ON(BARRIER_VERBOSE, "%s, tid %d leaves barrier global_sense %d | local_sense %d\n",
 				__func__, tid, b->global_sense,	*local_sense);
 	}
 	return;

@@ -996,6 +996,7 @@ int column_sort_table_parallel(data_base_t *db, table_t *table, int column, int 
 
 		bcache_stats_read_and_reset(&db->bcache, &bstats);
 		bcache_stats_printf(&bstats); 
+		print_schema(&table->sc, table->name); 
 
 #endif
 

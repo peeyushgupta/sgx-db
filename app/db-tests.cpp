@@ -801,7 +801,7 @@ int test_merge_sort_write(sgx_enclave_id_t eid)
 		int	write_table_id;
 		unsigned long long start, end;
 		start = RDTSC_START();
-		auto num_threads = 2u;
+		auto num_threads = 1u;
 
 		ecall_merge_and_sort_and_write(eid, &ret, db_id,
 			rankings_table_id,
