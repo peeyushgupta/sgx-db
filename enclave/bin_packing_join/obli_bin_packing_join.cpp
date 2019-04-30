@@ -48,7 +48,7 @@ int obli_fill_bins_per_dblk(table_t *data_table, int column, int *data_row_num,
         table_t *bin = bins->at(cell_num);
         std::vector<std::string> keys;
         // Load each value in `bin_info_table` into `keys`
-        for (int i = 0; i < rows_per_cell; ++i) {
+        for (int row_num_in_cell = 0; row_num_in_cell < rows_per_cell; ++row_num_in_cell) {
             row_t row;
 #if !defined(NDEBUG)
             if (*info_row_num >= bin_info_table->num_rows) {
@@ -74,12 +74,13 @@ int obli_fill_bins_per_dblk(table_t *data_table, int column, int *data_row_num,
             } catch (const std::bad_alloc &) {
                 ERR("Not enough memory: dblk %d, i %d, row_num %d, byte_info "
                     "%d\n",
-                    dblk_cnt, i, data_row_num, byte_read_info);
+                    dblk_cnt, row_num_in_cell, data_row_num, byte_read_info);
                 return -1;
             }
         }
 
         // Create temp_bin
+        DBG("W\n");
         table_t *temp_bin;
         std::string temp_bin_name = bin->name + "_obli_phase3_temp_bin";
         rtn = create_table(bin->db, temp_bin_name, &bin->sc, &temp_bin);
@@ -89,6 +90,7 @@ int obli_fill_bins_per_dblk(table_t *data_table, int column, int *data_row_num,
         }
 
         // Scan the entire datablock(expensive) and load data into temp_bin
+        DBG("X\n");
         *data_row_num = initial_data_row_num;
         int initial_bin_row_num = (*bins)[cell_num]->num_rows;
         for (int i = 0; i < rows_per_dblk; ++i) {
@@ -107,9 +109,9 @@ int obli_fill_bins_per_dblk(table_t *data_table, int column, int *data_row_num,
                 (char *)get_column(&(data_table->sc), column, &data_row));
             // If we don't want to load this value, make data_row empty
             // TODO: set header.is_fake instead. it's way cheaper
-            bool should_not_load = false;
+            bool should_not_load = true;
             for (const auto &key : keys) {
-                should_not_load |= (key == value);
+                should_not_load &= (key != value);
             }
             row_t fake_row;
             memset(&fake_row, 0x0, sizeof(fake_row));
@@ -118,31 +120,28 @@ int obli_fill_bins_per_dblk(table_t *data_table, int column, int *data_row_num,
             if (should_not_load) {
                 memcpy(&data_row, &fake_row, sizeof(data_row));
             }
-
             // obli_cswap((u8*)&data_row, (u8*)&fake_row, sizeof(row_t),
             // should_not_load);
 
             insert_row_dbg(temp_bin, &data_row);
         }
 
-        DBG("Keys: \n");
-        for (const auto& key : keys) {
-            DBG("%s\n", key.c_str());
-        }
-        DBG("\n");
-
         // Append fake row to make
+        DBG("Y\n");
         row_t fake_row;
         memset(&fake_row, 0x0, sizeof(fake_row));
         fake_row.header.fake = true;
         int n = nearest_pow_2(temp_bin->num_rows);
+        DBG("y.1\n");
         assert(__builtin_popcount(n) == 1);
+        DBG("y.2\n");
         for (int i = temp_bin->num_rows; i < n; ++i) {
+            DBG("y.3.%d\n", i);
             insert_row_dbg(temp_bin, &fake_row);
         }
-        // print_table_dbg(temp_bin, 0, 100);
 
         // Sort temp bin
+        DBG("Z\n");
         table_t *sorted_temp_bin = nullptr;
         bitonic_sort_table(temp_bin->db, temp_bin, column, &sorted_temp_bin);
 #if !defined(NDEBUG)
@@ -151,10 +150,15 @@ int obli_fill_bins_per_dblk(table_t *data_table, int column, int *data_row_num,
             return -1;
         }
 #endif
-        print_table_dbg(temp_bin, 8000, 8100);
+
+        // Flush temp bin to the actual bin
+        DBG("a\n");
+        for (int i = 0; i < rows_per_cell; ++i) {
+            row_t row;
+            read_row(temp_bin, i, &row);
+            insert_row_dbg(bin, &row);
+        }
         delete_table(temp_bin->db, temp_bin);
-        assert(false);
-        return -1;
     }
 
     *data_row_num = initial_data_row_num + rows_per_dblk;
