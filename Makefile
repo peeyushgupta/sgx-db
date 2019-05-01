@@ -342,5 +342,5 @@ clean_tables:
 	@find ./ -name 'p:*' -delete
 	@find ./ -name 'append:*' -delete
 
-clean:
+clean: clean_tables
 	@rm -f .config_* $(App_Name) $(Enclave_Name) $(Signed_Enclave_Name) $(App_Cpp_Objects) app/enclave_u.* $(Enclave_Cpp_Objects) enclave/enclave_t.*
