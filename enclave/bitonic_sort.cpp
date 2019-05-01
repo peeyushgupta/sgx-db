@@ -164,7 +164,7 @@ thread_local volatile unsigned int bitonic_lsense = 0;
 
 int bitonic_sort_table_parallel(table_t *table, int column, int tid, int num_threads) {
 
-	auto N = table->num_rows;
+	auto N = table->num_rows.load();
 
 	assert (((N & (N - 1)) == 0));
 	// printf("%s, num_rows %d | tid = %d\n", __func__, table->num_rows, tid);

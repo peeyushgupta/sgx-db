@@ -49,10 +49,10 @@ unsigned long long RDTSC( void )
 static inline
 unsigned long long fipc_test_time_get_correction ( void )
 {
-	register unsigned long long start;
-	register unsigned long long end;
-	register unsigned long long sum;
-	register unsigned long long i;
+	unsigned long long start;
+	unsigned long long end;
+	unsigned long long sum;
+	unsigned long long i;
 
 	for ( sum = 0, i = 0; i < 100000; ++i )
 	{

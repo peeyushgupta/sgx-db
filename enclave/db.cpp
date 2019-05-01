@@ -1084,17 +1084,19 @@ int read_row(table_t *table, unsigned int row_num, row_t *row) {
 	return 0; 
 }
 
-int write_row_dbg(table_t *table, row_t *row, unsigned int row_num) {
+int write_row_dbg(table_t *table, row_t *row, unsigned int __row_num) {
 	unsigned long dblk_num;
 	unsigned long row_off; 
-	unsigned int old_num_rows, tmp_num_rows; 
+	std::atomic_uint row_num = __row_num; 
+	std::atomic_uint old_num_rows, tmp_num_rows; 
 	data_block_t *b;
 
 	do {
-		tmp_num_rows = table->num_rows;
-		old_num_rows = tmp_num_rows;  
+		tmp_num_rows.store(table->num_rows);
+		old_num_rows.store(tmp_num_rows);  
 		if(row_num >= tmp_num_rows) {
-			old_num_rows = xchg(&table->num_rows, (row_num + 1)); 
+			//old_num_rows = xchg(&table->num_rows, (row_num + 1)); 
+			old_num_rows = std::atomic_exchange(&table->num_rows, (row_num + 1)); 
 		}
 	} while (old_num_rows != tmp_num_rows);  
 
@@ -1127,7 +1129,8 @@ int insert_row_dbg(table_t *table, row_t *row) {
 
 	//DBG("insert row, row size:%lu\n", table->sc.row_size); 
 	
-	row_num = __sync_fetch_and_add(&table->num_rows, 1);
+	//row_num = __sync_fetch_and_add(&table->num_rows, 1);
+	row_num = std::atomic_fetch_add(&table->num_rows, 1u);
 
 	dblk_num = row_num / table->rows_per_blk;
 
@@ -1249,7 +1252,7 @@ int scan_table_dbg(table_t *table) {
 	row_t *row;
 
 	printf("scan table:%s with %lu rows\n", 
-		table->name.c_str(), table->num_rows); 
+		table->name.c_str(), table->num_rows.load()); 
 
 	row = (row_t *)malloc(row_size(table)); 
 	if (!row) {
@@ -1307,7 +1310,7 @@ int print_table_dbg(table_t *table, int start, int end) {
 	row_t *row;
 
 	printf("printing table:%s with %lu rows (row size:%d) from %d to %d\n", 
-		table->name.c_str(), table->num_rows, row_size(table), start, end); 
+		table->name.c_str(), table->num_rows.load(), row_size(table), start, end); 
 
 	row = (row_t *)calloc(row_size(table), 1);
 	if (!row) {
@@ -1611,8 +1614,10 @@ int ecall_merge_and_sort_and_write(int db_id,
 	if( row_size(p3_tbl_left) != row_size(p3_tbl_right) )
 		return -6;
 
-	INFO(" Size of the left table AFTER 3P %d | row_size=%d\n", p3_tbl_left->num_rows, row_size(p3_tbl_left));
-	INFO(" Size of the right table AFTER 3P %d | row_size=%d\n", p3_tbl_right->num_rows, row_size(p3_tbl_right));
+	INFO(" Size of the left table AFTER 3P %d | row_size=%d\n", 
+			p3_tbl_left->num_rows.load(), row_size(p3_tbl_left));
+	INFO(" Size of the right table AFTER 3P %d | row_size=%d\n", 
+			p3_tbl_right->num_rows.load(), row_size(p3_tbl_right));
 	
 	/* Append R and S */
 	append_table_name = "append:" + tbl_left->name + tbl_right->name; 
@@ -1707,7 +1712,8 @@ int ecall_merge_and_sort_and_write(int db_id,
 
 //// 1 THREAD SERIEAL
 
-	INFO(" Size of the table BEFORE sorting table %d", append_table->num_rows);
+	INFO(" Size of the table BEFORE sorting table %d", 
+			append_table->num_rows.load());
 
 	// Sort: 1) bitonic or 2) quick
 	/* Which field to sort? */
@@ -1749,7 +1755,8 @@ int ecall_merge_and_sort_and_write(int db_id,
 	start = RDTSC();
 #endif	
 
-	INFO(" Size of the table BEFORE writing sorted table %d\n", append_table->num_rows);
+	INFO(" Size of the table BEFORE writing sorted table %d\n", 
+			append_table->num_rows.load());
 
 	append_table->num_rows = tbl_left->num_rows + tbl_right->num_rows;
 

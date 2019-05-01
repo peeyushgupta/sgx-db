@@ -1,6 +1,7 @@
 #pragma once
 
 #include <string>
+#include <atomic> 
 
 #include "dbg.hpp"
 #include "bcache.hpp"
@@ -79,7 +80,7 @@ typedef struct table {
 	unsigned long id; 
 	std::string name;
 	schema_t sc;
-	unsigned int num_rows;    /* Number of rows in the table (used only 
+	std::atomic_uint num_rows;    /* Number of rows in the table (used only 
 					 for bulk insertion) */
 	unsigned long num_blks;   /* Number of blocks allocated */
 	int fd [THREADS_PER_DB];  /* File descriptor backing up the table data */

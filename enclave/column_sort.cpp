@@ -233,8 +233,8 @@ int compare_tables(table_t *left_tbl, table_t *right_tbl, int tid, int num_threa
 
 	if(left_tbl->num_rows != left_tbl->num_rows) {
 		ERR("tables have different size: (%s,%d) != (%s, %d)\n",
-			left_tbl->name.c_str(), left_tbl->num_rows, 
-			right_tbl->name.c_str(), right_tbl->num_rows);
+			left_tbl->name.c_str(), left_tbl->num_rows.load(), 
+			right_tbl->name.c_str(), right_tbl->num_rows.load());
 		return -3;
 	};
 

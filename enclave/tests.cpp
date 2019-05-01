@@ -180,7 +180,7 @@ int ecall_bcache_test_create_read_write_table(int db_id, int from_table_id, int 
 		return ret; 
 	}
 
-	to_tbl->num_rows = from_tbl->num_rows;
+	to_tbl->num_rows.store(from_tbl->num_rows.load());
 
 	*to_table_id = to_tbl->id;
 
