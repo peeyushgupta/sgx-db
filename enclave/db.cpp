@@ -1710,9 +1710,9 @@ int ecall_merge_and_sort_and_write(int db_id,
 	start = RDTSC();
 #endif
 	// Refer to parallelization and update - column_sort_table_parallel();
-	//ret = column_sort_table(db, append_table, field);
+	ret = column_sort_table(db, append_table, field);
 	//ret = bitonic_sort_table(db, append_table, field, &s_table);
-	ret = quick_sort_table(db, append_table, field, &s_table);
+	//ret = quick_sort_table(db, append_table, field, &s_table);
 	if(ret) {
 		ERR("failed to bitonic sort table %s\n",
 			append_table->name.c_str());
@@ -1825,15 +1825,18 @@ int join_and_write_sorted_table(data_base_t *db, table_t *tbl, join_condition_t 
 
 	DBG("Created join table %s, id:%d\n", join_table_name.c_str(), *join_table_id); 
 
+	// the actual join_row would always be less than this size
+	// why? because we don't copy PADDING columns
 	join_row = (row_t *) calloc(row_size(tbl_left) + row_size(tbl_right), 1);
 	if (!join_row)
 		return -ENOMEM;
 
-	row_left = (row_t *) calloc(std::max(row_size(tbl_left), row_size(tbl_right)), 1);
+	// both row_left and row_right are read from (p3 + append + sort)
+	row_left = (row_t *) calloc(row_size(tbl_left) + row_size(tbl_right), 1);
 	if(!row_left)
 		return -ENOMEM;
 
-	row_right = (row_t *) calloc(std::max(row_size(tbl_left), row_size(tbl_right)), 1);
+	row_right = (row_t *) calloc(row_size(tbl_left) + row_size(tbl_right), 1);
 	if(!row_right)
 		return -ENOMEM;
 

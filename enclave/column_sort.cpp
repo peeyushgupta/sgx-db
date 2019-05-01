@@ -33,7 +33,7 @@ extern thread_local int thread_id;
    - r > 2 * (s - 1)^2
 */
 
-int column_sort_pick_params(unsigned long num_records, 
+int column_sort_pick_params_pow2(unsigned long num_records, 
 				unsigned long rec_size, 
 				unsigned long bcache_rec_size, 
 				unsigned long sgx_mem_size, 
@@ -97,6 +97,87 @@ int column_sort_pick_params(unsigned long num_records,
 
 	return 0;
 }
+
+#if 0
+
+/* 
+   - num_records -- number of records in the table
+   - rec_size -- size of projected record
+   - bcache_rec_size -- size of the buffer cache record
+
+   - r * rec_size + s * bcache_rec_size < sgx_mem_size
+   - r * s >= num_records
+   - r % s = 0 -- r is divisible by s
+   - r > 2 * (s - 1)^2
+*/
+
+int column_sort_pick_params(unsigned long num_records, 
+				unsigned long rec_size, 
+				unsigned long bcache_rec_size, 
+				unsigned long sgx_mem_size, 
+				unsigned long *r_out, 
+				unsigned long *s_out) 
+{
+
+	bool all_good = false;
+	unsigned long r, s, min_r = 0;
+  
+	DBG_ON(COLUMNSORT_VERBOSE, 
+		"Searching for r and s for num_records=%d, rec_size=%d, bcache_rec_size=%d, sgx_mem_size=%d\n", num_records, rec_size, bcache_rec_size, sgx_mem_size);
+
+	/* Our goal is to minimize r */
+	s = 0; 
+	do {
+		/* Increase s, start over */
+		s ++;
+
+		//for (r = (num_records / s) + 1; s < r; s ++) {
+		for (i = 1; ; i++ ) {
+
+			r = s*i;
+
+ 			DBG_ON(COLUMNSORT_VERBOSE_L2, 
+				"trying r=%d and s=%d\n", r, s);
+			if (s * r < num_records)
+				continue; 
+	
+			//if( r % s != 0) {
+			//	DBG_ON(COLUMNSORT_VERBOSE_L2, 
+			//	"r (%d) is not divisible by s (%d)\n", r, s);
+			//	continue;
+			//}	
+
+			if ( r < 2*(s - 1)*(s - 1)) {
+				DBG_ON(COLUMNSORT_VERBOSE, 
+					"r (%d) is < 2*(s - 1)^2 (%d), where r=%d, s=%d\n", 
+					r, 2*(s - 1)*(s - 1), r, s);  
+				continue; 
+			}
+		
+			if (r * rec_size + s * bcache_rec_size > sgx_mem_size) {
+				DBG_ON(COLUMNSORT_VERBOSE, 
+					"r * rec_size + s * bcache_rec_size < sgx_mem_size, where r=%d, rec_size %d, s=%d, rec_size:%d, bcache_rec_size:%d, sgx_mem_size:%d\n", 
+					r, rec_size, s, rec_size, bcache_rec_size, sgx_mem_size);  
+				continue; 
+			}
+			
+
+			all_good = true;
+			break;  
+		};
+
+ 	
+	} while (!all_good); 
+
+	DBG_ON(COLUMNSORT_VERBOSE, 
+		"r=%d, s=%d\n", r, s); 
+	*r_out = r; 
+	*s_out = s; 
+
+	return 0;
+}
+
+#endif
 
 int reassemble_column_tables(table_t** s_tables, table_t *table, row_t *row, int s, int r, int tid, int num_threads)
 {
@@ -246,7 +327,7 @@ int column_sort_table_parallel(data_base_t *db, table_t *table, int column, int 
 
 	if(tid == 0) {
 		dbuf = new dbg_buffer(20);
-		ret = column_sort_pick_params(table->num_rows, table->sc.row_data_size, 
+		ret = column_sort_pick_params_pow2(table->num_rows, table->sc.row_data_size, 
 				DATA_BLOCK_SIZE, 
 				(1 << 20) * 80, 
 				&r, &s);
