@@ -37,9 +37,7 @@ int ecall_quicksort_table(int db_id, int table_id, int field, int *sorted_id) {
 }
 
 int quicksort_table_parallel(table_t *table, int column, int tid, int num_threads) {
-	int ret; 
-	data_base_t *db;
-	table_t *s_table;
+	int ret = 0; 
 
 	/*
 	if (!(db = get_db(db_id)))
@@ -60,7 +58,6 @@ int quicksort_table_parallel(table_t *table, int column, int tid, int num_thread
 
 int ecall_quicksort_table_parallel(int db_id, int table_id, int column, int tid, int num_threads)
 {
-	int ret;
 	data_base_t *db;
 	table_t *table;
 
@@ -80,7 +77,6 @@ int ecall_quicksort_table_parallel(int db_id, int table_id, int column, int tid,
 row_t *row = NULL, *start_row = NULL, *end_row = NULL, *temp_row = NULL;
 
 int allocate_memory_for_quicksort(table_t *tbl) {
-	int ret;
 
 	row = (row_t *) malloc(row_size(tbl));
 	if(!row)
@@ -338,8 +334,6 @@ void quickSort_parallel(table_t *tbl, int column, int start, int end) {
 
 
 int partition(table_t *tbl, int column, int start, int end) {
-
-	int ret = 0;
 
 	int mid = start + (end - start) / 2;
 	int i = start - 1;

@@ -10,7 +10,6 @@ sgx_enclave_id_t eid = 0;
 # define ENCLAVE_FILENAME "enclave.signed.so"
 
 int main(){
-	char token_path[MAX_PATH] = {'\0'};
 	sgx_launch_token_t token = {0};
  	sgx_status_t ret = SGX_ERROR_UNEXPECTED;
  	int updated = 0;

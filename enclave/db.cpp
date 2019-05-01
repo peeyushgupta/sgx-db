@@ -75,8 +75,12 @@ std::string get_schema_type(schema_type_t t) {
 		return "TINYTEXT";
 	case PADDING:
 		return "PADDING";
+    default: 
+        return "UNKNOWN"; 
 	}
-}
+    
+    return "UNKNOWN";
+}   
 
 /* Data layout
  *
@@ -717,8 +721,6 @@ int pin_table(table_t *table) {
 int unpin_table_dirty(table_t *table) {
 
 	unsigned long blk_num;
-	data_block_t *b;
-
 
 	for(blk_num = 0; blk_num*table->rows_per_blk < table->num_rows; blk_num++) 
 	{ 
@@ -758,6 +760,7 @@ int _join_rows(row_t *join_row, unsigned int join_row_data_size, row_t *
 				return sc->offsets[i];
 			}
 		}
+        return 0; 
 	};
 
 	// We should skip the joining column
@@ -1177,7 +1180,7 @@ int ecall_insert_row_dbg(int db_id, int table_id, void *row_data) {
 	return ret; 
 }
 
-int print_schema(schema_t *sc, std::string name)
+void print_schema(schema_t *sc, std::string name)
 {
 	auto total_sz = 0u;
 	printf("Dumping" TXT_FG_GREEN " %s " TXT_FG_WHITE "schema with %d "
@@ -1196,9 +1199,10 @@ int print_schema(schema_t *sc, std::string name)
 	printf("row_size " TXT_FG_GREEN "%d" TXT_FG_WHITE " bytes"
 		" row_data_sz " TXT_FG_GREEN "%d" TXT_FG_WHITE " bytes\n",
 			total_sz, sc->row_data_size);
+    return; 
 }
 
-int print_row(schema_t *sc, row_t *row) {
+void print_row(schema_t *sc, row_t *row) {
 	bool first = true; 	
 	for(int i = 0;  i < sc->num_fields; i++) {
 		if (first) {
@@ -1231,6 +1235,7 @@ int print_row(schema_t *sc, row_t *row) {
 
 	}
 	printf("\n"); 
+    return;
 }
 
 /* 
@@ -1526,8 +1531,8 @@ int ecall_merge_and_sort_and_write(int db_id,
 
 	int ret;
 
-	table_t *p3_tbl_left, *p3_tbl_right, *append_table, *s_table;
-	row_t *row_left = NULL, *row_right = NULL, *join_row = NULL;
+	table_t *p3_tbl_left, *p3_tbl_right, *append_table;
+	row_t *row_left = NULL, *row_right = NULL;
 	schema_t append_sc, join_sc, p3_left_schema, p3_right_schema, p2_left_schema, p2_right_schema;
 	std::string append_table_name;  
 	int append_table_id;

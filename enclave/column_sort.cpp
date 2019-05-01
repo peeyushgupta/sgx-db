@@ -301,11 +301,11 @@ table_t **s_tables, **st_tables, *tmp_table;
 unsigned long r, s;
 
 int column_sort_table_parallel(data_base_t *db, table_t *table, int column, int tid, int num_threads) {
-	int ret;
+	int ret = 0;
 	std::string tmp_tbl_name;  
 	row_t *row;
 	unsigned long row_num;  
-	unsigned long shift, unshift;
+	unsigned long shift = 0, unshift = 0;
 
 #if defined(COLUMNSORT_COMPARE_TABLES)
 	table_t *tmp_table; 
@@ -316,7 +316,7 @@ int column_sort_table_parallel(data_base_t *db, table_t *table, int column, int 
 	unsigned long long cycles;
 	double secs;
 	bcache_stats_t bstats;
-	dbg_buffer *dbuf;
+	dbg_buffer *dbuf = NULL; 
 #endif
 	
 	row = (row_t*) malloc(row_size(table));
@@ -326,7 +326,9 @@ int column_sort_table_parallel(data_base_t *db, table_t *table, int column, int 
 	}
 
 	if(tid == 0) {
+#if defined(REPORT_COLUMNSORT_STATS)
 		dbuf = new dbg_buffer(20);
+#endif
 		ret = column_sort_pick_params_pow2(table->num_rows, table->sc.row_data_size, 
 				DATA_BLOCK_SIZE, 
 				(1 << 20) * 80, 
@@ -1120,10 +1122,12 @@ cleanup:
 			st_tables = NULL; 
 		};
 	};
+#if defined(REPORT_COLUMNSORT_STATS)
 	if (tid == 0) {
 		dbuf->flush();
 		delete dbuf;
 	}
+#endif
 	return ret; 
 };
 
@@ -1134,7 +1138,6 @@ int column_sort_table(data_base_t *db, table_t *table, int column) {
 
 int ecall_column_sort_table_parallel(int db_id, int table_id, int column, int tid, int num_threads)
 {
-	int ret;
 	data_base_t *db;
 	table_t *table;
 

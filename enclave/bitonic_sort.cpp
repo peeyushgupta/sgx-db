@@ -23,9 +23,7 @@ const int DESCENDING = 0;
    then a[i] and a[j] are interchanged.
 **/
 int compare_and_exchange(table_t *tbl, int column, int i, int j, int dir, int tid) {
-	int val_i, val_j;
 	row_t *row_i, *row_j;
-	data_block_t *b_i, *b_j;
 
 	// FIXME: if tables are pinned, this stack allocation is not needed
 #if defined(ALIGNMENT)
@@ -260,7 +258,6 @@ int bitonic_sort_table_parallel(table_t *table, int column, int tid, int num_thr
 
 int ecall_bitonic_sort_table_parallel(int db_id, int table_id, int column, int tid, int num_threads)
 {
-	int ret;
 	data_base_t *db;
 	table_t *table;
 
