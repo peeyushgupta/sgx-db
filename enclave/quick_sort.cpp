@@ -245,7 +245,9 @@ int quick_sort_table_parallel(data_base_t *db, table_t *tbl, int column, table_t
 
 	ret = verify_sorted_output(tbl, 0, tbl->num_rows, column);
 
+#if defined(REPORT_QSORT_STATS)
 	INFO("%s, verify_sorted_output returned %d\n", __func__, ret);
+#endif
 
 	if (ret) {
 		ERR("============================\n");

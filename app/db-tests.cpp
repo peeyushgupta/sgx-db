@@ -13,10 +13,10 @@
 
 using namespace std;
 #define OCALL_TEST_LENGTH 10000
-#define RANKINGS_TABLE_SIZE	(10)
-//#define RANKINGS_TABLE_SIZE	(360000)
-#define UVISITS_TABLE_SIZE	(20)
-//#define UVISITS_TABLE_SIZE	(350000)
+// #define RANKINGS_TABLE_SIZE	(10)
+#define RANKINGS_TABLE_SIZE	(360000)
+// #define UVISITS_TABLE_SIZE	(20)
+#define UVISITS_TABLE_SIZE	(350000)
 
 #define RANDINT_TABLE_SIZE	256
 
@@ -348,7 +348,7 @@ int test_rankings(sgx_enclave_id_t eid) {
 			
 		unsigned long long start, end;
 		start = RDTSC_START();
-		int num_threads = 4;
+		int num_threads = 1;
 		
 		//ecall_column_sort_table_dbg(eid, &ret, db_id, rankings_table_id, column);
 		column_sort_table_parallel(eid, db_id, rankings_table_id, column, num_threads);
@@ -356,7 +356,7 @@ int test_rankings(sgx_enclave_id_t eid) {
 		ecall_flush_table(eid, &ret, db_id, rankings_table_id);
 		end = RDTSCP();
 
-		printf("Sorting + flushing took %llu cycles\n", end - start);
+		printf("Sorting + flushing %d rows took %llu cycles (%f sec, %f rows/sec)\n", RANKINGS_TABLE_SIZE, end - start, (end - start) / cycles_per_sec, RANKINGS_TABLE_SIZE / ((end - start) / cycles_per_sec));
 		ecall_print_table_dbg(eid, &ret, db_id, rankings_table_id, 0, 23);
 
 	}
@@ -763,7 +763,7 @@ int test_merge_sort_write(sgx_enclave_id_t eid)
 		int	write_table_id;
 		unsigned long long start, end;
 		start = RDTSC_START();
-		auto num_threads = 2u;
+		auto num_threads = 1u;
 
 		ecall_merge_and_sort_and_write(eid, &ret, db_id,
 			rankings_table_id,
