@@ -221,8 +221,8 @@ int quick_sort_table_parallel(data_base_t *db, table_t *tbl, int column, table_t
 	start = RDTSC();
 #endif
 	// index runs from 0 to (num_rows - 1)
-	#pragma omp parallel
-    #pragma omp single
+//#pragma omp parallel
+//#pragma omp single
 	quickSort_parallel(tbl, column, 0, tbl->num_rows - 1);
 	//#pragma omp taskwait
 
@@ -322,10 +322,10 @@ void quickSort_parallel(table_t *tbl, int column, int start, int end) {
 	//omp_set_nested(1);
 	//#pragma omp parallel sections num_threads(16)
 	{
-		#pragma omp task
+		//#pragma omp task
 		//#pragma omp section	
 		quickSort(tbl, column, start, pivot);
-		#pragma omp task
+		//#pragma omp task
 		//#pragma omp section
 		quickSort(tbl, column, pivot + 1, end);
 	}

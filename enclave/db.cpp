@@ -1091,6 +1091,8 @@ int write_row_dbg(table_t *table, row_t *row, unsigned int __row_num) {
 	std::atomic_uint old_num_rows, tmp_num_rows; 
 	data_block_t *b;
 
+#if 0 
+
 	do {
 		tmp_num_rows.store(table->num_rows);
 		old_num_rows.store(tmp_num_rows);  
@@ -1099,7 +1101,14 @@ int write_row_dbg(table_t *table, row_t *row, unsigned int __row_num) {
 			old_num_rows = std::atomic_exchange(&table->num_rows, (row_num + 1)); 
 		}
 	} while (old_num_rows != tmp_num_rows);  
+#endif
 
+	/* For now forbid writing rows beyond exising rows */
+	if(row_num >= table->num_rows) {
+		ERR("Trying to write row %d, with num_rows %d\n", 
+			row_num.load(), table->num_rows.load());
+		return -1;
+	} 
 	dblk_num = row_num / table->rows_per_blk;
 
 	/* Offset of the row within the data block in bytes */
