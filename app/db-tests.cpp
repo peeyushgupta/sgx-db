@@ -21,68 +21,30 @@ using namespace std;
 
 #define RANDINT_TABLE_SIZE	256
 
-typedef enum {
-	RANKINGS_TABLE_ID = 0,
-	UVISITS_TABLE_ID = 1,
-	RAND_INT_TABLE_ID = 2,
-	MAX_TABLE_TYPES_ID,
-} table_id_t;
+#define NUM_ELEMENTS(x) (sizeof(x)/sizeof(x[0]))
+schema_type_t uvisits_type_arr[] = { TINYTEXT, TINYTEXT, INTEGER, INTEGER, TINYTEXT, TINYTEXT, TINYTEXT, TINYTEXT, INTEGER };
+schema_type_t rankings_type_arr[] = { TINYTEXT, INTEGER, INTEGER };
+schema_type_t rand_int_type_arr[] = { INTEGER };
 
+constexpr schema_t derive_schema(schema_type_t *type_arr, int num_types) {
+	schema_t sc = {0};
+	auto offset = 0;
+	auto i = 0;
 
-struct schemas {
-	// redundant field
-	table_id_t table_id;
-	// predefined schema
-	schema_t schema;
-	// if the schema is valid or not
-	bool valid;
-} predef_schemas[] = {
-	{
-		.table_id = RANKINGS_TABLE_ID,
-		.schema = {
-			.num_fields = 3,
-			.offsets = { 0, 255, 259},
-			.sizes = { 255, 4, 4},
-			.types = { TINYTEXT, INTEGER, INTEGER },
-			.row_data_size = 259 + 4,
-		},
-		.valid = true,
-	},
-	{
-		.table_id = UVISITS_TABLE_ID,
-		.schema = {
-			.num_fields = 9,
-			.offsets = { 0, 255, 510, 514, 518, 773, 1028, 1283, 1538 },
-			.sizes = { 255, 255, 4, 4, 255, 255, 255, 255, 4 },
-			.types = { TINYTEXT, TINYTEXT, INTEGER, INTEGER, TINYTEXT, TINYTEXT, TINYTEXT, TINYTEXT, INTEGER },
-			.row_data_size = 1538 + 4,
-		},
-		.valid = true,
-	},
-	{
-		.table_id = RAND_INT_TABLE_ID,
-		.schema = {
-			.num_fields = 1,
-			.offsets = { 0 },
-			.sizes = { 4 },
-			.types = { INTEGER },
-		},
-		.valid = true,
-	},
-};
-
-schema_t get_predef_schema(table_id_t id)
-{
-	if (id >= MAX_TABLE_TYPES_ID)
-		goto out;
-	else {
-		auto schemas = &predef_schemas[id];
-		if (schemas->valid)
-			return schemas->schema;
+	for (i = 0; i < num_types; i++) {
+		sc.types[i] = type_arr[i];
+		sc.offsets[i] = offset;
+		if (type_arr[i] == TINYTEXT) {
+			sc.sizes[i] = 255;
+			offset += 255;
+		} else if(type_arr[i] == INTEGER) {
+			sc.sizes[i] = 4;
+			offset += 4;
+		}
 	}
-out:
-	DBG("Could not find predefined schema for table_id: %d\n", id);
-	return {0};
+	sc.row_data_size = sc.offsets[i - 1] + sc.sizes[i - 1];
+	sc.num_fields = num_types;
+	return sc;
 }
 
 int populate_database_from_csv(std::string fname, int num_rows, int db_id, int
@@ -145,6 +107,7 @@ int test_null_ocalls(sgx_enclave_id_t eid) {
 	printf("Null ecall %llu cycles\n", (end - start)/OCALL_TEST_LENGTH);
 
 	ecall_test_null_ocall(eid);
+	return 0; 
 };
 
 /* Trivial thread test, each does a null ecall */
@@ -279,15 +242,14 @@ int test_rankings(sgx_enclave_id_t eid) {
 	std::string db_name("rankings-and-udata");
 	std::string table_name("rankings");
 	std::string udata_table_name("udata");
-	int i, db_id, rankings_table_id, udata_table_id, join_table_id = -1, ret; 
-	join_condition_t c;
+	int db_id, rankings_table_id, udata_table_id, ret; 
 	sgx_status_t sgx_ret = SGX_ERROR_UNEXPECTED;
 
 	std::string rankings_csv("rankings.csv");
 	std::string uvisits_csv("uservisits.csv");
 
 
-	sc = get_predef_schema(RANKINGS_TABLE_ID);
+	sc = derive_schema(rankings_type_arr, NUM_ELEMENTS(rankings_type_arr));
 
 	sgx_ret = ecall_create_db(eid, &ret, db_name.c_str(), db_name.length(), &db_id);
 	if (sgx_ret || ret) {
@@ -312,7 +274,7 @@ int test_rankings(sgx_enclave_id_t eid) {
 	printf("created rankings table with db ID:%d | table_id:%d\n",
 			db_id, rankings_table_id);
 
-	sc_udata = get_predef_schema(UVISITS_TABLE_ID);
+	sc_udata = derive_schema(uvisits_type_arr, NUM_ELEMENTS(uvisits_type_arr));
 
 	sgx_ret = ecall_create_table(eid, &ret, db_id, udata_table_name.c_str(), udata_table_name.length(), &sc_udata, &udata_table_id);
 	if (sgx_ret || ret) {
@@ -387,7 +349,7 @@ int test_rankings(sgx_enclave_id_t eid) {
 			
 		unsigned long long start, end;
 		start = RDTSC_START();
-		int num_threads = 4;
+		int num_threads = 1;
 		
 		//ecall_column_sort_table_dbg(eid, &ret, db_id, rankings_table_id, column);
 		column_sort_table_parallel(eid, db_id, rankings_table_id, column, num_threads);
@@ -395,7 +357,7 @@ int test_rankings(sgx_enclave_id_t eid) {
 		ecall_flush_table(eid, &ret, db_id, rankings_table_id);
 		end = RDTSCP();
 
-		printf("Sorting + flushing took %llu cycles\n", end - start);
+		printf("Sorting + flushing %d rows took %llu cycles (%f sec, %f rows/sec)\n", RANKINGS_TABLE_SIZE, end - start, (end - start) / cycles_per_sec, RANKINGS_TABLE_SIZE / ((end - start) / cycles_per_sec));
 		ecall_print_table_dbg(eid, &ret, db_id, rankings_table_id, 0, 23);
 
 	}
@@ -405,7 +367,8 @@ int test_rankings(sgx_enclave_id_t eid) {
 	{
 
 		// Join tests
-
+		int join_table_id = -1;
+		join_condition_t c;
 		c.num_conditions = 1; 
 		c.table_left = rankings_table_id; 
 		c.table_right = udata_table_id; 
@@ -441,22 +404,26 @@ out:
 int test_project_schema(sgx_enclave_id_t eid) {
     int ret;
     ecall_test_project_schema(eid, &ret);
+    return ret; 	
 }
 
 int test_pad_schema(sgx_enclave_id_t eid) { 
     int ret;
     ecall_test_pad_schema(eid, &ret);
+    return ret; 	
 }
 
 int test_project_row(sgx_enclave_id_t eid) {
     int ret;
     ecall_test_project_row(eid, &ret);
+    return ret; 
 }
 
 void test_barrier_fn(sgx_enclave_id_t eid, unsigned long count, int num_threads, int tid)
 {
 	int ret;
 	ecall_barrier_test(eid, &ret, count, num_threads, tid);
+    return; 
 }
 
 
@@ -495,13 +462,13 @@ int test_bitonic_sort(sgx_enclave_id_t eid)
 	schema_t sc;
 	std::string db_name("random-integers");
 	std::string table_name("rand_int");
-	int i, db_id, table_id, join_table_id, ret;
+	int db_id, table_id, ret;
 	sgx_status_t sgx_ret = SGX_ERROR_UNEXPECTED;
 	std::string rand_csv("rand.csv");
 
 	printf(TXT_FG_YELLOW "Starting bitonic sort test" TXT_NORMAL "\n");
 
-	sc = get_predef_schema(RAND_INT_TABLE_ID);
+	sc = derive_schema(rand_int_type_arr, NUM_ELEMENTS(rand_int_type_arr));
 
 	sgx_ret = ecall_create_db(eid, &ret, db_name.c_str(), db_name.length(), &db_id);
 	if (sgx_ret || ret) {
@@ -528,7 +495,6 @@ int test_bitonic_sort(sgx_enclave_id_t eid)
 
 #define PRINT_SORTED_TABLE
 	{
-		int sorted_id;
 		unsigned long long start, end;
 		start = RDTSC_START();
 		auto num_threads = 2u;
@@ -585,14 +551,14 @@ int test_column_sort(sgx_enclave_id_t eid)
 	schema_t sc;
 	std::string db_name("columnsort-db");
 	std::string table_name("columnsort");
-	int i, db_id, table_id, ret;
+	int db_id, table_id, ret;
 	sgx_status_t sgx_ret = SGX_ERROR_UNEXPECTED;
 
 	std::string rand_csv("rand.csv");
 
 	printf(TXT_FG_YELLOW "Starting column sort test" TXT_NORMAL "\n"); 
 
-	sc = get_predef_schema(RAND_INT_TABLE_ID);
+	sc = derive_schema(rand_int_type_arr, NUM_ELEMENTS(rand_int_type_arr));
 
 	sgx_ret = ecall_create_db(eid, &ret, db_name.c_str(), db_name.length(), &db_id);
 	if (sgx_ret || ret) {
@@ -663,13 +629,13 @@ int test_quick_sort(sgx_enclave_id_t eid)
 	schema_t sc;
 	std::string db_name("qsort_test");
 	std::string table_name("qsort_rankings");
-	int i, db_id, table_id, join_table_id, ret;
+	int db_id, table_id, ret;
 	sgx_status_t sgx_ret = SGX_ERROR_UNEXPECTED;
 	std::string rankings_csv("rankings.csv");
 
 	printf(TXT_FG_YELLOW "Starting quick sort test" TXT_NORMAL "\n");
 
-	sc = get_predef_schema(RANKINGS_TABLE_ID);
+	sc = derive_schema(rankings_type_arr, NUM_ELEMENTS(rankings_type_arr));
 
 	sgx_ret = ecall_create_db(eid, &ret, db_name.c_str(), db_name.length(), &db_id);
 	if (sgx_ret || ret) {
@@ -699,7 +665,7 @@ int test_quick_sort(sgx_enclave_id_t eid)
 		int sorted_id;
 		unsigned long long start, end;
 		start = RDTSC_START();
-		auto num_threads = 2u;
+		//auto num_threads = 2u;
 		ecall_quicksort_table(eid, &ret, db_id, table_id, 1, &sorted_id);
 
 		//quick_sort_parallel(eid, db_id, table_id, 0, num_threads);
@@ -723,18 +689,16 @@ out:
 int test_merge_sort_write(sgx_enclave_id_t eid)
 {
 	schema_t sc, sc_udata;
-	data_base_t *db;
 	std::string db_name("rankings-and-udata");
 	std::string table_name("rankings");
 	std::string udata_table_name("udata");
-	int i, db_id, rankings_table_id, udata_table_id, join_table_id, ret; 
-	join_condition_t c;
+	int db_id, rankings_table_id, udata_table_id, ret; 
 	std::string uvisits_csv("uservisits.csv");
 	std::string rankings_csv("rankings.csv");
 
 	sgx_status_t sgx_ret = SGX_ERROR_UNEXPECTED;
 
-	sc = get_predef_schema(RANKINGS_TABLE_ID);
+	sc = derive_schema(rankings_type_arr, NUM_ELEMENTS(rankings_type_arr));
 
 	sgx_ret = ecall_create_db(eid, &ret, db_name.c_str(), db_name.length(), &db_id);
 	if (sgx_ret || ret) {
@@ -760,7 +724,7 @@ int test_merge_sort_write(sgx_enclave_id_t eid)
 	printf("created rankings table with db ID:%d | table_id:%d\n",
 			db_id, rankings_table_id);
 
-	sc_udata = get_predef_schema(UVISITS_TABLE_ID);
+	sc_udata = derive_schema(uvisits_type_arr, NUM_ELEMENTS(uvisits_type_arr));
 
 	sgx_ret = ecall_create_table(eid, &ret, db_id, udata_table_name.c_str(), udata_table_name.length(), &sc_udata, &udata_table_id);
 	if (sgx_ret || ret) {
@@ -807,7 +771,7 @@ int test_merge_sort_write(sgx_enclave_id_t eid)
 		int	write_table_id;
 		unsigned long long start, end;
 		start = RDTSC_START();
-		auto num_threads = 2u;
+		//auto num_threads = 1u;
 
 		ecall_merge_and_sort_and_write(eid, &ret, db_id,
 			rankings_table_id,

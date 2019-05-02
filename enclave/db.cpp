@@ -75,8 +75,12 @@ std::string get_schema_type(schema_type_t t) {
 		return "TINYTEXT";
 	case PADDING:
 		return "PADDING";
+    default: 
+        return "UNKNOWN"; 
 	}
-}
+    
+    return "UNKNOWN";
+}   
 
 /* Data layout
  *
@@ -714,8 +718,6 @@ int pin_table(table_t *table) {
 int unpin_table_dirty(table_t *table) {
 
 	unsigned long blk_num;
-	data_block_t *b;
-
 
 	for(blk_num = 0; blk_num*table->rows_per_blk < table->num_rows; blk_num++) 
 	{ 
@@ -755,6 +757,7 @@ int _join_rows(row_t *join_row, unsigned int join_row_data_size, row_t *
 				return sc->offsets[i];
 			}
 		}
+        return 0; 
 	};
 
 	// We should skip the joining column
@@ -1078,20 +1081,31 @@ int read_row(table_t *table, unsigned int row_num, row_t *row) {
 	return 0; 
 }
 
-int write_row_dbg(table_t *table, row_t *row, unsigned int row_num) {
+int write_row_dbg(table_t *table, row_t *row, unsigned int __row_num) {
 	unsigned long dblk_num;
 	unsigned long row_off; 
-	unsigned int old_num_rows, tmp_num_rows; 
+	std::atomic_uint row_num(__row_num);  
+	std::atomic_uint old_num_rows, tmp_num_rows; 
 	data_block_t *b;
+	
+#if 0 
 
 	do {
-		tmp_num_rows = table->num_rows;
-		old_num_rows = tmp_num_rows;  
+		tmp_num_rows.store(table->num_rows);
+		old_num_rows.store(tmp_num_rows);  
 		if(row_num >= tmp_num_rows) {
-			old_num_rows = xchg(&table->num_rows, (row_num + 1)); 
+			//old_num_rows = xchg(&table->num_rows, (row_num + 1)); 
+			old_num_rows = std::atomic_exchange(&table->num_rows, (row_num + 1)); 
 		}
 	} while (old_num_rows != tmp_num_rows);  
+#endif
 
+	/* For now forbid writing rows beyond exising rows */
+	if(row_num >= table->num_rows) {
+		ERR("Trying to write row %d, with num_rows %d\n", 
+			row_num.load(), table->num_rows.load());
+		return -1;
+	} 
 	dblk_num = row_num / table->rows_per_blk;
 
 	/* Offset of the row within the data block in bytes */
@@ -1121,7 +1135,8 @@ int insert_row_dbg(table_t *table, row_t *row) {
 
 	//DBG("insert row, row size:%lu\n", table->sc.row_size); 
 	
-	row_num = __sync_fetch_and_add(&table->num_rows, 1);
+	//row_num = __sync_fetch_and_add(&table->num_rows, 1);
+	row_num = std::atomic_fetch_add(&table->num_rows, 1u);
 
 	dblk_num = row_num / table->rows_per_blk;
 
@@ -1174,7 +1189,7 @@ int ecall_insert_row_dbg(int db_id, int table_id, void *row_data) {
 	return ret; 
 }
 
-int print_schema(schema_t *sc, std::string name)
+void print_schema(schema_t *sc, std::string name)
 {
 	auto total_sz = 0u;
 	printf("Dumping" TXT_FG_GREEN " %s " TXT_FG_WHITE "schema with %d "
@@ -1193,9 +1208,10 @@ int print_schema(schema_t *sc, std::string name)
 	printf("row_size " TXT_FG_GREEN "%d" TXT_FG_WHITE " bytes"
 		" row_data_sz " TXT_FG_GREEN "%d" TXT_FG_WHITE " bytes\n",
 			total_sz, sc->row_data_size);
+    return; 
 }
 
-int print_row(schema_t *sc, row_t *row) {
+void print_row(schema_t *sc, row_t *row) {
 	bool first = true; 	
 	for(int i = 0;  i < sc->num_fields; i++) {
 		if (first) {
@@ -1228,6 +1244,7 @@ int print_row(schema_t *sc, row_t *row) {
 
 	}
 	printf("\n"); 
+    return;
 }
 
 /* 
@@ -1241,7 +1258,7 @@ int scan_table_dbg(table_t *table) {
 	row_t *row;
 
 	printf("scan table:%s with %lu rows\n", 
-		table->name.c_str(), table->num_rows); 
+		table->name.c_str(), table->num_rows.load()); 
 
 	row = (row_t *)malloc(row_size(table)); 
 	if (!row) {
@@ -1299,7 +1316,7 @@ int print_table_dbg(table_t *table, int start, int end) {
 	row_t *row;
 
 	printf("printing table:%s with %lu rows (row size:%d) from %d to %d\n", 
-		table->name.c_str(), table->num_rows, row_size(table), start, end); 
+		table->name.c_str(), table->num_rows.load(), row_size(table), start, end); 
 
 	row = (row_t *)calloc(row_size(table), 1);
 	if (!row) {
@@ -1523,8 +1540,8 @@ int ecall_merge_and_sort_and_write(int db_id,
 
 	int ret;
 
-	table_t *p3_tbl_left, *p3_tbl_right, *append_table, *s_table;
-	row_t *row_left = NULL, *row_right = NULL, *join_row = NULL;
+	table_t *p3_tbl_left, *p3_tbl_right, *append_table;
+	row_t *row_left = NULL, *row_right = NULL;
 	schema_t append_sc, join_sc, p3_left_schema, p3_right_schema, p2_left_schema, p2_right_schema;
 	std::string append_table_name;  
 	int append_table_id;
@@ -1603,8 +1620,10 @@ int ecall_merge_and_sort_and_write(int db_id,
 	if( row_size(p3_tbl_left) != row_size(p3_tbl_right) )
 		return -6;
 
-	INFO(" Size of the left table AFTER 3P %d | row_size=%d\n", p3_tbl_left->num_rows, row_size(p3_tbl_left));
-	INFO(" Size of the right table AFTER 3P %d | row_size=%d\n", p3_tbl_right->num_rows, row_size(p3_tbl_right));
+	INFO(" Size of the left table AFTER 3P %d | row_size=%d\n", 
+			p3_tbl_left->num_rows.load(), row_size(p3_tbl_left));
+	INFO(" Size of the right table AFTER 3P %d | row_size=%d\n", 
+			p3_tbl_right->num_rows.load(), row_size(p3_tbl_right));
 	
 	/* Append R and S */
 	append_table_name = "append:" + tbl_left->name + tbl_right->name; 
@@ -1658,6 +1677,7 @@ int ecall_merge_and_sort_and_write(int db_id,
 	INFO(" Append R took %llu cycles (%f sec)\n", cycles, secs);
 #endif
 
+#if 0
 	// READ S first then R 
 #if defined(REPORT_APPEND_STATS)
 	start = RDTSC();
@@ -1694,9 +1714,12 @@ int ecall_merge_and_sort_and_write(int db_id,
 	INFO(" Append S took %llu cycles (%f sec)\n", cycles, secs);
 #endif
 
+#endif
+
 //// 1 THREAD SERIEAL
 
-	INFO(" Size of the table BEFORE sorting table %d", append_table->num_rows);
+	INFO(" Size of the table BEFORE sorting table %d", 
+			append_table->num_rows.load());
 
 	// Sort: 1) bitonic or 2) quick
 	/* Which field to sort? */
@@ -1707,11 +1730,11 @@ int ecall_merge_and_sort_and_write(int db_id,
 	start = RDTSC();
 #endif
 	// Refer to parallelization and update - column_sort_table_parallel();
-	//ret = column_sort_table(db, append_table, field);
+	ret = column_sort_table(db, append_table, field);
 	//ret = bitonic_sort_table(db, append_table, field, &s_table);
-	ret = quick_sort_table(db, append_table, field, &s_table);
+	//ret = quick_sort_table(db, append_table, field, &s_table);
 	if(ret) {
-		ERR("failed to bitonic sort table %s\n",
+		ERR("failed to quick sort table %s\n",
 			append_table->name.c_str());
 		goto cleanup;
 	}
@@ -1738,7 +1761,8 @@ int ecall_merge_and_sort_and_write(int db_id,
 	start = RDTSC();
 #endif	
 
-	INFO(" Size of the table BEFORE writing sorted table %d\n", append_table->num_rows);
+	INFO(" Size of the table BEFORE writing sorted table %d\n", 
+			append_table->num_rows.load());
 
 	append_table->num_rows = tbl_left->num_rows + tbl_right->num_rows;
 
@@ -1822,15 +1846,18 @@ int join_and_write_sorted_table(data_base_t *db, table_t *tbl, join_condition_t 
 
 	DBG("Created join table %s, id:%d\n", join_table_name.c_str(), *join_table_id); 
 
+	// the actual join_row would always be less than this size
+	// why? because we don't copy PADDING columns
 	join_row = (row_t *) calloc(row_size(tbl_left) + row_size(tbl_right), 1);
 	if (!join_row)
 		return -ENOMEM;
 
-	row_left = (row_t *) calloc(std::max(row_size(tbl_left), row_size(tbl_right)), 1);
+	// both row_left and row_right are read from (p3 + append + sort)
+	row_left = (row_t *) calloc(row_size(tbl_left) + row_size(tbl_right), 1);
 	if(!row_left)
 		return -ENOMEM;
 
-	row_right = (row_t *) calloc(std::max(row_size(tbl_left), row_size(tbl_right)), 1);
+	row_right = (row_t *) calloc(row_size(tbl_left) + row_size(tbl_right), 1);
 	if(!row_right)
 		return -ENOMEM;
 

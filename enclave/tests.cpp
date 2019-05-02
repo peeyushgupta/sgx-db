@@ -68,7 +68,7 @@ int ecall_barrier_test(unsigned long count, int num_threads, int tid) {
 	for (auto i = 0u; i < count; i++) {
 		barrier_wait(&b, &lsense, tid, num_threads);
 	}
-
+    return 0; 
 }
 
 /* Test overheads of a NULL ecall */
@@ -180,7 +180,7 @@ int ecall_bcache_test_create_read_write_table(int db_id, int from_table_id, int 
 		return ret; 
 	}
 
-	to_tbl->num_rows = from_tbl->num_rows;
+	to_tbl->num_rows.store(from_tbl->num_rows.load());
 
 	*to_table_id = to_tbl->id;
 
@@ -190,7 +190,7 @@ int ecall_bcache_test_create_read_write_table(int db_id, int from_table_id, int 
 
 int bcache_test_read_write(data_base_t *db, table_t *from_tbl, table_t *to_tbl) {
 	int ret;  
-	row_t *row_old, *row_new; 
+	row_t *row_old; 
 
 	row_old = (row_t*) malloc(row_size(from_tbl));
 	if(!row_old)
@@ -343,6 +343,7 @@ int test_project_schema() {
 
     assert_schemas_entries_same(sc_new, sc_old, 0, 2);
     assert_schemas_entries_same(sc_new, sc_old, 1, 0);
+    return 0; 
 }
 
 void assert_schema_same_except_for_padding_at_end(schema_t sc1, schema_t sc2, int num_pad_bytes) {
@@ -383,6 +384,7 @@ int test_pad_schema() {
         pad_schema(&sc_old, num_pad_bytes, &sc_new);
         assert_schema_same_except_for_padding_at_end(sc_old, sc_new, num_pad_bytes);
     }
+    return 0; 
 }
 
 int ecall_test_project_schema() 
@@ -471,6 +473,7 @@ void test_project_row() {
 int ecall_test_project_row()
 {
     test_project_row();
+    return 0; 
 }
 
 template <typename T>

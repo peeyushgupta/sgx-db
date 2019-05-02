@@ -199,9 +199,8 @@ void obli_cswap(u8 * src, u8 * dst, u64 len, bool cond) {
 // 	return src;
 template <typename T>
 T obli_cmove_t(T src, T dst, bool cond) {
-    T temp;
     if (is_8bit<T>) {
-	return static_cast<T>(obli_cmove_t((u64) src, (u64) dst, cond));
+        return static_cast<T>(obli_cmove_t((u64) src, (u64) dst, cond));
     }
 
     asm volatile("test %[cond], %[cond]\n\t"

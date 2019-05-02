@@ -17,7 +17,7 @@ void *get_element(table_t *tbl, int row_num, row_t *row_buf, int column)
 	void *element;
 
 	if(tbl->pinned_blocks) {
-		data_block_t *b_i, *b_j;
+		data_block_t *b_i;
 		get_pinned_row(tbl, row_num, &b_i, &row_buf);
 	} else {
 		ret = read_row(tbl, row_num, row_buf);
@@ -36,7 +36,7 @@ void *get_element(table_t *tbl, int row_num, row_t *row_buf, int column)
 int verify_sorted_output(table_t *tbl, int start, int end, int column)
 {
 	int ret = 0;
-	unsigned long i, j;
+	unsigned long i;
 	row_t *row_i, *row_j;
 
 	if (end > tbl->num_rows) {

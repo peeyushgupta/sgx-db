@@ -1,6 +1,7 @@
 #pragma once
 
 #include <string>
+#include <atomic> 
 
 #include "dbg.hpp"
 #include "bcache.hpp"
@@ -79,7 +80,7 @@ typedef struct table {
 	unsigned long id; 
 	std::string name;
 	schema_t sc;
-	unsigned int num_rows;    /* Number of rows in the table (used only 
+	std::atomic_uint num_rows;    /* Number of rows in the table (used only 
 					 for bulk insertion) */
 	unsigned long num_blks;   /* Number of blocks allocated */
 	int fd [THREADS_PER_DB];  /* File descriptor backing up the table data */
@@ -166,12 +167,13 @@ static inline int get_pinned_row(table_t *table, unsigned int row_num, data_bloc
 	return 0; 
 }
 
+void print_schema(schema_t *sc, std::string name);
 
 int create_table(data_base_t *db, std::string &name, schema_t *schema, table_t **new_table);
 void free_table(table_t *table); 
 int read_row(table_t *table, unsigned int row_num, row_t *row);
 int write_row_dbg(table_t *table, row_t *row, unsigned int row_num);
-int print_row(schema_t *sc, row_t *row); 
+void print_row(schema_t *sc, row_t *row); 
 
 int read_data_block(table *table, unsigned long blk_num, void *buf);
 int write_data_block(table *table, unsigned long blk_num, void *buf); 

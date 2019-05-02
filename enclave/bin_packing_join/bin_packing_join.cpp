@@ -54,7 +54,7 @@ int ecall_bin_pack_join(int db_id, join_condition_t *join_cond,
     rhs_tbl = db->tables[rhs_tbl_id];
 #if defined(REPORT_BIN_PACKING_JOIN_STATS)
     INFO("Bin information with %lu rows is received.\n",
-         bin_info_btl->num_rows);
+         bin_info_btl->num_rows.load());
 #endif
 
 #if defined(REPORT_BIN_PACKING_JOIN_STATS)
@@ -120,7 +120,7 @@ int ecall_bin_pack_join(int db_id, join_condition_t *join_cond,
 #endif
 
 #if defined(REPORT_BIN_PACKING_JOIN_STATS)
-        INFO("%d rows of joined rows is generated.\n", join_tbl->num_rows);
+        INFO("%u rows of joined rows is generated.\n", join_tbl->num_rows.load());
 #endif
 
     } while (false);
@@ -160,7 +160,7 @@ int fill_bins(data_base_t *db, table_t *data_table, int column,
     int dblk_cnt = 0;
     int data_row_num = 0;
     const int start_row = start_dblk * num_bins * rows_per_cell;
-    const int end_row = end_dblk < 0 ? bin_info_table->num_rows
+    const int end_row = end_dblk < 0 ? bin_info_table->num_rows.load()
                                      : end_dblk * num_bins * rows_per_cell;
 #if defined(REPORT_BIN_PACKING_JOIN_STATS)
     INFO("Reading bin info table from row %d to %d\n", start_row, end_row);
@@ -203,8 +203,8 @@ int join_bins(table_t *lhs_tbl, const int lhs_column, table_t *rhs_tbl,
             mapping[value].push_back(row);
         } catch (const std::bad_alloc &) {
             ERR("Not enough memory: table_name %s, row_num %d, total_rows "
-                "%d\n",
-                lhs_tbl->name.c_str(), row_num, lhs_tbl->num_rows);
+                "%u\n",
+                lhs_tbl->name.c_str(), row_num, lhs_tbl->num_rows.load());
             return -1;
         }
     }

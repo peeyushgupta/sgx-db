@@ -5,10 +5,10 @@ OBJCOPY = $(TOOLPREFIX)objcopy
 OBJDUMP = $(TOOLPREFIX)objdump
 
 CPU_MHZ=$(shell grep -m1 MHz /proc/cpuinfo | cut -d':' -f2)
-CFLAGS :=-std=c++11 -Wall -g -D_GNU_SOURCE -pthread -lm -fno-pic -O2 
+CFLAGS :=-std=c++17 -Wall -g -D_GNU_SOURCE -pthread -lm -fno-pic -O2 
 CFLAGS +=-lprofiler
 CFLAGS +=-fsanitize=address
-SGX_COMMON_CFLAGS +=-Wall -Wno-builtin-declaration-mismatch -Wno-sign-compare
+SGX_COMMON_CFLAGS +=-Wall -Wno-builtin-declaration-mismatch -Wno-sign-compare -std=c++17
 SGX_COMMON_CFLAGS +=-DFREQ="$(CPU_MHZ)"
 SGX_COMMON_CFLAGS +=-DVERBOSE
 SGX_COMMON_CFLAGS +=-DREPORT_JOIN_STATS
@@ -17,12 +17,14 @@ SGX_COMMON_CFLAGS +=-DREPORT_JOIN_STATS
 SGX_COMMON_CFLAGS +=-DREPORT_COLUMNSORT_STATS
 SGX_COMMON_CFLAGS +=-DREPORT_QSORT_STATS
 #SGX_COMMON_CFLAGS +=-DREPORT_IO_STATS
-SGX_COMMON_CFLAGS +=-DPIN_TABLE
+#TODO: PIN_TABLE breaks COLUMNSORT_USE_QUICKSORT
+#SGX_COMMON_CFLAGS +=-DPIN_TABLE
 SGX_COMMON_CFLAGS +=-DALIGNED_ALLOC
 SGX_COMMON_CFLAGS +=-DPAD_SCHEMA
 SGX_COMMON_CFLAGS +=-DALIGNMENT=64
 SGX_COMMON_CFLAGS +=-DOBLI_XCHG
-#SGX_COMMON_CFLAGS +=-DSKIP_BITONIC
+#SGX_COMMON_CFLAGS +=-DCOLUMNSORT_USE_BITONIC
+SGX_COMMON_CFLAGS +=-DCOLUMNSORT_USE_QUICKSORT
 SGX_COMMON_CFLAGS +=-DCOLUMNSORT_APPENDS
 SGX_COMMON_CFLAGS +=-DIO_LOCK
 SGX_COMMON_CFLAGS +=-DREPORT_3P_APPEND_SORT_JOIN_WRITE_STATS
@@ -145,7 +147,7 @@ endif
 App_Cpp_Files := app/main.cpp app/apputil.cpp app/env.cpp app/db-tests.cpp app/time.cpp app/bin_packing_join_helper.cpp
 App_Include_Paths := -I./ -I./include -I./enclave -I$(SGX_SDK)/include
 
-App_C_Flags := $(SGX_COMMON_CFLAGS) -fPIC -Wno-attributes $(App_Include_Paths)
+App_C_Flags := $(SGX_COMMON_CFLAGS) -fPIC -Wno-attributes $(App_Include_Paths) 
 
 # Three configuration modes - Debug, prerelease, release
 #   Debug - Macro DEBUG enabled.
@@ -336,5 +338,14 @@ $(Signed_Enclave_Name): $(Enclave_Name)
 
 .PHONY: clean
 
-clean:
+clean_tables: 
+	@find ./ -name 's*:*' -delete
+	@find ./ -name 'udata' -delete
+	@find ./ -name 'rankings' -delete
+	@find ./ -name 'join:*' -delete
+	@find ./ -name 'p3:*' -delete
+	@find ./ -name 'p:*' -delete
+	@find ./ -name 'append:*' -delete
+
+clean: clean_tables
 	@rm -f .config_* $(App_Name) $(Enclave_Name) $(Signed_Enclave_Name) $(App_Cpp_Objects) app/enclave_u.* $(Enclave_Cpp_Objects) enclave/enclave_t.*
