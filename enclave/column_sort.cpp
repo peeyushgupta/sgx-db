@@ -497,10 +497,10 @@ int column_sort_table_parallel(data_base_t *db, table_t *table, int column, int 
 		barrier_wait(&column_barrier, &column_lsense, tid, num_threads);
 
 #if defined(COLUMNSORT_USE_QUICKSORT)
-        // TODO: use parallel quicksort
-        if (tid == 0) {
-            quick_sort_table(db, s_tables[i], column, NULL);
-        }
+		// TODO: use parallel quicksort
+		if (tid == 0) {
+			quick_sort_table(db, s_tables[i], column, NULL);
+		}	
 #elif defined(COLUMNSORT_USE_BITONIC)
 		ret = bitonic_sort_table_parallel(s_tables[i], column, tid, num_threads);
 #endif
@@ -756,10 +756,10 @@ int column_sort_table_parallel(data_base_t *db, table_t *table, int column, int 
 #endif
 		barrier_wait(&column_barrier, &column_lsense, tid, num_threads);
 #if defined(COLUMNSORT_USE_QUICKSORT)
-        // TODO: use parallel quicksort
-        if (tid == 0) {
-            quick_sort_table(db, s_tables[i], column, NULL);
-        }
+		// TODO: use parallel quicksort
+		if (tid == 0) {
+			quick_sort_table(db, s_tables[i], column, NULL);
+		}
 #elif defined(COLUMNSORT_USE_BITONIC)
 		ret = bitonic_sort_table_parallel(s_tables[i], column, tid, num_threads);
 #endif
@@ -882,10 +882,10 @@ int column_sort_table_parallel(data_base_t *db, table_t *table, int column, int 
 		barrier_wait(&column_barrier, &column_lsense, tid, num_threads);
 
 #if defined(COLUMNSORT_USE_QUICKSORT)
-        // TODO: use parallel quicksort
-        if (tid == 0) {
-            quick_sort_table(db, st_tables[i], column, NULL);
-        }
+		// TODO: use parallel quicksort
+		if (tid == 0) {
+			quick_sort_table(db, st_tables[i], column, NULL);
+		}
 #elif defined(COLUMNSORT_USE_BITONIC)
 		ret = bitonic_sort_table_parallel(st_tables[i], column, tid, num_threads);
 #endif		
