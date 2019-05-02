@@ -1087,10 +1087,10 @@ int read_row(table_t *table, unsigned int row_num, row_t *row) {
 int write_row_dbg(table_t *table, row_t *row, unsigned int __row_num) {
 	unsigned long dblk_num;
 	unsigned long row_off; 
-	std::atomic_uint row_num = __row_num; 
+	std::atomic_uint row_num(__row_num);  
 	std::atomic_uint old_num_rows, tmp_num_rows; 
 	data_block_t *b;
-
+	
 #if 0 
 
 	do {

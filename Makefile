@@ -5,10 +5,10 @@ OBJCOPY = $(TOOLPREFIX)objcopy
 OBJDUMP = $(TOOLPREFIX)objdump
 
 CPU_MHZ=$(shell grep -m1 MHz /proc/cpuinfo | cut -d':' -f2)
-CFLAGS :=-std=c++11 -Wall -g -D_GNU_SOURCE -pthread -lm -fno-pic -O2 
+CFLAGS :=-std=c++17 -Wall -g -D_GNU_SOURCE -pthread -lm -fno-pic -O2 
 CFLAGS +=-lprofiler
 CFLAGS +=-fsanitize=address
-SGX_COMMON_CFLAGS +=-Wall -Wno-builtin-declaration-mismatch -Wno-sign-compare
+SGX_COMMON_CFLAGS +=-Wall -Wno-builtin-declaration-mismatch -Wno-sign-compare -std=c++17
 SGX_COMMON_CFLAGS +=-DFREQ="$(CPU_MHZ)"
 SGX_COMMON_CFLAGS +=-DVERBOSE
 SGX_COMMON_CFLAGS +=-DREPORT_JOIN_STATS
@@ -144,7 +144,7 @@ endif
 App_Cpp_Files := app/main.cpp app/apputil.cpp app/env.cpp app/db-tests.cpp app/time.cpp
 App_Include_Paths := -I./ -I./include -I./enclave -I$(SGX_SDK)/include
 
-App_C_Flags := $(SGX_COMMON_CFLAGS) -fPIC -Wno-attributes $(App_Include_Paths)
+App_C_Flags := $(SGX_COMMON_CFLAGS) -fPIC -Wno-attributes $(App_Include_Paths) 
 
 # Three configuration modes - Debug, prerelease, release
 #   Debug - Macro DEBUG enabled.
