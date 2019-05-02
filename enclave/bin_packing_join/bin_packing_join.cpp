@@ -55,6 +55,7 @@ int ecall_bin_pack_join(int db_id, join_condition_t *join_cond,
 #if defined(REPORT_BIN_PACKING_JOIN_STATS)
     INFO("Bin information with %lu rows is received.\n",
          bin_info_btl->num_rows.load());
+    print_schema(&bin_info_btl->sc, "bin_info_tbl_schema");
 #endif
 
 #if defined(REPORT_BIN_PACKING_JOIN_STATS)
