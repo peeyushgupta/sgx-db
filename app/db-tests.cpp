@@ -83,11 +83,16 @@ int populate_database_from_csv(std::string fname, int num_rows, int db_id, int
 		if (sgx_ret || ret) {
 			ERR("insert row:%d from %s, err:%d (sgx ret:%d)\n",
 				i, fname.c_str(), ret, sgx_ret);
-			return ret;
+			goto cleanup;
 		}
 
 	}
-	return 0;
+	ret = 0;
+cleanup:
+	if (row)
+		free(row);
+
+	return ret;
 }
 
 void column_sort_table_parallel(sgx_enclave_id_t eid, int db_id, int table_id, int field, int num_threads);
