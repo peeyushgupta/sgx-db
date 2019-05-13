@@ -201,6 +201,12 @@ int reassemble_column_tables(table_t** s_tables, table_t *table, row_t *row, int
 				return -1;
 			}
 
+            // r*s can be larger than the actual number of rows
+            // therefore ignore the fake rows added while assembling
+            if (row->header.fake) {
+                continue;
+            }
+
 			/* Add row to the st table */
 			ret = write_row_dbg(table, row, row_num);
 			if(ret) {

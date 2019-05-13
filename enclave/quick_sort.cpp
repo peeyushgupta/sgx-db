@@ -78,17 +78,19 @@ row_t *row = NULL, *start_row = NULL, *end_row = NULL, *temp_row = NULL;
 
 int allocate_memory_for_quicksort(table_t *tbl) {
 
-	row = (row_t *) malloc(row_size(tbl));
-	if(!row)
-		goto fail1;
+    if (!tbl->pinned_blocks) {
+        row = (row_t *) malloc(row_size(tbl));
+        if (!row)
+            goto fail1;
 
-	start_row = (row_t *) malloc(row_size(tbl));
-	if(!start_row)
-		goto fail2;
-	
-	end_row = (row_t *) malloc(row_size(tbl));
-	if(!end_row)
-		goto fail3;
+        start_row = (row_t *) malloc(row_size(tbl));
+        if (!start_row)
+            goto fail2;
+
+        end_row = (row_t *) malloc(row_size(tbl));
+        if (!end_row)
+            goto fail3;
+    }
 
 	temp_row = (row_t *) malloc(row_size(tbl));
 	if(!temp_row)
@@ -106,16 +108,17 @@ fail1:
 	return -ENOMEM;
 }
 
-void deallocate_memory_for_quicksort() {
-	if (row)
-		free(row); 
-	
-	if (start_row)
-		free(start_row); 
+void deallocate_memory_for_quicksort(table_t *tbl) {
+	if (!tbl->pinned_blocks) {
+        if (row)
+            free(row);
 
-	if (end_row)
-		free(end_row);
+        if (start_row)
+            free(start_row);
 
+        if (end_row)
+            free(end_row);
+    }
 	if (temp_row)
 		free(temp_row);
 }
@@ -172,8 +175,7 @@ int quick_sort_table(data_base_t *db, table_t *tbl, int column, table_t **p_tbl)
 #endif
 	//print_table_dbg(tbl, 0, tbl->num_rows);
 
-	ret = verify_sorted_output(tbl, 0, tbl->num_rows, column);
-
+    ret = verify_sorted_output(tbl, 0, tbl->num_rows, column);
 	INFO(" %s, verify_sorted_output returned %d\n", __func__, ret);
 
 	if (ret) {
@@ -181,7 +183,7 @@ int quick_sort_table(data_base_t *db, table_t *tbl, int column, table_t **p_tbl)
 		ERR("%s: SORTED OUTPUT INCORRECT \n");
 		ERR("============================\n");
 	}
-	deallocate_memory_for_quicksort();
+	deallocate_memory_for_quicksort(tbl);
 	return ret; 	
 }
 
@@ -250,7 +252,7 @@ int quick_sort_table_parallel(data_base_t *db, table_t *tbl, int column, table_t
 		ERR("%s: SORTED OUTPUT INCORRECT \n");
 		ERR("============================\n");
 	}
-	deallocate_memory_for_quicksort();
+	deallocate_memory_for_quicksort(tbl);
 	return ret; 	
 }
  
@@ -318,7 +320,6 @@ void quickSort_parallel(table_t *tbl, int column, int start, int end) {
 		ERR("Sorting failed\n");
 		return;
 	}
-	
 	//omp_set_nested(1);
 	//#pragma omp parallel sections num_threads(16)
 	{
@@ -335,15 +336,31 @@ void quickSort_parallel(table_t *tbl, int column, int start, int end) {
 
 int partition(table_t *tbl, int column, int start, int end) {
 
+    if (start == end)
+        return start;
+
 	int mid = start + (end - start) / 2;
-	int i = start - 1;
-	int j = end + 1;
-	void *pivot_data = get_element(tbl, mid, row, column);
+    int i;
+    int j;
+    void *pivot_data;
 
-	if (!pivot_data)
-		return -1;
+    if (start+1 == end) {
+        i = start - 1;
+        j = end + 1;
+        pivot_data = get_element(tbl, mid, &row, column);
+    } else {
+        get_element(tbl, start, &start_row, column);
+        get_element(tbl, mid, &end_row, column);
+        exchange(tbl, start, mid, start_row, end_row, 0);
+        pivot_data = get_element(tbl, start, &row, column);
+        i = start;
+        j = end + 1;
+    }
 
-	while (true) {
+    if (!pivot_data)
+        return -1;
+
+    while (true) {
 		switch (tbl->sc.types[column]) {
 			case BOOLEAN: {
 				bool pivot = *((bool*)pivot_data);
@@ -351,14 +368,19 @@ int partition(table_t *tbl, int column, int start, int end) {
 
 				do {
 					i++;
-				} while ((start_val = *((bool*)get_element(tbl, i, start_row, column))) < pivot);
+				} while ((start_val = *((bool*)get_element(tbl, i, &start_row, column))) < pivot && i<=j);
 
 				do {
 					j--;
-				} while ((end_val = *((bool*)get_element(tbl, j, end_row, column))) > pivot);
+				} while ((end_val = *((bool*)get_element(tbl, j, &end_row, column))) > pivot);
 
-				if (i >= j)
-					return j;
+                if (i >= j) {
+                    if (end > start+1) {
+                        get_element(tbl, start, &start_row, column);
+                        exchange(tbl, start, j, start_row, end_row, 0);
+                    }
+                    return j;
+                }
 
 				break;
 			}
@@ -368,15 +390,19 @@ int partition(table_t *tbl, int column, int start, int end) {
 
 				do {
 					i++;
-				} while ((start_val = *((int*)get_element(tbl, i, start_row, column))) < pivot);
+				} while ((start_val = *((int*)get_element(tbl, i, &start_row, column))) < pivot && i<=j);
 
 				do {
 					j--;
-				} while ((end_val = *((int*)get_element(tbl, j, end_row, column))) > pivot);
+				} while ((end_val = *((int*)get_element(tbl, j, &end_row, column))) > pivot);
 
-				if (i >= j)
-					return j;
-
+                if (i >= j) {
+                    if (end > start+1) {
+                        get_element(tbl, start, &start_row, column);
+                        exchange(tbl, start, j, start_row, end_row, 0);
+                    }
+                    return j;
+                }
 				break;
 
 			}
@@ -387,17 +413,21 @@ int partition(table_t *tbl, int column, int start, int end) {
 
 				do {
 					i++;
-					start_val = (char*)get_element(tbl, i, start_row, column);
-				} while (strncmp(start_val, pivot, MAX_ROW_SIZE) < 0);
+					start_val = (char*)get_element(tbl, i, &start_row, column);
+				} while (strncmp(start_val, pivot, MAX_ROW_SIZE) < 0 && i<=j);
 
 				do {
 					j--;
-					end_val = (char*)get_element(tbl, j, end_row, column);
+					end_val = (char*)get_element(tbl, j, &end_row, column);
 				} while (strncmp(end_val, pivot, MAX_ROW_SIZE) > 0);
 
-				if (i >= j)
-					return j;
-
+                if (i >= j) {
+                    if (end > start+1) {
+                        get_element(tbl, start, &start_row, column);
+                        exchange(tbl, start, j, start_row, end_row, 0);
+                    }
+                    return j;
+                }
 				break;
 			}
 			default:

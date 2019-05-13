@@ -24,6 +24,8 @@ using namespace std;
 schema_type_t uvisits_type_arr[] = { TINYTEXT, TINYTEXT, INTEGER, INTEGER, TINYTEXT, TINYTEXT, TINYTEXT, TINYTEXT, INTEGER };
 schema_type_t rankings_type_arr[] = { TINYTEXT, INTEGER, INTEGER };
 schema_type_t rand_int_type_arr[] = { INTEGER };
+int uvisits_sizes_arr[] = {20, 110, 4, 4, 160, 10, 20, 25, 4};
+int rankings_sizes_arr[] = {110, 4, 4};
 
 constexpr schema_t derive_schema(schema_type_t *type_arr, int num_types) {
 	schema_t sc = {0};
@@ -44,6 +46,23 @@ constexpr schema_t derive_schema(schema_type_t *type_arr, int num_types) {
 	sc.row_data_size = sc.offsets[i - 1] + sc.sizes[i - 1];
 	sc.num_fields = num_types;
 	return sc;
+}
+
+constexpr schema_t derive_schema_var_size(schema_type_t *type_arr, int num_types, int *sizes) {
+    schema_t sc = {0};
+    auto offset = 0;
+    auto i = 0;
+
+    for (i = 0; i < num_types; i++) {
+        sc.types[i] = type_arr[i];
+        sc.offsets[i] = offset;
+        sc.sizes[i] = sizes[i];
+        offset += sizes[i];
+
+    }
+    sc.row_data_size = sc.offsets[i - 1] + sc.sizes[i - 1];
+    sc.num_fields = num_types;
+    return sc;
 }
 
 int populate_database_from_csv(std::string fname, int num_rows, int db_id, int
@@ -696,7 +715,7 @@ int test_merge_sort_write(sgx_enclave_id_t eid)
 
 	sgx_status_t sgx_ret = SGX_ERROR_UNEXPECTED;
 
-	sc = derive_schema(rankings_type_arr, NUM_ELEMENTS(rankings_type_arr));
+	sc = derive_schema_var_size(rankings_type_arr, NUM_ELEMENTS(rankings_type_arr), rankings_sizes_arr);
 
 	sgx_ret = ecall_create_db(eid, &ret, db_name.c_str(), db_name.length(), &db_id);
 	if (sgx_ret || ret) {
@@ -722,7 +741,7 @@ int test_merge_sort_write(sgx_enclave_id_t eid)
 	printf("created rankings table with db ID:%d | table_id:%d\n",
 			db_id, rankings_table_id);
 
-	sc_udata = derive_schema(uvisits_type_arr, NUM_ELEMENTS(uvisits_type_arr));
+	sc_udata = derive_schema_var_size(uvisits_type_arr, NUM_ELEMENTS(uvisits_type_arr), uvisits_sizes_arr);
 
 	sgx_ret = ecall_create_table(eid, &ret, db_id, udata_table_name.c_str(), udata_table_name.length(), &sc_udata, &udata_table_id);
 	if (sgx_ret || ret) {

@@ -958,19 +958,37 @@ int promote_schema(schema_t *old_sc, int column, schema_t *new_sc) {
 }
 
 int promote_row(row_t *old_row, schema_t *sc, int column, row_t * new_row) {
-      
+
 	/* Copy the header */
 	memcpy(new_row, old_row, row_header_size()); 
  
 	/* Copy data */
 	memcpy(new_row->data, (char*)old_row->data + sc->offsets[column], sc->sizes[column]); 
 	memcpy((char*)new_row->data + sc->sizes[column], old_row->data, sc->offsets[column]); 
-	memcpy((char*)new_row->data + sc->sizes[column] + sc->offsets[column], 
-		(char*)old_row->data + sc->offsets[column] + sc->sizes[column], 
+	memcpy((char*)new_row->data + sc->sizes[column] + sc->offsets[column],
+		(char*)old_row->data + sc->offsets[column] + sc->sizes[column],
 		sc->row_data_size - (sc->offsets[column] + sc->sizes[column]));
-	
-        return 0; 
-}; 
+
+        return 0;
+};
+
+int promote_row_var_size(row_t *old_row, schema_t *sc,  schema_t *old_sc, int column, row_t * new_row) {
+
+    /* Copy the header */
+    memcpy(new_row, old_row, row_header_size());
+
+    /* Copy data */
+    memcpy(new_row->data, (char*)old_row->data + old_sc->offsets[column], old_sc->sizes[column]);
+    for(int i = 1; i <= column; i++) {
+        memcpy((char*)new_row->data + sc->offsets[i], (char*)old_row->data + old_sc->offsets[i-1], old_sc->sizes[i-1]);
+    }
+
+    memcpy((char*)new_row->data + sc->sizes[column] + sc->offsets[column],
+           (char*)old_row->data + sc->offsets[column] + sc->sizes[column],
+           sc->row_data_size - (sc->offsets[column] + sc->sizes[column]));
+
+    return 0;
+};
 
 /* Before sorting the table we promote the column that we sort on 
    to the front -- this allows us to compare the bits of the columns 
@@ -1492,7 +1510,7 @@ int project_promote_pad_table(
             goto cleanup;
         }
 
-		ret = promote_row(row_new, &project_promote_pad_sc, promote_columns[0], row_new2);
+		ret = promote_row_var_size(row_new, &project_promote_pad_sc, &project_sc, promote_columns[0], row_new2);
         if(ret) {
             ERR("project_row failed on row %d of table %s\n", i, tbl->name.c_str());
             goto cleanup;
