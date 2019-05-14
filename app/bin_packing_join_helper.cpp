@@ -31,7 +31,6 @@ int bin_packing_join(sgx_enclave_id_t eid, int db_id,
     // Determine size of data blocks
     const size_t dblk_size = usable_heap_size;
     const size_t rows_per_dblk = dblk_size / MAX_ROW_SIZE;
-
 #if defined(REPORT_BIN_PACKING_JOIN_STATS)
     INFO("Datablock size: %lu bytes.\n", dblk_size);
     INFO("Rows per datablock: %lu rows.\n", rows_per_dblk);
@@ -39,8 +38,8 @@ int bin_packing_join(sgx_enclave_id_t eid, int db_id,
     if (rows_per_dblk <= 0) {
         ERR("Usable SGX memory is smaller than one row\n");
     }
-    metadata_t metadata;
 
+    metadata_t metadata;
     int bin_info_tbl_id = -1;
     do {
 #if defined(REPORT_BIN_PACKING_JOIN_STATS)

@@ -19,8 +19,6 @@
 #include "enclave_t.h"
 #endif
 
-namespace hbpj = bin_packing_join::hash_bin_packing_join;
-
 #define RETURN_IF_FAILED(x)                                                    \
     {                                                                          \
         if (x)                                                                 \
@@ -39,6 +37,8 @@ const size_t usable_heap_size = (max_heap_size - DATA_BLKS_PER_DB * DATA_BLOCK_S
 // TODO(tianjiao): support multi column joining
 int ecall_hash_bin_packing_join(int db_id, join_condition_t *join_cond,
                            int *join_tbl_id) {
+    using namespace bin_packing_join::hash_bin_packing_join;
+    INFO("ecall_hash_bin_packing_join is received within enclave\n");
     int rtn = 0;
     data_base_t *db = get_db(db_id);
     if (!db) {
@@ -55,11 +55,16 @@ int ecall_hash_bin_packing_join(int db_id, join_condition_t *join_cond,
     }
 
     // Determine size of data blocks
-    const size_t dblk_size = usable_heap_size /
-                             (db->tables[left_table_id]->num_rows +
-                              db->tables[right_table_id]->num_rows) /
-                             MAX_ROW_SIZE;
-    std::vector<std::vector<std::pair<hbpj::hash_size_t, int>>> metadatas_left,
+    const size_t dblk_size = usable_heap_size;
+    const size_t rows_per_dblk = dblk_size / MAX_ROW_SIZE;
+#if defined(REPORT_BIN_PACKING_JOIN_STATS)
+    INFO("Datablock size: %lu bytes.\n", dblk_size);
+    INFO("Rows per datablock: %lu rows.\n", rows_per_dblk);
+#endif
+    if (rows_per_dblk <= 0) {
+        ERR("Usable SGX memory is smaller than one row\n");
+    }
+    std::vector<std::vector<std::pair<hash_size_t, int>>> metadatas_left,
         metadatas_right;
 
     do {
@@ -67,11 +72,13 @@ int ecall_hash_bin_packing_join(int db_id, join_condition_t *join_cond,
         unsigned long long start, end;
         unsigned long long cycles;
         double secs;
+
+        INFO("Begin to collect metadata\n");
         start = RDTSC();
 #endif
 
         // Number of occurance of each joining attribute across all datablocks
-        std::unordered_map<hbpj::hash_size_t, int> total_occurances;
+        std::unordered_map<hash_size_t, int> total_occurances;
 
         // if (collect_metadata(db_id, join_cond->table_left,
         //                      join_cond->fields_left[0], metadata_schema,
@@ -81,7 +88,7 @@ int ecall_hash_bin_packing_join(int db_id, join_condition_t *join_cond,
         //     break;
         // }
 
-        if (hbpj::collect_metadata(
+        if (collect_metadata(
                 db_id, join_cond->table_right, join_cond->fields_right[0],
                 dblk_size, &total_occurances, &metadatas_right)) {
             ERR("Failed to collect metadata");
@@ -91,15 +98,15 @@ int ecall_hash_bin_packing_join(int db_id, join_condition_t *join_cond,
 
 #if defined(REPORT_BIN_PACKING_JOIN_STATS)
         end = RDTSC();
-
         cycles = end - start;
         secs = (cycles / cycles_per_sec);
-
         INFO("Collecting metadata took %llu cycles (%f sec)\n", cycles, secs);
+
+        INFO("Begin to pack bins\n");
 #endif
 
-        std::vector<std::vector<std::vector<hbpj::hash_size_t>>> bins;
-        if (hbpj::pack_bins(&total_occurances, metadatas_right,
+        std::vector<std::vector<std::vector<hash_size_t>>> bins;
+        if (pack_bins(&total_occurances, metadatas_right,
                                              &bins)) {
             ERR("Failed to pack bin\n");
             rtn = -1;
