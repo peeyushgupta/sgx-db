@@ -155,6 +155,7 @@ int collect_metadata(
                 return sgx_status;
             }
             // This should take the 8 least significat bits of the hash.
+            // https://en.cppreference.com/w/cpp/language/implicit_conversion#Integral_conversions
             const hash_size_t hash = (hash_size_t)sh1_hash;
             counter[hash]++;
             (*total_occurances)[hash]++;
