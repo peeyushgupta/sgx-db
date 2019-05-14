@@ -11,6 +11,7 @@
 #include <unordered_map>
 #include <vector>
 
+namespace bin_packing_join::external_bin_packing_join {
 int bin_packing_join(sgx_enclave_id_t eid, int db_id,
                      join_condition_t *join_cond, const std::string &csv_left,
                      const std::string &csv_right, int *out_tbl_id);
@@ -56,3 +57,4 @@ int bin_info_to_table(sgx_enclave_id_t eid, int db_id,
                       int *bin_info_tbl_id);
 
 int verifyBins(const std::vector<bin_t> &bins);
+} // namespace bin_packing_join::external_bin_packing_join

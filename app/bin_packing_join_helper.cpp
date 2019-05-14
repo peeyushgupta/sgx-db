@@ -14,6 +14,8 @@
 #include "sort_helper.hpp"
 #include "time.hpp"
 
+namespace bin_packing_join::external_bin_packing_join {
+
 #ifdef MAX_HEAP_SIZE
 const size_t max_heap_size = MAX_HEAP_SIZE;
 #else
@@ -390,3 +392,5 @@ int bin_info_to_table(sgx_enclave_id_t eid, int db_id,
 
     return ret;
 }
+
+} // namespace bin_packing_join::external_bin_packing_join

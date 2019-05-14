@@ -378,7 +378,16 @@ int test_rankings(sgx_enclave_id_t eid) {
 		printf(TXT_FG_YELLOW "Sort join test" TXT_NORMAL ": joining rankings and udata tables \n"); 
 
 #if defined(TEST_BIN_PACKING_JOIN)	
-		ret = bin_packing_join(eid, db_id, &c, rankings_csv, uvisits_csv, &join_table_id);
+#if defined(TEST_HASH_BIN_PACKING_JOIN)
+		INFO("Performing hash based bin packing join\n");
+		sgx_ret = ecall_hash_bin_packing_join(eid, &ret, db_id, &c, &join_table_id);
+#else
+		INFO("Performing external bin packing join\n");
+		{
+			using bin_packing_join::external_bin_packing_join::bin_packing_join;
+			ret = bin_packing_join(eid, db_id, &c, rankings_csv, uvisits_csv, &join_table_id);
+		}
+#endif
 		// Uncomment this to print the output table
 		// ecall_print_table_dbg(eid, &ret, db_id, join_table_id, 0, 1<<20);
 #else
