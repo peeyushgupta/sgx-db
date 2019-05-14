@@ -19,8 +19,7 @@
 #include "enclave_t.h"
 #endif
 
-using namespace bin_packing_join;
-using namespace bin_packing_join::hash_bin_packing_join;
+namespace hbpj = bin_packing_join::hash_bin_packing_join;
 
 #define RETURN_IF_FAILED(x)                                                    \
     {                                                                          \
@@ -38,7 +37,7 @@ const size_t usable_heap_size = (max_heap_size - DATA_BLKS_PER_DB * DATA_BLOCK_S
 // Assuming only two table are joining
 // Assuming only one joining column
 // TODO(tianjiao): support multi column joining
-int ecall_bin_packing_join(int db_id, join_condition_t *join_cond,
+int ecall_hash_bin_packing_join(int db_id, join_condition_t *join_cond,
                            int *join_tbl_id) {
     int rtn = 0;
     data_base_t *db = get_db(db_id);
@@ -60,7 +59,7 @@ int ecall_bin_packing_join(int db_id, join_condition_t *join_cond,
                              (db->tables[left_table_id]->num_rows +
                               db->tables[right_table_id]->num_rows) /
                              MAX_ROW_SIZE;
-    std::vector<std::vector<std::pair<hash_size_t, int>>> metadatas_left,
+    std::vector<std::vector<std::pair<hbpj::hash_size_t, int>>> metadatas_left,
         metadatas_right;
 
     do {
@@ -72,7 +71,7 @@ int ecall_bin_packing_join(int db_id, join_condition_t *join_cond,
 #endif
 
         // Number of occurance of each joining attribute across all datablocks
-        std::unordered_map<hash_size_t, int> total_occurances;
+        std::unordered_map<hbpj::hash_size_t, int> total_occurances;
 
         // if (collect_metadata(db_id, join_cond->table_left,
         //                      join_cond->fields_left[0], metadata_schema,
@@ -82,7 +81,7 @@ int ecall_bin_packing_join(int db_id, join_condition_t *join_cond,
         //     break;
         // }
 
-        if (hash_bin_packing_join::collect_metadata(
+        if (hbpj::collect_metadata(
                 db_id, join_cond->table_right, join_cond->fields_right[0],
                 dblk_size, &total_occurances, &metadatas_right)) {
             ERR("Failed to collect metadata");
@@ -99,8 +98,8 @@ int ecall_bin_packing_join(int db_id, join_condition_t *join_cond,
         INFO("Collecting metadata took %llu cycles (%f sec)\n", cycles, secs);
 #endif
 
-        std::vector<std::vector<std::vector<hash_size_t>>> bins;
-        if (hash_bin_packing_join::pack_bins(&total_occurances, metadatas_right,
+        std::vector<std::vector<std::vector<hbpj::hash_size_t>>> bins;
+        if (hbpj::pack_bins(&total_occurances, metadatas_right,
                                              &bins)) {
             ERR("Failed to pack bin\n");
             rtn = -1;
@@ -113,6 +112,8 @@ int ecall_bin_packing_join(int db_id, join_condition_t *join_cond,
 
     return rtn;
 }
+
+namespace bin_packing_join::hash_bin_packing_join {
 
 int collect_metadata(
     int db_id, int table_id, int column, const size_t dblk_size,
@@ -215,3 +216,5 @@ int pack_bins(
 
     return 0;
 }
+
+} // namespace hash_bin_packing_join

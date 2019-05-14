@@ -39,6 +39,9 @@ enclave {
 		public int ecall_flush_table(int db_id, int table_id);
 		public int ecall_join(int db_id, [user_check]join_condition_t *c, [out] int *join_tbl_id);
 		public int ecall_print_table_dbg(int db_id, int table_id, int start, int end);
+		public int ecall_hash_bin_packing_join(int db_id,
+			[user_check]join_condition_t *join_cond,
+			[out] int *join_tbl_id);
 		public int ecall_bin_pack_join(int db_id,
 			[user_check]join_condition_t *join_cond,
 			int rows_per_dblk,
