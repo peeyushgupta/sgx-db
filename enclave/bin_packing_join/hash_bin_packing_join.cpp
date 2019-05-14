@@ -33,7 +33,7 @@ const size_t max_heap_size = MAX_HEAP_SIZE;
 #else
 const size_t max_heap_size = 7E7;
 #endif
-const size_t usable_heap_size = max_heap_size / 2;
+const size_t usable_heap_size = (max_heap_size - DATA_BLKS_PER_DB * DATA_BLOCK_SIZE) * 0.8;
 
 // Assuming only two table are joining
 // Assuming only one joining column

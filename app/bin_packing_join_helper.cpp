@@ -19,7 +19,7 @@ const size_t max_heap_size = MAX_HEAP_SIZE;
 #else
 const size_t max_heap_size = 7E7; // 70MB
 #endif
-const size_t usable_heap_size = max_heap_size / 4;
+const size_t usable_heap_size = (max_heap_size - DATA_BLKS_PER_DB * DATA_BLOCK_SIZE) * 0.8;
 
 int bin_packing_join(sgx_enclave_id_t eid, int db_id,
                      join_condition_t *join_cond, const std::string &csv_left,
