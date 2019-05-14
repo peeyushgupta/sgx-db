@@ -2,6 +2,7 @@
 
 #include <algorithm>
 #include <cerrno>
+#include <sgx_tcrypto.h>
 #include <unordered_map>
 #include <utility>
 #include <vector>
@@ -18,6 +19,7 @@
 #include "enclave_t.h"
 #endif
 
+using namespace bin_packing_join;
 using namespace bin_packing_join::hash_bin_packing_join;
 
 #define RETURN_IF_FAILED(x)                                                    \
@@ -80,9 +82,9 @@ int ecall_bin_packing_join(int db_id, join_condition_t *join_cond,
         //     break;
         // }
 
-        if (collect_metadata(db_id, join_cond->table_right,
-                             join_cond->fields_right[0], dblk_size, &total_occurances,
-                             &metadatas_right)) {
+        if (hash_bin_packing_join::collect_metadata(
+                db_id, join_cond->table_right, join_cond->fields_right[0],
+                dblk_size, &total_occurances, &metadatas_right)) {
             ERR("Failed to collect metadata");
             rtn = -1;
             break;
@@ -98,7 +100,8 @@ int ecall_bin_packing_join(int db_id, join_condition_t *join_cond,
 #endif
 
         std::vector<std::vector<std::vector<hash_size_t>>> bins;
-        if (pack_bins(&total_occurances, metadatas_right, &bins)) {
+        if (hash_bin_packing_join::pack_bins(&total_occurances, metadatas_right,
+                                             &bins)) {
             ERR("Failed to pack bin\n");
             rtn = -1;
             break;
@@ -115,7 +118,7 @@ int collect_metadata(
     int db_id, int table_id, int column, const size_t dblk_size,
     std::unordered_map<hash_size_t, int> *total_occurances,
     std::vector<std::vector<std::pair<hash_size_t, int>>> *metadatas) {
-
+    sgx_status_t sgx_status = SGX_ERROR_UNEXPECTED;
     // Check params
     data_base_t *db = get_db(db_id);
     if (!db) {
@@ -143,7 +146,16 @@ int collect_metadata(
                 val = std::string((char *)get_column(schema, column, &row));
             }
             // Probably there's more secured/better way to get hash
-            const hash_size_t hash = std::hash<std::string>{}(val);
+            sgx_sha1_hash_t sh1_hash;
+            sgx_status =
+                sgx_sha1_msg((uint8_t *)val.c_str(), val.size(), &sh1_hash);
+            if (sgx_status) {
+                ERR("Failed to hash %s. Error code: %d\n", val.c_str(),
+                    sgx_status);
+                return sgx_status;
+            }
+            // This should take the 8 least significat bits of the hash.
+            const hash_size_t hash = (hash_size_t)sh1_hash;
             counter[hash]++;
             (*total_occurances)[hash]++;
         }
@@ -160,13 +172,13 @@ int collect_metadata(
     return 0;
 }
 
-int pack_bins(std::unordered_map<hash_size_t, int> *total_occurances,
-              const std::vector<std::vector<std::pair<hash_size_t, int>>> &metadatas,
-              std::vector<bin_t> *bins) {
+int pack_bins(
+    std::unordered_map<hash_size_t, int> *total_occurances,
+    const std::vector<std::vector<std::pair<hash_size_t, int>>> &metadatas,
+    std::vector<bin_t> *bins) {
     std::unordered_map<hash_size_t, int> last_seen; // <val, bin>
     for (auto &metadata : metadatas) {
         std::unordered_map<hash_size_t, int> curr_seen;
-        row_t row;
         for (const auto &kv : metadata) {
             // Get metadata
             const hash_size_t val = kv.first;

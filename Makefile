@@ -191,7 +191,9 @@ Enclave_Cpp_Files := enclave/bcache.cpp \
 			enclave/column_sort.cpp \
 			enclave/bitonic_sort.cpp \
 			enclave/quick_sort.cpp \
-			enclave/bin_packing_join/*.cpp \
+			enclave/bin_packing_join/bin_packing_join.cpp \
+			enclave/bin_packing_join/hash_bin_packing_join.cpp \
+			enclave/bin_packing_join/obli_bin_packing_join.cpp \
 			enclave/spinlock.cpp \
 			enclave/tests.cpp \
 			enclave/aligned_alloc.cpp \
