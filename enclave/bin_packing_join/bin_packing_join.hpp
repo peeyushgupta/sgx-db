@@ -8,19 +8,22 @@
 
 #include "db.hpp"
 
+namespace bin_packing_join::external_bin_packing_join {
+
 // Bin Packing Phase 3: fill bins
 // Fill the bins with the actual value based on what we figured out in Phase 2.
 // `db`: the database to store temporary tables .
 // `data_table`: the table that stores the actual data.
 // `rows_per_dblk`: number of rows per datablock in `data_table`.
 // `bin_info_table`: the table that stores the bin information that we
-//      collection in Phase 2. `start_dblk`: the first datablock we need to read
+//      collection in Phase 2.
+// `start_dblk`: the first datablock we need to read
 //      in `bin_info_table`
 // `end_dblk`: the last datablock we need to read in
-// `bin_info_table` `num_bins`: number of bins. `num_rows_per_bins`: number of
-//      rows in a bin in the `bin_info_table`. `bin_sc`: The schema of the bins.
-//      We use this to create the actual bins. `column_offset`: Where the two
-//      tables are sperated in the `bin_sc`.
+// `bin_info_table` `num_bins`: number of bins.
+// `num_rows_per_bins`: number of rows in a bin in the `bin_info_table`.
+// `bin_sc`: The schema of the bins. We use this to create the actual bins.
+// `column_offset`: Where the two tables are sperated in the `bin_sc`.
 // `bins`: The actual bins, which is the output of Phase 3 and the input of
 // Phase 4.
 // TODO: parallelize this
@@ -46,4 +49,6 @@ int fill_bins_per_dblk(table_t *data_table, int column, int *data_row_num,
 int join_bins(table_t *lhs_tbl, const int lhs_column, table_t *rhs_tbl,
               const int rhs_column, schema_t *join_sc, table_t *join_tbl,
               const int num_rows_per_out_bin, int bin_id);
+
+} // namespace bin_packing_join::external_bin_packing_join
 #endif // E_BIN_PACKING_JOIN_HPP

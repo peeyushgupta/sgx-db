@@ -26,6 +26,7 @@ int ecall_bin_pack_join(int db_id, join_condition_t *join_cond,
                         int bin_info_tbl_id, int midpoint, int num_bins,
                         int rows_per_cell, int *join_tbl_id,
                         int rows_per_out_bin) {
+    using namespace bin_packing_join::external_bin_packing_join;
     int rtn = 0;
     data_base_t *db = get_db(db_id);
     table_t *bin_info_btl;
@@ -138,6 +139,7 @@ int ecall_bin_pack_join(int db_id, join_condition_t *join_cond,
     return rtn;
 }
 
+namespace bin_packing_join::external_bin_packing_join {
 int fill_bins(data_base_t *db, table_t *data_table, int column,
               const int rows_per_dblk, table_t *bin_info_table,
               const int start_dblk, const int end_dblk, const int num_bins,
@@ -357,3 +359,4 @@ int fill_bins_per_dblk(table_t *data_table, int column, int *data_row_num,
 
     return 0;
 }
+} // namespace bin_packing_join::external_bin_packing_join

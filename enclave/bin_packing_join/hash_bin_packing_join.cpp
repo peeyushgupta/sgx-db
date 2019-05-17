@@ -99,7 +99,7 @@ int ecall_hash_bin_packing_join(int db_id, join_condition_t *join_cond,
         start = RDTSC();
 #endif
 
-        std::vector<bin_t> bins;
+        std::vector<bin_info_t> bins;
         rtn = bin_info_collection(dblk_cnt, metadata, &bins);
         if (rtn) {
             ERR("Failed to pack bin\n");
@@ -212,7 +212,7 @@ int collect_metadata(table_t* table, int column,
 }
 
 // Attempt to merge `b` into `a`. Nothing happens and return false if failed.
-bool mergeBins(bin_t *a, const bin_t *b, const int cell_size) {
+bool mergeBins(bin_info_t *a, const bin_info_t *b, const int cell_size) {
     assert(a->size() == b->size());
     for (int i = 0; i < a->size(); ++i) {
         if ((*a)[i].first + (*b)[i].first > cell_size) {
@@ -231,7 +231,7 @@ bool mergeBins(bin_t *a, const bin_t *b, const int cell_size) {
 
 // Sort metadata and pack bins
 int bin_info_collection(const int dblk_count, const metadata_t &metadata,
-                        std::vector<bin_t> *bins) {
+                        std::vector<bin_info_t> *bins) {
     const int cell_size = usable_heap_size / dblk_count / MAX_ROW_SIZE;
     if (cell_size <= 0) {
         ERR("Too many datablocks created.\n");
@@ -250,12 +250,12 @@ int bin_info_collection(const int dblk_count, const metadata_t &metadata,
                          std::tie(b.max_cnt, b.count);
               });
 
-    std::vector<bin_t> res;
-    bin_t last_bin(dblk_count);
+    std::vector<bin_info_t> res;
+    bin_info_t last_bin(dblk_count);
 
     for (const auto &it : metadata) {
         auto &dblks = it.second.dblks;
-        bin_t bin(dblk_count);
+        bin_info_t bin(dblk_count);
         for (const auto &pair : dblks) {
             bin[pair.first].first += pair.second;
             bin[pair.first].second.emplace_back(it.first, pair.second);
@@ -276,7 +276,7 @@ int bin_info_collection(const int dblk_count, const metadata_t &metadata,
          res.size() * dblk_count * cell_size);
 
 #if defined(REPORT_BIN_PACKING_JOIN_PRINT_BIN)
-    for (const bin_t &bin : res) {
+    for (const bin_info_t &bin : res) {
         for (const auto &cell : bin) {
             printf("%3d ", cell.first);
         }
@@ -291,7 +291,7 @@ int bin_info_collection(const int dblk_count, const metadata_t &metadata,
     return 0;
 }
 
-int out_bin_info_collection(const std::vector<bin_t> &bins, int midpoint,
+int out_bin_info_collection(const std::vector<bin_info_t> &bins, int midpoint,
                             int *num_rows_per_out_bin) {
     if (bins.empty()) {
         ERR("Bin can't be empty");
@@ -299,7 +299,7 @@ int out_bin_info_collection(const std::vector<bin_t> &bins, int midpoint,
     }
     *num_rows_per_out_bin = 0;
 
-    for (const bin_t &bin : bins) {
+    for (const bin_info_t &bin : bins) {
         int sum = 0;
         std::unordered_map<hash_size_t, int> lhs, rhs;
         for (int i = 0; i < midpoint; ++i) {
