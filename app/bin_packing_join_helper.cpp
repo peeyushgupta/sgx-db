@@ -43,10 +43,10 @@ int bin_packing_join(sgx_enclave_id_t eid, int db_id,
     int bin_info_tbl_id = -1;
     do {
 #if defined(REPORT_BIN_PACKING_JOIN_STATS)
-        unsigned long long start, end, total_start, total_end;
+        unsigned long long start, end;
         unsigned long long cycles;
         double secs;
-        total_start = start = RDTSC_START();
+        start = RDTSC_START();
 #endif
 
         int dblk_cnt = 0;
@@ -141,17 +141,6 @@ int bin_packing_join(sgx_enclave_id_t eid, int db_id,
             ERR("Bin packing join error:%d (sgx ret:%d)\n", rtn, sgx_ret);
             return rtn;
         }
-
-#if defined(REPORT_BIN_PACKING_JOIN_STATS)
-        total_end = RDTSC_START();
-
-        cycles = total_end - total_start;
-        secs = (cycles / cycles_per_sec);
-
-        INFO("Finished: Bin-Packing-Based Merge Join takes %llu cycles (%f sec)\n", cycles,
-             secs);
-#endif
-
     } while (0);
 
 #if defined(REPORT_BIN_PACKING_JOIN_STATS)
