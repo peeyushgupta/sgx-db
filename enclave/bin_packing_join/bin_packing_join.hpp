@@ -1,3 +1,6 @@
+// Phase 3 and Phase 4 of the external bin packing join
+// Refer to app/bin_packing_join_help.hpp for Phase 1 And Phase 2
+
 #ifndef E_BIN_PACKING_JOIN_HPP
 #define E_BIN_PACKING_JOIN_HPP
 
@@ -12,14 +15,14 @@
 // `rows_per_dblk`: number of rows per datablock in `data_table`.
 // `bin_info_table`: the table that stores the bin information that we
 //      collection in Phase 2. `start_dblk`: the first datablock we need to read
-//      in
-// `bin_info_table` `end_dblk`: the last datablock we need to read in
+//      in `bin_info_table`
+// `end_dblk`: the last datablock we need to read in
 // `bin_info_table` `num_bins`: number of bins. `num_rows_per_bins`: number of
 //      rows in a bin in the `bin_info_table`. `bin_sc`: The schema of the bins.
 //      We use this to create the actual bins. `column_offset`: Where the two
 //      tables are sperated in the `bin_sc`.
-// `bins`: The actual bins, which is the output of
-// Phase 3 and the input of Phase 4.
+// `bins`: The actual bins, which is the output of Phase 3 and the input of
+// Phase 4.
 // TODO: parallelize this
 // TODO: get `bin_sc` from table
 int fill_bins(data_base_t *db, table_t *data_table, int column,
