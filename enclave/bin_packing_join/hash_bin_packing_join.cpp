@@ -27,7 +27,7 @@
 #endif
 // TODO: set this to 0.8
 const size_t usable_heap_size =
-    (MAX_HEAP_SIZE - DATA_BLKS_PER_DB * DATA_BLOCK_SIZE) * 0.4;
+    (MAX_HEAP_SIZE - DATA_BLKS_PER_DB * DATA_BLOCK_SIZE) * 0.8;
 
 // Helpers
 namespace {
@@ -43,7 +43,7 @@ static inline hash_size_t get_hash(char *data, uint32_t len) {
     }
     // This should take the 8 least significat bits of the hash.
     // https://en.cppreference.com/w/cpp/language/implicit_conversion#Integral_conversions
-    hash_size_t rtn = (hash_size_t)sh1_hash;
+    hash_size_t rtn = sh1_hash[0];
     return rtn;
 }
 static inline hash_size_t get_hash(char *str) {
@@ -115,11 +115,11 @@ int ecall_hash_bin_packing_join(int db_id, join_condition_t *join_cond,
         }
 
 #if defined(REPORT_BIN_PACKING_JOIN_STATS)
-        end = RDTSC();
+        INFO("%d datablocks of metadata is collected in total\n", metadata.size());
 
+        end = RDTSC();
         cycles = end - start;
         secs = (cycles / cycles_per_sec);
-
         INFO("Phase 1: collecting metadata took %llu cycles (%f sec)\n", cycles,
              secs);
         start = RDTSC();
@@ -134,10 +134,8 @@ int ecall_hash_bin_packing_join(int db_id, join_condition_t *join_cond,
 
 #if defined(REPORT_BIN_PACKING_JOIN_STATS)
         end = RDTSC();
-
         cycles = end - start;
         secs = (cycles / cycles_per_sec);
-
         INFO("Phase 2: bin information collection took %llu cycles (%f sec)\n",
              cycles, secs);
         start = RDTSC();
