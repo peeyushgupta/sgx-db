@@ -25,8 +25,9 @@
 // 70MB
 #define MAX_HEAP_SIZE 7E7
 #endif
+// TODO: set this to 0.8
 const size_t usable_heap_size =
-    (MAX_HEAP_SIZE - DATA_BLKS_PER_DB * DATA_BLOCK_SIZE) * 0.8;
+    (MAX_HEAP_SIZE - DATA_BLKS_PER_DB * DATA_BLOCK_SIZE) * 0.4;
 
 // Helpers
 namespace {
@@ -181,7 +182,7 @@ int ecall_hash_bin_packing_join(int db_id, join_condition_t *join_cond,
         }
 
         lhs_bins = rhs_bins =
-            std::vector<table_t *>(bins.size(), (table_t *)-1);
+            std::vector<table_t *>(bins.size(), nullptr);
         rtn =
             fill_bins(db, left_table, join_cond->fields_left[0], rows_per_dblk,
                       bins, 0, midpoint, rows_per_cell, &lhs_bins);
@@ -238,21 +239,22 @@ int ecall_hash_bin_packing_join(int db_id, join_condition_t *join_cond,
 #if defined(REPORT_BIN_PACKING_JOIN_STATS)
     if (rtn == 0) {
         // ecall_print_table_dbg(eid, &rtn, db_id, *out_tbl_id, 0, 1 << 20);
+        INFO("%u rows of joined rows is generated.\n", join_tbl->num_rows.load());
     }
-#endif
-
-#if defined(REPORT_BIN_PACKING_JOIN_STATS)
-    INFO("%u rows of joined rows is generated.\n", join_tbl->num_rows.load());
 #endif
 
     // Clean up
     for (const auto &tbl : lhs_bins) {
-        delete_table(db, tbl);
+        if (tbl != nullptr) {
+            delete_table(db, tbl);
+        }
     }
     lhs_bins.clear();
 
     for (const auto &tbl : rhs_bins) {
-        delete_table(db, tbl);
+        if (tbl != nullptr) {
+            delete_table(db, tbl);
+        }
     }
     rhs_bins.clear();
     return rtn;
@@ -262,7 +264,8 @@ namespace bin_packing_join::hash_bin_packing_join {
 
 int collect_metadata(table_t *table, int column, const size_t rows_per_dblk,
                      int *dblk_count, metadata_t *metadata) {
-    INFO("Collection metadata on table %s with %d rows\n", table->name.c_str(), table->num_rows.load());
+    INFO("Collection metadata on table %s with %d rows\n", table->name.c_str(),
+         table->num_rows.load());
     int original_dblk_cnt = *dblk_count;
     int row_num;
     for (row_num = 0; row_num < table->num_rows; ++(*dblk_count)) {
@@ -447,8 +450,9 @@ int fill_bins(data_base_t *db, table_t *data_table, int column,
 #endif
     // For each datablock
     for (int dblk_num = start_dblk; dblk_num < end_dblk; ++dblk_num) {
-        int rtn = fill_bins_per_dblk(data_table, column, &data_row_num, rows_per_dblk,
-                           dblk_num, info_bins, rows_per_cell, bins);
+        int rtn =
+            fill_bins_per_dblk(data_table, column, &data_row_num, rows_per_dblk,
+                               dblk_num, info_bins, rows_per_cell, bins);
         if (rtn) {
             ERR("Failed to fill bin\n");
             return rtn;
