@@ -465,6 +465,7 @@ int fill_bins_per_dblk(table_t *data_table, int column, int *data_row_num,
                        const std::vector<bin_info_t> &info_bins,
                        const int rows_per_cell,
                        const std::vector<table_t *> *bins) {
+                           
     // Load bin information
     // This map stores the information about a value should be placed in
     // which cell.
@@ -524,7 +525,7 @@ int fill_bins_per_dblk(table_t *data_table, int column, int *data_row_num,
             byte_read_bin += sizeof(row);
         } catch (const std::bad_alloc &) {
             ERR("Not enough memory: dblk %d, i %d, row_num %d, byte_bin %d\n",
-                dblk_num, i, data_row_num, byte_read_bin);
+                dblk_num, i, *data_row_num, byte_read_bin);
             return -1;
         }
     }
