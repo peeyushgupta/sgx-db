@@ -262,18 +262,21 @@ namespace bin_packing_join::hash_bin_packing_join {
 
 int collect_metadata(table_t *table, int column, const size_t rows_per_dblk,
                      int *dblk_count, metadata_t *metadata) {
+    INFO("Collection metadata on table %s with %d rows\n", table->name.c_str(), table->num_rows.load());
     int original_dblk_cnt = *dblk_count;
     int row_num;
     for (row_num = 0; row_num < table->num_rows; ++(*dblk_count)) {
         std::unordered_map<hash_size_t, int> counter;
         for (int i = 0; i < rows_per_dblk; ++i) {
+            if (row_num >= table->num_rows) {
+                break;
+            }
             row_t row;
             if (read_row(table, row_num++, &row)) {
                 ERR("Failed to read row\n");
             }
             char *value = (char *)get_column(&table->sc, column, &row);
             counter[get_hash(value)]++;
-            row_num++;
         }
 
         // Populate the the metadata after reading each datablock.
@@ -444,8 +447,12 @@ int fill_bins(data_base_t *db, table_t *data_table, int column,
 #endif
     // For each datablock
     for (int dblk_num = start_dblk; dblk_num < end_dblk; ++dblk_num) {
-        fill_bins_per_dblk(data_table, column, &data_row_num, rows_per_dblk,
+        int rtn = fill_bins_per_dblk(data_table, column, &data_row_num, rows_per_dblk,
                            dblk_num, info_bins, rows_per_cell, bins);
+        if (rtn) {
+            ERR("Failed to fill bin\n");
+            return rtn;
+        }
     }
 
     return 0;
