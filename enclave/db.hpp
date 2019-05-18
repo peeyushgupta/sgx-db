@@ -9,7 +9,7 @@
 #define MAX_DATABASES 10
 #define MAX_ROWS (1 << 20) /* 1 M for now */
 #define MAX_ROW_SIZE (1 << 12) /* 4096 for now */
-#define MAX_TABLES 512
+#define MAX_TABLES 1024
 #define MAX_COLS 20
 #define MAX_CONDITIONS 3 // number of ORs allowed in one clause of a condition
 #define THREADS_PER_DB 8 // number of threads concurrently working on DB
