@@ -27,7 +27,7 @@
 #endif
 // TODO: set this to 0.8
 const size_t usable_heap_size =
-    (MAX_HEAP_SIZE - DATA_BLKS_PER_DB * DATA_BLOCK_SIZE) * 0.8;
+    (MAX_HEAP_SIZE - DATA_BLKS_PER_DB * DATA_BLOCK_SIZE) * 0.3;
 
 // Helpers
 namespace {
@@ -87,7 +87,6 @@ int ecall_hash_bin_packing_join(int db_id, join_condition_t *join_cond,
         ERR("Usable SGX memory is smaller than one row\n");
     }
 
-    metadata_t metadata;
     std::vector<table_t *> lhs_bins, rhs_bins;
     table_t *join_tbl;
     do {
@@ -98,48 +97,54 @@ int ecall_hash_bin_packing_join(int db_id, join_condition_t *join_cond,
         total_start = start = RDTSC();
 #endif
 
-        int dblk_cnt = 0;
-        rtn = collect_metadata(left_table, join_cond->fields_left[0],
-                               rows_per_dblk, &dblk_cnt, &metadata);
-        if (rtn) {
-            ERR("Failed to collect metadata\n");
-            break;
-        }
-        int midpoint = dblk_cnt;
-
-        rtn = collect_metadata(right_table, join_cond->fields_right[0],
-                               rows_per_dblk, &dblk_cnt, &metadata);
-        if (rtn) {
-            ERR("Failed to collect metadata\n");
-            break;
-        }
-
-#if defined(REPORT_BIN_PACKING_JOIN_STATS)
-        INFO("%d datablocks of metadata is collected in total\n", metadata.size());
-
-        end = RDTSC();
-        cycles = end - start;
-        secs = (cycles / cycles_per_sec);
-        INFO("Phase 1: collecting metadata took %llu cycles (%f sec)\n", cycles,
-             secs);
-        start = RDTSC();
-#endif
-
         std::vector<bin_info_t> bins;
-        rtn = bin_info_collection(dblk_cnt, metadata, &bins);
-        if (rtn) {
-            ERR("Failed to pack bin\n");
-            break;
-        }
+        int dblk_cnt = 0;
+        int midpoint;
+        {   // metadata is only alive in this scope
+            metadata_t metadata;
+            rtn = collect_metadata(left_table, join_cond->fields_left[0],
+                                   rows_per_dblk, &dblk_cnt, &metadata);
+            if (rtn) {
+                ERR("Failed to collect metadata\n");
+                break;
+            }
+            midpoint = dblk_cnt;
+
+            rtn = collect_metadata(right_table, join_cond->fields_right[0],
+                                   rows_per_dblk, &dblk_cnt, &metadata);
+            if (rtn) {
+                ERR("Failed to collect metadata\n");
+                break;
+            }
 
 #if defined(REPORT_BIN_PACKING_JOIN_STATS)
-        end = RDTSC();
-        cycles = end - start;
-        secs = (cycles / cycles_per_sec);
-        INFO("Phase 2: bin information collection took %llu cycles (%f sec)\n",
-             cycles, secs);
-        start = RDTSC();
+            INFO("%d datablocks of metadata is collected in total\n",
+                 metadata.size());
+
+            end = RDTSC();
+            cycles = end - start;
+            secs = (cycles / cycles_per_sec);
+            INFO("Phase 1: collecting metadata took %llu cycles (%f sec)\n",
+                 cycles, secs);
+            start = RDTSC();
 #endif
+
+            rtn = bin_info_collection(dblk_cnt, metadata, &bins);
+            if (rtn) {
+                ERR("Failed to pack bin\n");
+                break;
+            }
+
+#if defined(REPORT_BIN_PACKING_JOIN_STATS)
+            end = RDTSC();
+            cycles = end - start;
+            secs = (cycles / cycles_per_sec);
+            INFO("Phase 2: bin information collection took %llu cycles (%f "
+                 "sec)\n",
+                 cycles, secs);
+            start = RDTSC();
+#endif
+        }
 
         int num_rows_per_out_bin;
         rtn = out_bin_info_collection(bins, midpoint, &num_rows_per_out_bin);
@@ -161,17 +166,6 @@ int ecall_hash_bin_packing_join(int db_id, join_condition_t *join_cond,
 #endif
 
         // Perform Phase 3
-
-#if defined(REPORT_BIN_PACKING_JOIN_STATS)
-        total_end = RDTSC();
-
-        cycles = total_end - total_start;
-        secs = (cycles / cycles_per_sec);
-
-        INFO("Finished: Bin-Packing-Based Merge Join takes %llu cycles (%f "
-             "sec)\n",
-             cycles, secs);
-#endif
         int rows_per_cell = 0;
         for (const bin_info_t &bin : bins) {
             for (const auto &cell : bin) {
@@ -179,8 +173,7 @@ int ecall_hash_bin_packing_join(int db_id, join_condition_t *join_cond,
             }
         }
 
-        lhs_bins = rhs_bins =
-            std::vector<table_t *>(bins.size(), nullptr);
+        lhs_bins = rhs_bins = std::vector<table_t *>(bins.size(), nullptr);
         rtn =
             fill_bins(db, left_table, join_cond->fields_left[0], rows_per_dblk,
                       bins, 0, midpoint, rows_per_cell, &lhs_bins);
@@ -237,7 +230,8 @@ int ecall_hash_bin_packing_join(int db_id, join_condition_t *join_cond,
 #if defined(REPORT_BIN_PACKING_JOIN_STATS)
     if (rtn == 0) {
         // ecall_print_table_dbg(eid, &rtn, db_id, *out_tbl_id, 0, 1 << 20);
-        INFO("%u rows of joined rows is generated.\n", join_tbl->num_rows.load());
+        INFO("%u rows of joined rows is generated.\n",
+             join_tbl->num_rows.load());
     }
 #endif
 
@@ -465,7 +459,7 @@ int fill_bins_per_dblk(table_t *data_table, int column, int *data_row_num,
                        const std::vector<bin_info_t> &info_bins,
                        const int rows_per_cell,
                        const std::vector<table_t *> *bins) {
-                           
+
     // Load bin information
     // This map stores the information about a value should be placed in
     // which cell.
