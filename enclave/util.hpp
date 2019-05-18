@@ -16,6 +16,11 @@ extern "C" {
 
 void printf(const char *fmt, ...);
 
+// Pretend to use the value so the compiler won't issue warning
+#ifndef UNUSED
+#define UNUSED(x) (void)(x)
+#endif
+
 //unsigned long long RDTSC( void );
 
 

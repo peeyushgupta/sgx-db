@@ -4,11 +4,11 @@
 #include <cassert>
 #include <cerrno>
 #include <cstring>
-#include <sgx_tcrypto.h>
 #include <unordered_map>
 #include <utility>
 #include <vector>
 
+#include "bin_packing_join.hpp"
 #include "db.hpp"
 #include "dbg.hpp"
 #include "sort_helper.hpp"
@@ -25,13 +25,37 @@
 // 70MB
 #define MAX_HEAP_SIZE 7E7
 #endif
-const size_t usable_heap_size = (MAX_HEAP_SIZE - DATA_BLKS_PER_DB * DATA_BLOCK_SIZE) * 0.8;
+const size_t usable_heap_size =
+    (MAX_HEAP_SIZE - DATA_BLKS_PER_DB * DATA_BLOCK_SIZE) * 0.8;
+
+// Helpers
+namespace {
+using namespace bin_packing_join::hash_bin_packing_join;
+static inline hash_size_t get_hash(char *data, uint32_t len) {
+    sgx_sha1_hash_t sh1_hash;
+    sgx_status_t sgx_status = sgx_sha1_msg((uint8_t *)data, len, &sh1_hash);
+    if (sgx_status) {
+        data[len] = '\n';
+        ERR("Failed to hash %s. Error code: %d\n", data, sgx_status);
+        assert(false);
+        return 0;
+    }
+    // This should take the 8 least significat bits of the hash.
+    // https://en.cppreference.com/w/cpp/language/implicit_conversion#Integral_conversions
+    hash_size_t rtn = (hash_size_t)sh1_hash;
+    return rtn;
+}
+static inline hash_size_t get_hash(char *str) {
+    int value_len = strlen(str);
+    return get_hash(str, value_len);
+}
+} // namespace
 
 // Assuming only two table are joining
 // Assuming only one joining column
 // TODO(tianjiao): support multi column joining
 int ecall_hash_bin_packing_join(int db_id, join_condition_t *join_cond,
-                           int *join_tbl_id) {
+                                int *join_tbl_id) {
     using namespace bin_packing_join::hash_bin_packing_join;
     // Validate input
     int rtn = 0;
@@ -51,7 +75,6 @@ int ecall_hash_bin_packing_join(int db_id, join_condition_t *join_cond,
     }
     table_t *right_table = db->tables[right_table_id];
 
-
     // Determine size of data blocks
     const size_t dblk_size = usable_heap_size;
     const size_t rows_per_dblk = dblk_size / MAX_ROW_SIZE;
@@ -64,6 +87,8 @@ int ecall_hash_bin_packing_join(int db_id, join_condition_t *join_cond,
     }
 
     metadata_t metadata;
+    std::vector<table_t *> lhs_bins, rhs_bins;
+    table_t *join_tbl;
     do {
 #if defined(REPORT_BIN_PACKING_JOIN_STATS)
         unsigned long long start, end, total_start, total_end;
@@ -138,34 +163,105 @@ int ecall_hash_bin_packing_join(int db_id, join_condition_t *join_cond,
 
         // Perform Phase 3
 
-
 #if defined(REPORT_BIN_PACKING_JOIN_STATS)
         total_end = RDTSC();
 
         cycles = total_end - total_start;
         secs = (cycles / cycles_per_sec);
 
-        INFO("Finished: Bin-Packing-Based Merge Join takes %llu cycles (%f sec)\n", cycles,
-             secs);
+        INFO("Finished: Bin-Packing-Based Merge Join takes %llu cycles (%f "
+             "sec)\n",
+             cycles, secs);
+#endif
+        int rows_per_cell = 0;
+        for (const bin_info_t &bin : bins) {
+            for (const auto &cell : bin) {
+                rows_per_cell = std::max(rows_per_cell, cell.first);
+            }
+        }
+
+        lhs_bins = rhs_bins =
+            std::vector<table_t *>(bins.size(), (table_t *)-1);
+        rtn =
+            fill_bins(db, left_table, join_cond->fields_left[0], rows_per_dblk,
+                      bins, 0, midpoint, rows_per_cell, &lhs_bins);
+        if (rtn) {
+            ERR("Failed to fill lhs bins\n");
+            break;
+        }
+
+        // ERR: contents in `lhs_bins` are corrupted after this call;
+        rtn = fill_bins(db, right_table, join_cond->fields_right[0],
+                        rows_per_dblk, bins, midpoint, dblk_cnt, rows_per_cell,
+                        &rhs_bins);
+        if (rtn) {
+            ERR("Failed to fill lhs bins\n");
+            break;
+        }
+
+#if defined(REPORT_BIN_PACKING_JOIN_STATS)
+        end = RDTSC();
+        cycles = end - start;
+        secs = (cycles / cycles_per_sec);
+        start = end;
+        INFO("Phase 3: fill bins took %llu cycles (%f sec)\n", cycles, secs);
 #endif
 
-    } while (0);
+        schema_t join_sc;
+        join_schema(&join_sc, &left_table->sc, &right_table->sc);
+        std::string join_tbl_name = "join:bp:result";
+        rtn = create_table(db, join_tbl_name, &join_sc, &join_tbl);
+        if (rtn) {
+            ERR("Failed to create table %s\n", join_tbl_name.c_str());
+            break;
+        }
+        for (int i = 0; i < bins.size(); ++i) {
+            rtn = join_bins(lhs_bins[i], join_cond->fields_left[0], rhs_bins[i],
+                            join_cond->fields_right[0], &join_sc, join_tbl,
+                            num_rows_per_out_bin, i);
+            if (rtn) {
+                ERR("Failed to join bin %d out of %d\n", i, bins.size());
+                break;
+            }
+        }
+        *join_tbl_id = join_tbl->id;
+
+#if defined(REPORT_BIN_PACKING_JOIN_STATS)
+        end = RDTSC();
+        cycles = end - start;
+        secs = (cycles / cycles_per_sec);
+        start = end;
+        INFO("Phase 4: join bins took %llu cycles (%f sec)\n", cycles, secs);
+#endif
+    } while (false);
 
 #if defined(REPORT_BIN_PACKING_JOIN_STATS)
     if (rtn == 0) {
         // ecall_print_table_dbg(eid, &rtn, db_id, *out_tbl_id, 0, 1 << 20);
     }
 #endif
+
+#if defined(REPORT_BIN_PACKING_JOIN_STATS)
+    INFO("%u rows of joined rows is generated.\n", join_tbl->num_rows.load());
+#endif
+
     // Clean up
+    for (const auto &tbl : lhs_bins) {
+        delete_table(db, tbl);
+    }
+    lhs_bins.clear();
+
+    for (const auto &tbl : rhs_bins) {
+        delete_table(db, tbl);
+    }
+    rhs_bins.clear();
     return rtn;
 }
 
-namespace bin_packing_join::hash_bin_packing_join{
+namespace bin_packing_join::hash_bin_packing_join {
 
-int collect_metadata(table_t* table, int column,
-                     const size_t rows_per_dblk, int *dblk_count,
-                     metadata_t *metadata) {
-    sgx_status_t sgx_status = SGX_ERROR_UNEXPECTED;
+int collect_metadata(table_t *table, int column, const size_t rows_per_dblk,
+                     int *dblk_count, metadata_t *metadata) {
     int original_dblk_cnt = *dblk_count;
     int row_num;
     for (row_num = 0; row_num < table->num_rows; ++(*dblk_count)) {
@@ -175,20 +271,8 @@ int collect_metadata(table_t* table, int column,
             if (read_row(table, row_num++, &row)) {
                 ERR("Failed to read row\n");
             }
-            char* value = (char *)get_column(&table->sc, column, &row);
-            int value_len = strlen(value);
-            sgx_sha1_hash_t sh1_hash;
-            sgx_status =
-                sgx_sha1_msg((uint8_t *)value, value_len, &sh1_hash);
-            if (sgx_status) {
-                ERR("Failed to hash %s. Error code: %d\n", value,
-                    sgx_status);
-                return sgx_status;
-            }
-            // This should take the 8 least significat bits of the hash.
-            // https://en.cppreference.com/w/cpp/language/implicit_conversion#Integral_conversions
-            const hash_size_t hashed_value = (hash_size_t)sh1_hash;
-            counter[hashed_value]++;   // TODO: using string_view?
+            char *value = (char *)get_column(&table->sc, column, &row);
+            counter[get_hash(value)]++;
             row_num++;
         }
 
@@ -334,4 +418,134 @@ int out_bin_info_collection(const std::vector<bin_info_t> &bins, int midpoint,
     return 0;
 }
 
-} // namespace hash_bin_packing_join
+int fill_bins(data_base_t *db, table_t *data_table, int column,
+              const int rows_per_dblk, const std::vector<bin_info_t> &info_bins,
+              const int start_dblk, const int end_dblk, const int rows_per_cell,
+              std::vector<table_t *> *bins) {
+    schema_t *bin_sc = &data_table->sc;
+    for (int i = 0; i < bins->size(); ++i) {
+        std::string bin_name = "join:bp:bin_" + data_table->name + "_";
+        bin_name += std::to_string(i);
+        table_t *tmp;
+        if (create_table(db, bin_name, bin_sc, &tmp)) {
+            ERR("Failed to create table %s\n", bin_name.c_str());
+            return -1;
+        }
+        (*bins)[i] = tmp;
+    }
+
+    // Load one datablock of bin information into the memory at a time.
+    // For each datablock, data will be stored in temp_bins before we flush them
+    // to the actual bins for security measure.
+    // TODO: parallelize this in per dblk level.
+    int data_row_num = 0;
+#if defined(REPORT_BIN_PACKING_JOIN_STATS)
+    INFO("Reading bin info table from dblk %d to %d\n", start_dblk, end_dblk);
+#endif
+    // For each datablock
+    for (int dblk_num = start_dblk; dblk_num < end_dblk; ++dblk_num) {
+        fill_bins_per_dblk(data_table, column, &data_row_num, rows_per_dblk,
+                           dblk_num, info_bins, rows_per_cell, bins);
+    }
+
+    return 0;
+}
+
+int fill_bins_per_dblk(table_t *data_table, int column, int *data_row_num,
+                       const int rows_per_dblk, const int dblk_num,
+                       const std::vector<bin_info_t> &info_bins,
+                       const int rows_per_cell,
+                       const std::vector<table_t *> *bins) {
+    // Load bin information
+    // This map stores the information about a value should be placed in
+    // which cell.
+    const int num_bins = bins->size();
+    std::unordered_map<hash_size_t, int> placement;
+    // For each cell
+    for (int cell_num = 0; cell_num < info_bins.size(); ++cell_num) {
+        const auto &[_, info_cell] = info_bins[cell_num][dblk_num];
+        UNUSED(_);
+        // For each value
+        for (const auto &[value, _] : info_cell) {
+            UNUSED(_);
+            placement[value] = cell_num;
+        }
+    }
+
+    // Scan the data table and fill bin according to the bin information
+    int byte_read_bin = 0;
+    typedef std::vector<row_t> temp_bin_t;
+    std::vector<temp_bin_t> temp_bins(num_bins);
+    for (int i = 0; i < rows_per_dblk; ++i) {
+        row_t row;
+        if (*data_row_num >= data_table->num_rows) {
+            // TODO: make sure that there's no more info_bin to read in the
+            // outer loop if (data_table_exhausted) {
+            //     ERR("Reach the end of data table but still have more rows "
+            //         "to read. Data table: dblk %d, curr_row %d, "
+            //         "rows_per_dblk. Info table: total rows %d, curr_row "
+            //         "%d %d\n",
+            //         dblk_cnt, i, rows_per_dblk, bin_info_table->num_rows,
+            //         row_num, 1);
+            //     return -1;
+            // }
+            break;
+        }
+
+        if (read_row(data_table, (*data_row_num)++, &row)) {
+            ERR("Failed to read row");
+            return -1;
+        }
+        char *value = (char *)get_column(&(data_table->sc), column, &row);
+#if !defined(NDEBUG)
+        const auto it = placement.find(get_hash(value));
+        if (it == placement.end()) {
+            ERR("Failed to find bin info\n");
+            return -1;
+        }
+        if (it->second < 0 || it->second >= temp_bins.size()) {
+            ERR("Bin index out of bound: %d\n", it->second);
+            return -1;
+        }
+#endif
+        const auto &cell_to_be_placed_in = it->second;
+        auto &bin = temp_bins[cell_to_be_placed_in];
+        try {
+            bin.push_back(row);
+            byte_read_bin += sizeof(row);
+        } catch (const std::bad_alloc &) {
+            ERR("Not enough memory: dblk %d, i %d, row_num %d, byte_bin %d\n",
+                dblk_num, i, data_row_num, byte_read_bin);
+            return -1;
+        }
+    }
+
+    // Flush temp_bins to bins
+    row_t empty_row;
+    memset(&empty_row, 0x0, sizeof(empty_row));
+    empty_row.header.fake = true;
+    for (int i = 0; i < temp_bins.size(); ++i) {
+        temp_bin_t *temp_bin = &temp_bins[i];
+        for (int j = 0; j < rows_per_cell; j++) {
+            row_t *row;
+            if (j < temp_bin->size()) {
+                row = &(*temp_bin)[j];
+            } else {
+                row = &empty_row;
+            }
+            insert_row_dbg((*bins)[i], row);
+        }
+    }
+
+    return 0;
+}
+
+int join_bins(table_t *lhs_tbl, const int lhs_column, table_t *rhs_tbl,
+              const int rhs_column, schema_t *join_sc, table_t *join_tbl,
+              const int num_rows_per_out_bin, int bin_id) {
+    return bin_packing_join::external_bin_packing_join::join_bins(
+        lhs_tbl, lhs_column, rhs_tbl, rhs_column, join_sc, join_tbl,
+        num_rows_per_out_bin, bin_id);
+}
+
+} // namespace bin_packing_join::hash_bin_packing_join

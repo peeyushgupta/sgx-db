@@ -5,12 +5,14 @@
 #pragma once
 
 #include "db.hpp"
+#include <sgx_tcrypto.h>
+#include <cassert>
 #include <cstdint>
 #include <unordered_map>
 #include <vector>
 
 namespace bin_packing_join::hash_bin_packing_join {
-typedef std::size_t hash_size_t;    // The ID of each unique key
+typedef std::size_t hash_size_t; // The ID of each unique key
 // [cell_t<size_of_cell, [value_t<value, occurances>]>]
 typedef std::vector<std::pair<int, std::vector<std::pair<hash_size_t, int>>>>
     bin_info_t;
@@ -29,9 +31,8 @@ typedef std::unordered_map<hash_size_t, metadata_value_t> metadata_t;
 // Assuming only two table are joining
 // Assuming only one joining column
 // Assuming the corresponding tables are already created in the enclave.
-int collect_metadata(table_t* table, int column,
-                     const size_t rows_per_dblk, int *dblk_count,
-                     metadata_t *metadata);
+int collect_metadata(table_t *table, int column, const size_t rows_per_dblk,
+                     int *dblk_count, metadata_t *metadata);
 
 // Bin Packing Phase 2: bin information collection
 // Figure out which value goes into which cell based on the metadata
@@ -61,20 +62,21 @@ int out_bin_info_collection(const std::vector<bin_info_t> &bins, int midpoint,
 // Phase 4.
 // TODO: parallelize this
 // TODO: get `bin_sc` from table
+// TODO: use std::span for info_bins once it's supported
 int fill_bins(data_base_t *db, table_t *data_table, int column,
               const int rows_per_dblk, const std::vector<bin_info_t> &info_bins,
-              const int start_dblk, const int end_dblk, const int num_bins,
-              const int rows_per_cell, schema_t *bin_sc,
+              const int start_dblk, const int end_dblk,
+              const int rows_per_cell,
               std::vector<table_t *> *bins);
 // Helper for fill_bins
 // Fill bin in a datablock. The information of the bin is located at
 // `row_num`: to keep track of which row are we on in the `data_table.
 //  Increment as we scan through the `data_table`.
 int fill_bins_per_dblk(table_t *data_table, int column, int *data_row_num,
-                       const int rows_per_dblk, const int dblk_cnt,
-                       table_t *bin_info_table, int *info_row_num,
-                       const int rows_per_cell, schema_t *bin_sc,
-                       std::vector<table_t *> *bins);
+                       const int rows_per_dblk, const int dblk_num,
+                       const std::vector<bin_info_t> &info_bins,
+                       const int rows_per_cell,
+                       const std::vector<table_t *> *bins);
 
 // Bin Packing Phase 4: join each individual bin
 // For each individual bin, do a hash join, do padding(while pretending not),
